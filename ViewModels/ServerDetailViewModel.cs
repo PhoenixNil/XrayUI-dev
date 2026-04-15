@@ -1,0 +1,382 @@
+﻿using System;
+using System.ComponentModel;
+using System.Threading;
+using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI;
+using Microsoft.UI.Xaml.Media;
+using Windows.UI;
+using XrayUI.Models;
+using XrayUI.Services;
+
+namespace XrayUI.ViewModels
+{
+    public partial class ServerDetailViewModel : ObservableObject
+    {
+        private static readonly Color NeutralLatencyColor = Color.FromArgb(255, 156, 163, 175);
+
+        // AI unlock indicator brushes
+        private static readonly SolidColorBrush GrayBrush   = new(Color.FromArgb(255, 120, 120, 130));
+        private static readonly SolidColorBrush GreenBrush  = new(Color.FromArgb(255,  72, 199, 142));
+        private static readonly SolidColorBrush RedBrush    = new(Color.FromArgb(255, 239,  68,  68));
+
+        private readonly LatencyProbeService _latencyProbe;
+        private readonly AiUnlockCheckService _aiUnlockCheck;
+        private CancellationTokenSource? _latencyTestCts;
+        private CancellationTokenSource? _aiCheckCts;
+        private int _latencyTestVersion;
+        private ServerEntry? _activeServer;
+        private bool _isProxyRunning;
+        private AiUnlockStatus? _openAiStatus;
+        private AiUnlockStatus? _claudeStatus;
+        private AiUnlockStatus? _geminiStatus;
+
+        public ServerDetailViewModel(LatencyProbeService latencyProbe, AiUnlockCheckService aiUnlockCheck)
+        {
+            _latencyProbe = latencyProbe;
+            _aiUnlockCheck = aiUnlockCheck;
+        }
+
+        [ObservableProperty]
+        private ServerEntry? selectedServer;
+
+        public ServerEntry? ActiveServer
+        {
+            get => _activeServer;
+            set
+            {
+                if (ReferenceEquals(_activeServer, value))
+                {
+                    return;
+                }
+
+                _activeServer = value;
+                UpdateAiUnlockDisplay();
+            }
+        }
+
+        public bool IsProxyRunning
+        {
+            get => _isProxyRunning;
+            private set
+            {
+                if (_isProxyRunning == value)
+                {
+                    return;
+                }
+
+                _isProxyRunning = value;
+                UpdateAiUnlockDisplay();
+            }
+        }
+
+        public string SelectedName => SelectedServer?.Name ?? "未选择服务器";
+
+        public string SelectedHost => SelectedServer?.Host ?? "-";
+
+        public string SelectedPort => SelectedServer?.Port.ToString() ?? "-";
+
+        public string SelectedProtocol => SelectedServer?.DisplayProtocol ?? "-";
+
+        public string SelectedSecurityLabel
+            => string.Equals(SelectedServer?.Protocol, "ss", StringComparison.OrdinalIgnoreCase)
+                ? "加密"
+                : "安全";
+
+        public string SelectedEncryption => SelectedServer?.Encryption ?? "-";
+
+        public string SelectedShareLink
+            => SelectedServer is null ? string.Empty : (NodeLinkSerializer.ToLink(SelectedServer) ?? string.Empty);
+
+        public string SelectedTransport
+        {
+            get
+            {
+                if (SelectedServer is null)
+                {
+                    return "TCP";
+                }
+
+                if (string.Equals(SelectedServer.Protocol, "hysteria2", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "UDP";
+                }
+
+                return (SelectedServer.Network?.ToLowerInvariant()) switch
+                {
+                    "ws" => "WebSocket",
+                    "grpc" => "gRPC",
+                    _ => "TCP"
+                };
+            }
+        }
+
+        [ObservableProperty]
+        private string latencyText = "Not tested";
+
+
+        [ObservableProperty]
+        private bool isTestingLatency;
+
+        public bool CanTestLatency => !IsTestingLatency && SelectedServer is not null;
+
+        // ── AI Unlock indicators ──────────────────────────────────────────────
+
+        [ObservableProperty]
+        private SolidColorBrush openAiStatusBrush = GrayBrush;
+
+        [ObservableProperty]
+        private SolidColorBrush claudeStatusBrush = GrayBrush;
+
+        [ObservableProperty]
+        private SolidColorBrush geminiStatusBrush = GrayBrush;
+
+        partial void OnSelectedServerChanged(ServerEntry? oldValue, ServerEntry? newValue)
+        {
+            if (oldValue is not null)
+            {
+                oldValue.PropertyChanged -= OnSelectedServerPropertyChanged;
+            }
+
+            if (newValue is not null)
+            {
+                newValue.PropertyChanged += OnSelectedServerPropertyChanged;
+            }
+
+            CancelPendingLatencyTest();
+            NotifySelectedServerFieldsChanged();
+            UpdateAiUnlockDisplay();
+
+            if (newValue is null)
+            {
+                ResetLatencyDisplay();
+                return;
+            }
+
+            _ = TestLatency();
+        }
+
+        partial void OnIsTestingLatencyChanged(bool value)
+        {
+            OnPropertyChanged(nameof(CanTestLatency));
+            TestLatencyCommand.NotifyCanExecuteChanged();
+        }
+
+        private void OnSelectedServerPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            switch (e.PropertyName)
+            {
+                case nameof(ServerEntry.Name):
+                    OnPropertyChanged(nameof(SelectedName));
+                    break;
+                case nameof(ServerEntry.Host):
+                    OnPropertyChanged(nameof(SelectedHost));
+                    CancelPendingLatencyTest();
+                    ResetLatencyDisplay();
+                    break;
+                case nameof(ServerEntry.Port):
+                    OnPropertyChanged(nameof(SelectedPort));
+                    CancelPendingLatencyTest();
+                    ResetLatencyDisplay();
+                    break;
+                case nameof(ServerEntry.Protocol):
+                    OnPropertyChanged(nameof(SelectedProtocol));
+                    OnPropertyChanged(nameof(SelectedSecurityLabel));
+                    OnPropertyChanged(nameof(SelectedTransport));
+                    break;
+                case nameof(ServerEntry.Encryption):
+                    OnPropertyChanged(nameof(SelectedEncryption));
+                    break;
+                case nameof(ServerEntry.Network):
+                    OnPropertyChanged(nameof(SelectedTransport));
+                    break;
+                case null:
+                case "":
+                    CancelPendingLatencyTest();
+                    NotifySelectedServerFieldsChanged();
+                    ResetLatencyDisplay();
+                    break;
+            }
+        }
+
+        private void NotifySelectedServerFieldsChanged()
+        {
+            OnPropertyChanged(nameof(SelectedName));
+            OnPropertyChanged(nameof(SelectedHost));
+            OnPropertyChanged(nameof(SelectedPort));
+            OnPropertyChanged(nameof(SelectedProtocol));
+            OnPropertyChanged(nameof(SelectedSecurityLabel));
+            OnPropertyChanged(nameof(SelectedEncryption));
+            OnPropertyChanged(nameof(SelectedTransport));
+            OnPropertyChanged(nameof(SelectedShareLink));
+            OnPropertyChanged(nameof(CanTestLatency));
+            TestLatencyCommand.NotifyCanExecuteChanged();
+        }
+
+        private void ResetLatencyDisplay()
+        {
+            LatencyText = "未测试";
+            
+        }
+
+        private void ResetAiUnlockDisplay()
+        {
+            OpenAiStatusBrush = GrayBrush;
+            ClaudeStatusBrush = GrayBrush;
+            GeminiStatusBrush = GrayBrush;
+        }
+
+        private void ClearAiUnlockResults()
+        {
+            _openAiStatus = null;
+            _claudeStatus = null;
+            _geminiStatus = null;
+        }
+
+        private void UpdateAiUnlockDisplay()
+        {
+            if (!IsProxyRunning || SelectedServer is null || !ReferenceEquals(SelectedServer, ActiveServer))
+            {
+                ResetAiUnlockDisplay();
+                return;
+            }
+
+            OpenAiStatusBrush = ResolveAiUnlockBrush(_openAiStatus);
+            ClaudeStatusBrush = ResolveAiUnlockBrush(_claudeStatus);
+            GeminiStatusBrush = ResolveAiUnlockBrush(_geminiStatus);
+        }
+
+        private static SolidColorBrush ResolveAiUnlockBrush(AiUnlockStatus? status) => status switch
+        {
+            AiUnlockStatus.Unlocked => GreenBrush,
+            AiUnlockStatus.Blocked => RedBrush,
+            _ => GrayBrush
+        };
+
+        private void CancelPendingLatencyTest()
+        {
+            _latencyTestVersion++;
+            _latencyTestCts?.Cancel();
+            _latencyTestCts = null;
+            IsTestingLatency = false;
+        }
+
+        private void CancelPendingAiCheck()
+        {
+            _aiCheckCts?.Cancel();
+            _aiCheckCts = null;
+        }
+
+        /// <summary>
+        /// Called by the view / MainViewModel when the proxy starts or stops.
+        /// </summary>
+        public void OnProxyRunningChanged(bool isRunning, int httpProxyPort)
+        {
+            CancelPendingAiCheck();
+            IsProxyRunning = isRunning;
+
+            if (!isRunning)
+            {
+                ClearAiUnlockResults();
+                UpdateAiUnlockDisplay();
+                return;
+            }
+
+            ClearAiUnlockResults();
+            UpdateAiUnlockDisplay();
+            _ = RunAiUnlockChecksAsync(httpProxyPort);
+        }
+
+        private async Task RunAiUnlockChecksAsync(int httpProxyPort)
+        {
+            var cts = new CancellationTokenSource();
+            _aiCheckCts = cts;
+
+            try
+            {
+                // Run all checks in parallel
+                var openAiTask = _aiUnlockCheck.CheckOpenAiAsync(httpProxyPort, cts.Token);
+                var claudeTask = _aiUnlockCheck.CheckClaudeAsync(httpProxyPort, cts.Token);
+                var geminiTask = _aiUnlockCheck.CheckGeminiAsync(httpProxyPort, cts.Token);
+
+                var results = await Task.WhenAll(openAiTask, claudeTask, geminiTask);
+
+                if (cts.IsCancellationRequested) return;
+
+                _openAiStatus = results[0];
+                _claudeStatus = results[1];
+                _geminiStatus = results[2];
+                UpdateAiUnlockDisplay();
+            }
+            catch (OperationCanceledException)
+            {
+                // cancelled — leave as-is
+            }
+            finally
+            {
+                cts.Dispose();
+                if (ReferenceEquals(_aiCheckCts, cts))
+                    _aiCheckCts = null;
+            }
+        }
+
+        [RelayCommand(CanExecute = nameof(CanTestLatency))]
+        private async Task TestLatency()
+        {
+            var server = SelectedServer;
+            if (server is null)
+            {
+                return;
+            }
+
+            var version = _latencyTestVersion;
+            var cts = new CancellationTokenSource();
+            _latencyTestCts = cts;
+
+            IsTestingLatency = true;
+            LatencyText = "测试中...";
+            
+
+            try
+            {
+                var result = await _latencyProbe.ProbeAsync(
+                    server,
+                    TimeSpan.FromSeconds(3),
+                    cts.Token);
+
+                if (version != _latencyTestVersion || cts.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                LatencyText = result.Status switch
+                {
+                    LatencyProbeStatus.Success => $"{result.Milliseconds ?? 0} ms",
+                    LatencyProbeStatus.Timeout => "超时",
+                    _ => "失败"
+                };
+                
+            }
+            catch (OperationCanceledException) when (cts.IsCancellationRequested)
+            {
+            }
+            finally
+            {
+                cts.Dispose();
+
+                if (ReferenceEquals(_latencyTestCts, cts))
+                {
+                    _latencyTestCts = null;
+                }
+
+                if (version == _latencyTestVersion)
+                {
+                    IsTestingLatency = false;
+                }
+            }
+        }
+    }
+}
+
+

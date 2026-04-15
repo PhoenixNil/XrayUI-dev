@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window x:Class="XrayUI.Views.LogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="代理日志">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid RowSpacing="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Log text area -->
+        <ScrollViewer x:Name="LogScrollViewer"
+                      Grid.Row="0"
+                      Padding="12,12,12,0"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Auto">
+            <TextBlock x:Name="LogTextBlock"
+                       FontFamily="Cascadia Code, Consolas, Courier New"
+                       FontSize="12"
+                       IsTextSelectionEnabled="True"
+                       TextWrapping="NoWrap"
+                       Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+        </ScrollViewer>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="1"
+                Padding="12,8"
+                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                BorderThickness="0,1,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+                <!-- Status -->
+                <StackPanel Orientation="Horizontal"
+                            Spacing="8"
+                            VerticalAlignment="Center">
+                    <Ellipse x:Name="StatusDot"
+                             Width="8" Height="8"
+                             VerticalAlignment="Center"
+                             Fill="{ThemeResource SystemFillColorCautionBrush}" />
+                    <TextBlock x:Name="StatusText"
+                               Text="未运行"
+                               FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center" />
+                    <TextBlock x:Name="LineCountText"
+                               FontSize="12"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!-- Buttons -->
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="8">
+                    <ToggleButton x:Name="AutoScrollToggle"
+                                  IsChecked="True"
+                                  Content="自动滚动"
+                                  FontSize="12"
+                                  Padding="10,5" />
+                    <Button x:Name="CopyButton"
+                            Content="复制全部"
+                            FontSize="12"
+                            Padding="10,5"
+                            Click="CopyButton_Click" />
+                    <Button x:Name="ClearButton"
+                            Content="清除"
+                            FontSize="12"
+                            Padding="10,5"
+                            Click="ClearButton_Click" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

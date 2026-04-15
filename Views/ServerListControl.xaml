@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl x:Class="XrayUI.Views.ServerListControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:models="using:XrayUI.Models"
+             mc:Ignorable="d"
+             d:DesignHeight="500"
+             d:DesignWidth="420">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0"
+                    Orientation="Vertical">
+            <TextBlock Text="&#x670D;&#x52A1;&#x5668;&#x5217;&#x8868;"
+                       FontSize="20"
+                       FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Left"
+                        Spacing="8"
+                        Margin="0,8,0,0">
+                <DropDownButton x:Name="BtnAdd"
+                                Padding="12,6">
+                    <DropDownButton.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="&#x6DFB;&#x52A0;" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </DropDownButton.Content>
+                    <DropDownButton.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                            <MenuFlyoutItem Text="&#x5BFC;&#x5165;&#x8282;&#x70B9;&#x94FE;&#x63A5;"
+                                            Command="{x:Bind ViewModel.ImportFromLinkCommand}"
+                                            FontWeight="Normal">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE77F;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="&#x6DFB;&#x52A0;&#x8BA2;&#x9605;&#x5730;&#x5740;"
+                                            Command="{x:Bind ViewModel.AddSubscriptionCommand}"
+                                            FontWeight="Normal">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xED0E;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="&#x624B;&#x52A8;&#x6DFB;&#x52A0;&#x65B0;&#x670D;&#x52A1;&#x5668;"
+                                            Command="{x:Bind ViewModel.AddManualCommand}"
+                                            FontWeight="Normal">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE710;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+                <Button x:Name="BtnEdit"
+                        Command="{x:Bind ViewModel.EditServerCommand}"
+                        IsEnabled="{x:Bind ViewModel.CanEditServer, Mode=OneWay}"
+                        Padding="12,6">
+                    <StackPanel Orientation="Horizontal">
+                        <FontIcon Glyph="&#xE70F;"
+                                  Margin="0,0,5,0" />
+                        <TextBlock Text="&#x7F16;&#x8F91;" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="BtnRemove"
+                        Command="{x:Bind ViewModel.RemoveServerCommand}"
+                        IsEnabled="{x:Bind ViewModel.CanRemoveServer, Mode=OneWay}"
+                        Padding="12,6">
+                    <StackPanel Orientation="Horizontal">
+                        <FontIcon Glyph="&#xE74D;"
+                                  Margin="0,0,5,0" />
+                        <TextBlock Text="&#x5220;&#x9664;" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </StackPanel>
+
+        <AutoSuggestBox x:Name="ServerSearchBox"
+                        Grid.Row="1"
+                        Margin="0,16,0,0"
+                        PlaceholderText="&#x641C;&#x7D22;&#x670D;&#x52A1;&#x5668;"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Center"
+                        UpdateTextOnSelect="True"
+                        QueryIcon="Find"
+                        TextChanged="ServerSearchBox_TextChanged"
+                        SuggestionChosen="ServerSearchBox_SuggestionChosen"
+                        QuerySubmitted="ServerSearchBox_QuerySubmitted"
+                        TextMemberPath="Name">
+            <AutoSuggestBox.ItemTemplate>
+                <DataTemplate x:DataType="models:ServerEntry">
+                    <TextBlock Text="{x:Bind Name, Mode=OneWay}" />
+                </DataTemplate>
+            </AutoSuggestBox.ItemTemplate>
+        </AutoSuggestBox>
+
+        <ListView Grid.Row="2"
+                  x:Name="ServersListView"
+                  Margin="0,16,0,0"
+                  ItemsSource="{x:Bind ViewModel.Servers, Mode=OneWay}"
+                  SelectedItem="{x:Bind ViewModel.SelectedServer, Mode=TwoWay}"
+                  CanDragItems="True"
+                  CanReorderItems="True"
+                  AllowDrop="True"
+                  DragItemsCompleted="ServersListView_DragItemsCompleted"
+                  SelectionMode="Single"
+                  ScrollViewer.VerticalScrollBarVisibility="Auto">
+
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="models:ServerEntry">
+                    <Grid Background="Transparent"
+                          ContextRequested="ServerItem_ContextRequested">
+                        <StackPanel Orientation="Vertical"
+                                    Spacing="6"
+                                    Margin="0,12,0,12">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Text="{x:Bind Name, Mode=OneWay}"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Grid.Column="0"
+                                           TextTrimming="CharacterEllipsis" />
+
+                                <Border Background="{ThemeResource SystemFillColorSuccessBrush}"
+                                        CornerRadius="3"
+                                        Padding="6,2"
+                                        Visibility="{x:Bind IsActive, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                        Grid.Column="1"
+                                        Margin="8,0,0,0">
+                                    <TextBlock Text="&#x25CF; Activated"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="White" />
+                                </Border>
+                            </Grid>
+
+                            <StackPanel Orientation="Horizontal"
+                                        Spacing="8">
+                                <TextBlock Text="{x:Bind Host, Mode=OneWay}"
+                                           FontSize="13"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{x:Bind Port, Mode=OneWay}"
+                                           FontSize="13"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{x:Bind DisplayProtocol, Mode=OneWay}"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Foreground="{x:Bind Protocol, Mode=OneWay, Converter={StaticResource ProtocolToBrushConverter}}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</UserControl>

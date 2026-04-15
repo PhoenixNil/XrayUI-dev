@@ -1,0 +1,92 @@
+## .NET / C# / WinUI3
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+ARM/
+ARM64/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build logs
+*.log
+msbuild*.wrn
+msbuild*.err
+
+# Visual Studio profiler
+*.psess
+*.vsp
+*.vspx
+*.sap
+
+# NuGet
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nupkg
+**/packages/repositories.config
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# WinUI / MSIX packaging
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+*.msixupload
+*.appxupload
+
+# Publish output
+publish/
+
+# NuGet v3 cache
+*.nuget.props
+*.nuget.targets
+
+# dotnet tool
+.dotnet/
+
+# Generated files
+Generated\ Files/
+
+# Auto-generated files
+*.g.cs
+*.g.i.cs
+
+# Claude / AI
+.claude/
