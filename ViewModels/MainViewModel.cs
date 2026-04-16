@@ -51,6 +51,7 @@ namespace XrayUI.ViewModels
             // Sync ServerDetail with whatever was selected
             ServerDetail.SelectedServer = ServerList.SelectedServer;
             UpdateActiveServer(null);
+            ServerList.IsProxyRunning = ControlPanel.IsRunning;
 
             // Load settings and apply to ControlPanel
             var s = await _settings.LoadSettingsAsync();
@@ -72,6 +73,7 @@ namespace XrayUI.ViewModels
 
             var isRunning = ControlPanel.IsRunning;
             UpdateActiveServer(isRunning ? ServerList.SelectedServer : null);
+            ServerList.IsProxyRunning = isRunning;
 
             // Trigger AI unlock detection through the local HTTP proxy
             var httpPort = ControlPanel.LocalPort + 1; // HTTP proxy = SOCKS + 1

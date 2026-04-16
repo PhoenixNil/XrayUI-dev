@@ -34,7 +34,9 @@ namespace XrayUI
 
             InitializeComponent();
 
-            AppWindow.Resize(new SizeInt32(1160, 740));
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            var scale = GetWindowScale(hWnd);
+            AppWindow.Resize(new SizeInt32((int)Math.Round(950 * scale), (int)Math.Round(600 * scale)));
             _windowManager = WindowManager.Get(this);
 
             _rootElement = (FrameworkElement)Content;
@@ -221,6 +223,23 @@ namespace XrayUI
             ViewModel.ControlPanel.CleanupTunOnExit();
             ViewModel.ControlPanel.XrayService.StopForShutdown();
         }
+
+        private static double GetWindowScale(IntPtr hwnd)
+        {
+            try
+            {
+                if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 14393))
+                {
+                    var dpi = GetDpiForWindow(hwnd);
+                    if (dpi > 0) return dpi / 96.0;
+                }
+            }
+            catch { }
+            return 1.0;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern int GetDpiForWindow(IntPtr hWnd);
 
         [DllImport("kernel32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]

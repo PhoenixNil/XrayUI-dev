@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
@@ -16,6 +17,7 @@ namespace XrayUI.ViewModels
         private readonly SettingsService _settings;
         private ObservableCollection<ServerEntry> _servers = new();
         private ServerEntry? _selectedServer;
+        private bool _isProxyRunning;
 
         public ServerListViewModel(IDialogService dialogs, SettingsService settings)
         {
@@ -34,16 +36,35 @@ namespace XrayUI.ViewModels
             get => _selectedServer;
             set
             {
+                var previous = _selectedServer;
                 if (SetProperty(ref _selectedServer, value))
                 {
-                    OnPropertyChanged(nameof(CanEditServer));
-                    OnPropertyChanged(nameof(CanRemoveServer));
+                    OnSelectedServerChanged(previous, value);
                 }
             }
         }
 
-        public bool CanEditServer   => SelectedServer != null;
-        public bool CanRemoveServer => SelectedServer != null;
+        public bool IsProxyRunning
+        {
+            get => _isProxyRunning;
+            set
+            {
+                if (SetProperty(ref _isProxyRunning, value))
+                {
+                    NotifyServerActionStateChanged();
+                }
+            }
+        }
+
+        public bool IsSelectedServerLocked => IsProxyRunning && SelectedServer?.IsActive == true;
+
+        public bool CanEditSelectedServer => SelectedServer != null && !IsSelectedServerLocked;
+
+        public bool CanRemoveSelectedServer => SelectedServer != null && !IsSelectedServerLocked;
+
+        public bool CanEditServer => CanEditSelectedServer;
+
+        public bool CanRemoveServer => CanRemoveSelectedServer;
 
         // ── Search ────────────────────────────────────────────────────────────
 
@@ -73,6 +94,38 @@ namespace XrayUI.ViewModels
         private Task SaveAsync() => _settings.SaveServersAsync(Servers);
 
         public Task SaveOrderAsync() => SaveAsync();
+
+        private void OnSelectedServerChanged(ServerEntry? previous, ServerEntry? current)
+        {
+            if (previous is not null)
+            {
+                previous.PropertyChanged -= OnSelectedServerPropertyChanged;
+            }
+
+            if (current is not null)
+            {
+                current.PropertyChanged += OnSelectedServerPropertyChanged;
+            }
+
+            NotifyServerActionStateChanged();
+        }
+
+        private void OnSelectedServerPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ServerEntry.IsActive))
+            {
+                NotifyServerActionStateChanged();
+            }
+        }
+
+        private void NotifyServerActionStateChanged()
+        {
+            OnPropertyChanged(nameof(IsSelectedServerLocked));
+            OnPropertyChanged(nameof(CanEditSelectedServer));
+            OnPropertyChanged(nameof(CanRemoveSelectedServer));
+            OnPropertyChanged(nameof(CanEditServer));
+            OnPropertyChanged(nameof(CanRemoveServer));
+        }
 
         // ── Import via link ───────────────────────────────────────────────────
 

@@ -106,9 +106,11 @@ namespace XrayUI.Views
             var flyout = new MenuFlyout();
 
             var editItem = CreateMenuItem("\u7F16\u8F91", "\uE70F");
+            editItem.IsEnabled = ViewModel.CanEditSelectedServer;
             editItem.Click += (_, _) => ViewModel.EditServerCommand.Execute(null);
 
             var deleteItem = CreateMenuItem("\u5220\u9664", "\uE74D");
+            deleteItem.IsEnabled = ViewModel.CanRemoveSelectedServer;
             deleteItem.Click += (_, _) => ViewModel.RemoveServerCommand.Execute(null);
 
             var shareItem = CreateMenuItem("\u5206\u4EAB", "\uE72D");

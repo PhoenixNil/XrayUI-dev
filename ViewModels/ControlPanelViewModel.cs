@@ -14,7 +14,7 @@ namespace XrayUI.ViewModels
         private readonly SettingsService _settings;
         private readonly XrayService _xray;
         private readonly TunService _tunService;
-        private string _startStopButtonContent = "Start";
+        private string _startStopButtonContent = "启动";
         private bool _startStopButtonChecked;
         private bool _isRunning;
         private bool _isTunMode;
@@ -106,7 +106,7 @@ namespace XrayUI.ViewModels
                 var server = GetSelectedServer();
                 if (server is null)
                 {
-                    await _dialogs.ShowErrorAsync("No server selected", "Please select a server from the list first.");
+                    await _dialogs.ShowErrorAsync("未选择服务器", "请先从列表中选择服务器");
                     return;
                 }
 
@@ -149,7 +149,7 @@ namespace XrayUI.ViewModels
                 if (!ok)
                 {
                     var detail = string.IsNullOrEmpty(_xray.LastError)
-                        ? "xray failed to start. Please check the server configuration."
+                        ? "xray 启动失败. 请检查服务器配置."
                         : _xray.LastError;
                     await _dialogs.ShowErrorAsync("启动失败", detail);
                     return;
