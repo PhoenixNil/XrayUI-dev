@@ -384,6 +384,15 @@ namespace XrayUI.Services
             AddNode(rules, new JsonObject
             {
                 ["type"] = "field",
+                ["outboundTag"] = "proxy",
+                ["domain"] = CreateStringArray(
+                    "fonts.gstatic.com",
+                    "fonts.googleapis.com"
+                )
+            });
+            AddNode(rules, new JsonObject
+            {
+                ["type"] = "field",
                 ["outboundTag"] = "direct",
                 ["domain"] = CreateStringArray("geosite:cn", "geosite:private")
             });
