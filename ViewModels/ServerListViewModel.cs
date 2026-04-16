@@ -14,6 +14,8 @@ namespace XrayUI.ViewModels
     {
         private readonly IDialogService  _dialogs;
         private readonly SettingsService _settings;
+        private ObservableCollection<ServerEntry> _servers = new();
+        private ServerEntry? _selectedServer;
 
         public ServerListViewModel(IDialogService dialogs, SettingsService settings)
         {
@@ -21,13 +23,24 @@ namespace XrayUI.ViewModels
             _settings = settings;
         }
 
-        [ObservableProperty]
-        private ObservableCollection<ServerEntry> servers = new();
+        public ObservableCollection<ServerEntry> Servers
+        {
+            get => _servers;
+            set => SetProperty(ref _servers, value);
+        }
 
-        [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(CanEditServer))]
-        [NotifyPropertyChangedFor(nameof(CanRemoveServer))]
-        private ServerEntry? selectedServer;
+        public ServerEntry? SelectedServer
+        {
+            get => _selectedServer;
+            set
+            {
+                if (SetProperty(ref _selectedServer, value))
+                {
+                    OnPropertyChanged(nameof(CanEditServer));
+                    OnPropertyChanged(nameof(CanRemoveServer));
+                }
+            }
+        }
 
         public bool CanEditServer   => SelectedServer != null;
         public bool CanRemoveServer => SelectedServer != null;

@@ -14,6 +14,13 @@ namespace XrayUI.ViewModels
         private readonly SettingsService _settings;
         private readonly XrayService _xray;
         private readonly TunService _tunService;
+        private string _startStopButtonContent = "Start";
+        private bool _startStopButtonChecked;
+        private bool _isRunning;
+        private bool _isTunMode;
+        private int _localPort = 16890;
+        private string _routingMode = "智能分流";
+        private bool _isThemePickerOpen;
 
         // Guards OnIsTunModeChanged from firing the dialog when we update internally
         private bool _isTunInternalUpdate;
@@ -43,18 +50,33 @@ namespace XrayUI.ViewModels
 
         // ── Running state ─────────────────────────────────────────────────────────────────────────────────────────────
 
-        [ObservableProperty]
-        private string startStopButtonContent = "Start";
+        public string StartStopButtonContent
+        {
+            get => _startStopButtonContent;
+            set => SetProperty(ref _startStopButtonContent, value);
+        }
 
-        [ObservableProperty]
-        private bool startStopButtonChecked;
+        public bool StartStopButtonChecked
+        {
+            get => _startStopButtonChecked;
+            set => SetProperty(ref _startStopButtonChecked, value);
+        }
 
-        [ObservableProperty]
-        private bool isRunning;
+        public bool IsRunning
+        {
+            get => _isRunning;
+            set
+            {
+                if (SetProperty(ref _isRunning, value))
+                {
+                    OnIsRunningChanged(value);
+                }
+            }
+        }
 
         public string StatusText => IsRunning ? _activeServerName : "未运行";
 
-        partial void OnIsRunningChanged(bool value)
+        private void OnIsRunningChanged(bool value)
         {
             StartStopButtonContent = value ? "停止" : "启动";
             StartStopButtonChecked = value;
@@ -67,106 +89,123 @@ namespace XrayUI.ViewModels
         [RelayCommand]
         private async Task StartStop()
         {
-            if (IsRunning)
+            try
             {
-                // ── STOP ──
-                await CleanupTunStateAsync();
-                await _xray.StopAsync();
+                if (IsRunning)
+                {
+                    // ── STOP ──
+                    await CleanupTunStateAsync();
+                    await _xray.StopAsync();
+                    SystemProxyService.ClearProxy();
+                    _activeServerName = string.Empty;
+                    IsRunning = false;
+                    return;
+                }
+
+                // ── START ──
+                var server = GetSelectedServer();
+                if (server is null)
+                {
+                    await _dialogs.ShowErrorAsync("No server selected", "Please select a server from the list first.");
+                    return;
+                }
+
+                var appSettings = await _settings.LoadSettingsAsync();
+                appSettings.LocalSocksPort = LocalPort;
+                appSettings.LocalHttpPort  = LocalPort + 1;
+                appSettings.RoutingMode    = RoutingMode == "智能分流" ? "smart" : "global";
+                appSettings.IsTunMode      = IsTunMode;
+
+                string? outboundInterface = null;
+
+                if (IsTunMode)
+                {
+                    // Pre-check 1: wintun.dll
+                    if (!_tunService.IsWintunAvailable())
+                    {
+                        await _dialogs.ShowErrorAsync("TUN mode error",
+                            $"Could not find wintun.dll\nPath: {_tunService.GetExpectedWintunPath()}");
+                        return;
+                    }
+
+                    // Pre-check 2: detect outbound NIC
+                    outboundInterface = _tunService.DetectOutboundInterface(forceRefresh: true);
+                    if (string.IsNullOrEmpty(outboundInterface))
+                    {
+                        await _dialogs.ShowErrorAsync("TUN mode error", "Unable to detect a valid outbound network interface. Please check your network connection.");
+                        return;
+                    }
+                }
+
+                if (IsTunMode)
+                {
+                    SystemProxyService.ClearProxy();
+                    await CleanupPersistedTunRoutesAsync(appSettings);
+                }
+
+                var configJson = XrayConfigBuilder.Build(server, appSettings, outboundInterface);
+                var ok = await _xray.StartAsync(configJson);
+
+                if (!ok)
+                {
+                    var detail = string.IsNullOrEmpty(_xray.LastError)
+                        ? "xray failed to start. Please check the server configuration."
+                        : _xray.LastError;
+                    await _dialogs.ShowErrorAsync("启动失败", detail);
+                    return;
+                }
+
+                if (IsTunMode)
+                {
+                    // Wait for xray to create the TUN adapter, then add system routes
+                    _currentTunServerHost = server.Host;
+                    try
+                    {
+                        await WaitForTunInterfaceAsync();
+                        if (!_tunService.SetupTunRoutes(server.Host))
+                        {
+                            throw new InvalidOperationException("Failed to set up TUN routes. Please confirm the app is running as administrator.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        await CleanupTunStateAsync();
+                        await _xray.StopAsync();
+                        await _dialogs.ShowErrorAsync("TUN 启动失败", ex.Message);
+                        return;
+                    }
+                    // TUN 模式是透明代理，不设置系统 HTTP 代理
+                    appSettings.LastTunServerHost = server.Host;
+                    await TrySaveSettingsAsync(appSettings, "persist TUN runtime state");
+                }
+                else
+                {
+                    appSettings.LastTunServerHost = null;
+                    SystemProxyService.SetProxy("127.0.0.1", appSettings.LocalHttpPort);
+                    await TrySaveSettingsAsync(appSettings, "persist system proxy settings");
+                }
+
+                _activeServerName = server.Name;
+                IsRunning = true;
+
+                // Warm up connectivity in the background after TUN startup.
+                if (IsTunMode)
+                    _ = WarmUpTunInBackgroundAsync();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[ControlPanel] StartStop failed: {ex}");
+
+                if (_xray.IsRunning)
+                {
+                    await _xray.StopAsync();
+                }
+
                 SystemProxyService.ClearProxy();
                 _activeServerName = string.Empty;
                 IsRunning = false;
-                return;
+                await _dialogs.ShowErrorAsync("启动失败", ex.Message);
             }
-
-            // ── START ──
-            var server = GetSelectedServer();
-            if (server is null)
-            {
-                await _dialogs.ShowErrorAsync("No server selected", "Please select a server from the list first.");
-                return;
-            }
-
-            var appSettings = await _settings.LoadSettingsAsync();
-            appSettings.LocalSocksPort = LocalPort;
-            appSettings.LocalHttpPort  = LocalPort + 1;
-            appSettings.RoutingMode    = RoutingMode == "智能分流" ? "smart" : "global";
-            appSettings.IsTunMode      = IsTunMode;
-
-            string? outboundInterface = null;
-
-            if (IsTunMode)
-            {
-                // Pre-check 1: wintun.dll
-                if (!_tunService.IsWintunAvailable())
-                {
-                    await _dialogs.ShowErrorAsync("TUN mode error",
-                        $"Could not find wintun.dll\nPath: {_tunService.GetExpectedWintunPath()}");
-                    return;
-                }
-
-                // Pre-check 2: detect outbound NIC
-                outboundInterface = _tunService.DetectOutboundInterface(forceRefresh: true);
-                if (string.IsNullOrEmpty(outboundInterface))
-                {
-                    await _dialogs.ShowErrorAsync("TUN mode error", "Unable to detect a valid outbound network interface. Please check your network connection.");
-                    return;
-                }
-            }
-
-            if (IsTunMode)
-            {
-                SystemProxyService.ClearProxy();
-                await CleanupPersistedTunRoutesAsync(appSettings);
-            }
-
-            var configJson = XrayConfigBuilder.Build(server, appSettings, outboundInterface);
-            var ok = await _xray.StartAsync(configJson);
-
-            if (!ok)
-            {
-                var detail = string.IsNullOrEmpty(_xray.LastError)
-                    ? "xray failed to start. Please check the server configuration."
-                    : _xray.LastError;
-                await _dialogs.ShowErrorAsync("启动失败", detail);
-                return;
-            }
-
-            if (IsTunMode)
-            {
-                // Wait for xray to create the TUN adapter, then add system routes
-                _currentTunServerHost = server.Host;
-                try
-                {
-                    await WaitForTunInterfaceAsync();
-                    if (!_tunService.SetupTunRoutes(server.Host))
-                    {
-                        throw new InvalidOperationException("Failed to set up TUN routes. Please confirm the app is running as administrator.");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    await CleanupTunStateAsync();
-                    await _xray.StopAsync();
-                    await _dialogs.ShowErrorAsync("TUN 启动失败", ex.Message);
-                    return;
-                }
-                // TUN 模式是透明代理，不设置系统 HTTP 代理
-                appSettings.LastTunServerHost = server.Host;
-                await _settings.SaveSettingsAsync(appSettings);
-            }
-            else
-            {
-                appSettings.LastTunServerHost = null;
-                await _settings.SaveSettingsAsync(appSettings);
-                SystemProxyService.SetProxy("127.0.0.1", appSettings.LocalHttpPort);
-            }
-
-            _activeServerName = server.Name;
-            IsRunning = true;
-
-            // Warm up connectivity in the background after TUN startup.
-            if (IsTunMode)
-                _ = WarmUpTunInBackgroundAsync();
         }
 
         /// <summary>轮询等待 xray 创建 TUN 网络适配器（最多 15 秒）</summary>
@@ -266,7 +305,7 @@ namespace XrayUI.ViewModels
 
             CleanupTunRoutesSafely();
             settings.LastTunServerHost = null;
-            await _settings.SaveSettingsAsync(settings);
+            await TrySaveSettingsAsync(settings, "clear persisted TUN routes");
         }
 
         private async Task CleanupTunStateAsync()
@@ -276,7 +315,7 @@ namespace XrayUI.ViewModels
             var settings = await _settings.LoadSettingsAsync();
             settings.IsTunMode = false;
             settings.LastTunServerHost = null;
-            await _settings.SaveSettingsAsync(settings);
+            await TrySaveSettingsAsync(settings, "clear TUN state");
         }
 
         public void CleanupTunOnExit()
@@ -288,7 +327,7 @@ namespace XrayUI.ViewModels
                 var settings = _settings.LoadSettingsAsync().GetAwaiter().GetResult();
                 settings.IsTunMode = false;
                 settings.LastTunServerHost = null;
-                _settings.SaveSettingsAsync(settings).GetAwaiter().GetResult();
+                TrySaveSettingsAsync(settings, "persist shutdown cleanup").GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
@@ -298,14 +337,23 @@ namespace XrayUI.ViewModels
 
         // ── TUN mode toggle ───────────────────────────────────────────────────
 
-        [ObservableProperty]
-        private bool isTunMode;
+        public bool IsTunMode
+        {
+            get => _isTunMode;
+            set
+            {
+                if (SetProperty(ref _isTunMode, value))
+                {
+                    OnIsTunModeChanged(value);
+                }
+            }
+        }
 
         public string TunModeText => IsTunMode ? "On" : "Off";
 
         public bool IsTunModeToggleEnabled => !IsRunning;
 
-        partial void OnIsTunModeChanged(bool value)
+        private void OnIsTunModeChanged(bool value)
         {
             OnPropertyChanged(nameof(TunModeText));
             if (!_isTunInternalUpdate)
@@ -344,16 +392,39 @@ namespace XrayUI.ViewModels
             {
                 var exePath = Process.GetCurrentProcess().MainModule?.FileName;
                 if (string.IsNullOrEmpty(exePath)) return;
+                var currentPid = Environment.ProcessId;
+                var restartArguments = string.IsNullOrWhiteSpace(arguments)
+                    ? $"--parent-pid={currentPid}"
+                    : $"{arguments} --parent-pid={currentPid}";
 
                 Process.Start(new ProcessStartInfo
                 {
                     FileName       = exePath,
-                    Arguments      = arguments,
+                    Arguments      = restartArguments,
                     UseShellExecute = true,
                     Verb           = "runas"
                 });
 
-                Environment.Exit(0);
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(800);
+                    try
+                    {
+                        Process.GetCurrentProcess().Kill();
+                    }
+                    catch
+                    {
+                    }
+                });
+
+                if (global::Microsoft.UI.Xaml.Application.Current is App app)
+                {
+                    app.RequestShutdown();
+                }
+                else
+                {
+                    Environment.Exit(0);
+                }
             }
             catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
             {
@@ -379,9 +450,17 @@ namespace XrayUI.ViewModels
 
         // ── Local port ────────────────────────────────────────────────────────
 
-        [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(LocalPortText))]
-        private int localPort = 16890;
+        public int LocalPort
+        {
+            get => _localPort;
+            set
+            {
+                if (SetProperty(ref _localPort, value))
+                {
+                    OnPropertyChanged(nameof(LocalPortText));
+                }
+            }
+        }
 
         public string LocalPortText => $":{LocalPort}";
 
@@ -395,7 +474,7 @@ namespace XrayUI.ViewModels
                 var settings = await _settings.LoadSettingsAsync();
                 settings.LocalSocksPort = LocalPort;
                 settings.LocalHttpPort  = LocalPort + 1;
-                await _settings.SaveSettingsAsync(settings);
+                await TrySaveSettingsAsync(settings, "persist local port");
             }
         }
 
@@ -406,8 +485,11 @@ namespace XrayUI.ViewModels
 
         // ── Routing mode ──────────────────────────────────────────────────────
 
-        [ObservableProperty]
-        private string routingMode = "智能分流";
+        public string RoutingMode
+        {
+            get => _routingMode;
+            set => SetProperty(ref _routingMode, value);
+        }
 
         [RelayCommand]
         private void SetRoutingMode(string mode) => RoutingMode = mode;
@@ -422,8 +504,11 @@ namespace XrayUI.ViewModels
         public bool IsDarkThemeEnabled    => ThemeHelper.ActualTheme != ElementTheme.Dark;
         public bool IsDefaultThemeEnabled => true;
 
-        [ObservableProperty]
-        private bool isThemePickerOpen;
+        public bool IsThemePickerOpen
+        {
+            get => _isThemePickerOpen;
+            set => SetProperty(ref _isThemePickerOpen, value);
+        }
 
         [RelayCommand]
         private void ToggleThemePicker() => IsThemePickerOpen = !IsThemePickerOpen;
@@ -438,6 +523,18 @@ namespace XrayUI.ViewModels
             OnPropertyChanged(nameof(IsDarkThemeEnabled));
             OnPropertyChanged(nameof(IsDefaultThemeEnabled));
             IsThemePickerOpen = false;
+        }
+
+        private async Task TrySaveSettingsAsync(AppSettings settings, string scenario)
+        {
+            try
+            {
+                await _settings.SaveSettingsAsync(settings);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Settings] Failed to {scenario}: {ex.Message}");
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 
 namespace XrayUI.Models
 {
@@ -65,6 +66,7 @@ namespace XrayUI.Models
             }
         }
 
+        [JsonIgnore]
         public string DisplayProtocol => (Protocol).ToLowerInvariant() switch
         {
             "ss" => "Shadowsocks",

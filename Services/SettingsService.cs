@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using XrayUI.Models;
 
@@ -16,12 +17,6 @@ namespace XrayUI.Services
 
         private static readonly string SettingsFile = Path.Combine(DataDir, "settings.json");
         private static readonly string ServersFile  = Path.Combine(DataDir, "servers.json");
-
-        private static readonly JsonSerializerOptions JsonOpts = new()
-        {
-            WriteIndented          = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-        };
 
         public SettingsService()
         {
@@ -38,17 +33,18 @@ namespace XrayUI.Services
                     return new AppSettings();
 
                 var json = await File.ReadAllTextAsync(SettingsFile).ConfigureAwait(false);
-                return JsonSerializer.Deserialize<AppSettings>(json, JsonOpts) ?? new AppSettings();
+                return JsonSerializer.Deserialize(json, AppJsonSerializerContext.Default.AppSettings) ?? new AppSettings();
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[SettingsService] Failed to load settings: {ex.Message}");
                 return new AppSettings();
             }
         }
 
         public async Task SaveSettingsAsync(AppSettings settings)
         {
-            var json = JsonSerializer.Serialize(settings, JsonOpts);
+            var json = JsonSerializer.Serialize(settings, AppJsonSerializerContext.Default.AppSettings);
             await File.WriteAllTextAsync(SettingsFile, json).ConfigureAwait(false);
         }
 
@@ -62,18 +58,20 @@ namespace XrayUI.Services
                     return new List<ServerEntry>();
 
                 var json = await File.ReadAllTextAsync(ServersFile).ConfigureAwait(false);
-                return JsonSerializer.Deserialize<List<ServerEntry>>(json, JsonOpts)
+                return JsonSerializer.Deserialize(json, AppJsonSerializerContext.Default.ListServerEntry)
                        ?? new List<ServerEntry>();
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[SettingsService] Failed to load servers: {ex.Message}");
                 return new List<ServerEntry>();
             }
         }
 
         public async Task SaveServersAsync(IEnumerable<ServerEntry> servers)
         {
-            var json = JsonSerializer.Serialize(servers, JsonOpts);
+            var serverList = servers as List<ServerEntry> ?? servers.ToList();
+            var json = JsonSerializer.Serialize(serverList, AppJsonSerializerContext.Default.ListServerEntry);
             await File.WriteAllTextAsync(ServersFile, json).ConfigureAwait(false);
         }
     }

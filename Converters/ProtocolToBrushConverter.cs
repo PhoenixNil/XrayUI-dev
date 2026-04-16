@@ -6,7 +6,7 @@ using Windows.UI;
 
 namespace XrayUI.Converters
 {
-    public class ProtocolToBrushConverter : IValueConverter
+    public partial class ProtocolToBrushConverter : IValueConverter
     {
         // Tailwind 400-level palette — readable on both light & dark surfaces
         private static readonly Dictionary<string, Color> ProtocolColors = new(StringComparer.OrdinalIgnoreCase)

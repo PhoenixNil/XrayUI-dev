@@ -31,6 +31,12 @@ namespace XrayUI.ViewModels
         private AiUnlockStatus? _openAiStatus;
         private AiUnlockStatus? _claudeStatus;
         private AiUnlockStatus? _geminiStatus;
+        private ServerEntry? _selectedServer;
+        private string _latencyText = "Not tested";
+        private bool _isTestingLatency;
+        private SolidColorBrush _openAiStatusBrush = GrayBrush;
+        private SolidColorBrush _claudeStatusBrush = GrayBrush;
+        private SolidColorBrush _geminiStatusBrush = GrayBrush;
 
         public ServerDetailViewModel(LatencyProbeService latencyProbe, AiUnlockCheckService aiUnlockCheck)
         {
@@ -38,8 +44,18 @@ namespace XrayUI.ViewModels
             _aiUnlockCheck = aiUnlockCheck;
         }
 
-        [ObservableProperty]
-        private ServerEntry? selectedServer;
+        public ServerEntry? SelectedServer
+        {
+            get => _selectedServer;
+            set
+            {
+                var oldValue = _selectedServer;
+                if (SetProperty(ref _selectedServer, value))
+                {
+                    OnSelectedServerChanged(oldValue, value);
+                }
+            }
+        }
 
         public ServerEntry? ActiveServer
         {
@@ -112,27 +128,47 @@ namespace XrayUI.ViewModels
             }
         }
 
-        [ObservableProperty]
-        private string latencyText = "Not tested";
+        public string LatencyText
+        {
+            get => _latencyText;
+            set => SetProperty(ref _latencyText, value);
+        }
 
-
-        [ObservableProperty]
-        private bool isTestingLatency;
+        public bool IsTestingLatency
+        {
+            get => _isTestingLatency;
+            set
+            {
+                if (SetProperty(ref _isTestingLatency, value))
+                {
+                    OnIsTestingLatencyChanged(value);
+                }
+            }
+        }
 
         public bool CanTestLatency => !IsTestingLatency && SelectedServer is not null;
 
         // ── AI Unlock indicators ──────────────────────────────────────────────
 
-        [ObservableProperty]
-        private SolidColorBrush openAiStatusBrush = GrayBrush;
+        public SolidColorBrush OpenAiStatusBrush
+        {
+            get => _openAiStatusBrush;
+            set => SetProperty(ref _openAiStatusBrush, value);
+        }
 
-        [ObservableProperty]
-        private SolidColorBrush claudeStatusBrush = GrayBrush;
+        public SolidColorBrush ClaudeStatusBrush
+        {
+            get => _claudeStatusBrush;
+            set => SetProperty(ref _claudeStatusBrush, value);
+        }
 
-        [ObservableProperty]
-        private SolidColorBrush geminiStatusBrush = GrayBrush;
+        public SolidColorBrush GeminiStatusBrush
+        {
+            get => _geminiStatusBrush;
+            set => SetProperty(ref _geminiStatusBrush, value);
+        }
 
-        partial void OnSelectedServerChanged(ServerEntry? oldValue, ServerEntry? newValue)
+        private void OnSelectedServerChanged(ServerEntry? oldValue, ServerEntry? newValue)
         {
             if (oldValue is not null)
             {
@@ -157,7 +193,7 @@ namespace XrayUI.ViewModels
             _ = TestLatency();
         }
 
-        partial void OnIsTestingLatencyChanged(bool value)
+        private void OnIsTestingLatencyChanged(bool value)
         {
             OnPropertyChanged(nameof(CanTestLatency));
             TestLatencyCommand.NotifyCanExecuteChanged();

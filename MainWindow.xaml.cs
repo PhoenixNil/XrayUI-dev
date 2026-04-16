@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using Microsoft.UI;
 using Windows.Graphics;
 using Windows.UI;
@@ -120,11 +121,44 @@ namespace XrayUI
 
         private void ExitApplication()
         {
+            if (_allowClose)
+            {
+                return;
+            }
+
             _allowClose = true;
             _isHiddenToTray = false;
-            ControlPanel.CloseLogWindow();
-            AppWindow.IsShownInSwitchers = true;
-            Close();
+            try
+            {
+                _windowManager.IsVisibleInTray = false;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Tray] Failed to hide tray icon during exit: {ex.Message}");
+            }
+
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(100);
+
+                try
+                {
+                    if (Microsoft.UI.Xaml.Application.Current is App app)
+                    {
+                        app.RequestShutdown();
+                        return;
+                    }
+
+                    StopBackgroundServicesOnExit();
+                    SystemProxyService.ClearProxy();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[Tray] RequestShutdown failed: {ex}");
+                }
+
+                Environment.Exit(0);
+            });
         }
 
         private void OnRootElementActualThemeChanged(FrameworkElement sender, object args)

@@ -3,7 +3,7 @@ using System;
 
 namespace XrayUI.Converters
 {
-    public class InverseBooleanToVisibilityConverter : IValueConverter
+    public partial class InverseBooleanToVisibilityConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, string language)
             => value is true ? Visibility.Collapsed : Visibility.Visible;
