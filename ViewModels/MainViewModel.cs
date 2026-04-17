@@ -1,5 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Xaml;
 using XrayUI.Models;
 using XrayUI.Services;
 
@@ -9,10 +11,16 @@ namespace XrayUI.ViewModels
     {
         private readonly SettingsService _settings;
         private ServerEntry? _activeServer;
+        private bool _showPersonalize;
 
         public ServerListViewModel   ServerList   { get; }
         public ServerDetailViewModel ServerDetail { get; }
         public ControlPanelViewModel ControlPanel { get; }
+        public PersonalizeViewModel  Personalize  { get; }
+
+        public Visibility MainContentVisibility => _showPersonalize ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility PersonalizeVisibility  => _showPersonalize ? Visibility.Visible   : Visibility.Collapsed;
+        public bool       IsBackButtonVisible    => _showPersonalize;
 
         public MainViewModel(
             IDialogService  dialogs,
@@ -31,12 +39,16 @@ namespace XrayUI.ViewModels
             ServerList   = new ServerListViewModel(dialogs, settings);
             ServerDetail = new ServerDetailViewModel(latencyProbe, aiUnlockCheck);
             ControlPanel = new ControlPanelViewModel(dialogs, settings, xray, tunService);
+            Personalize  = new PersonalizeViewModel(settings);
 
             // Wire ControlPanel so it knows the current selected server
             ControlPanel.GetSelectedServer = () => ServerList.SelectedServer;
 
             ServerList.PropertyChanged   += OnServerListPropertyChanged;
             ControlPanel.PropertyChanged += OnControlPanelPropertyChanged;
+
+            ControlPanel.ShowPersonalizeRequested += (_, _) => OpenPersonalize();
+            Personalize.CloseRequested            += (_, _) => ClosePersonalize();
 
             ServerDetail.SelectedServer = ServerList.SelectedServer;
         }
@@ -57,6 +69,36 @@ namespace XrayUI.ViewModels
             var s = await _settings.LoadSettingsAsync();
             ControlPanel.LocalPort    = s.LocalSocksPort;
             ControlPanel.RoutingMode  = s.RoutingMode == "global" ? "全局路由" : "智能分流";
+            ControlPanel.InitializePersonalize(s);
+        }
+
+        // ── Personalize navigation ────────────────────────────────────────────
+
+        private void OpenPersonalize()
+        {
+            Personalize.LoadFromStore();
+            _showPersonalize = true;
+            OnPropertyChanged(nameof(MainContentVisibility));
+            OnPropertyChanged(nameof(PersonalizeVisibility));
+            OnPropertyChanged(nameof(IsBackButtonVisible));
+        }
+
+        private void ClosePersonalize()
+        {
+            _showPersonalize = false;
+            OnPropertyChanged(nameof(MainContentVisibility));
+            OnPropertyChanged(nameof(PersonalizeVisibility));
+            OnPropertyChanged(nameof(IsBackButtonVisible));
+        }
+
+        // ── Back navigation (TitleBar back button) ────────────────────────────
+        // Discards any in-flight edits and returns to the main view without saving.
+
+        [RelayCommand]
+        private void GoBack()
+        {
+            if (!_showPersonalize) return;
+            ClosePersonalize();
         }
 
         // ── Property change wiring ─────────────────────────────────────────────

@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 
@@ -177,6 +177,10 @@ namespace XrayUI.Models
             get => _flow;
             set { _flow = value; OnPropertyChanged(); }
         }
+
+        // ── Color refresh ─────────────────────────────────────────────────────
+
+        public void RefreshProtocolColor() => OnPropertyChanged(nameof(Protocol));
 
         // ── INotifyPropertyChanged ────────────────────────────────────────────
         public event PropertyChangedEventHandler? PropertyChanged;

@@ -19,21 +19,11 @@
         </Grid.RowDefinitions>
 
         <!-- Custom title bar — registered via SetTitleBar() in code-behind -->
-        <Grid x:Name="AppTitleBar"
-              Grid.Row="0"
-              Height="40">
-            <StackPanel Orientation="Horizontal"
-                        Spacing="10"
-                        VerticalAlignment="Center"
-                        Margin="16,0,0,0">
-                <FontIcon Glyph="&#xE705;"
-                          FontSize="14"
-                          VerticalAlignment="Center" />
-                <TextBlock Text="代理控制台"
-                           FontSize="12"
-                           VerticalAlignment="Center" />
-            </StackPanel>
-        </Grid>
+        <TitleBar x:Name="AppTitleBar"
+          Grid.Row="0"
+          IsBackButtonVisible="{x:Bind ViewModel.IsBackButtonVisible, Mode=OneWay}"
+          BackRequested="AppTitleBar_BackRequested"
+          Title="代理控制台" />
 
         <Grid Grid.Row="1"
               Margin="16,0,16,16"
@@ -49,18 +39,27 @@
 
             <Grid Grid.Column="1"
                   VerticalAlignment="Stretch">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
 
-                <views:ServerDetailControl Grid.Row="0"
-                                            x:Name="ServerDetail"
-                                            ViewModel="{x:Bind ViewModel.ServerDetail, Mode=OneWay}" />
+                <!-- Main view: server detail + control panel -->
+                <Grid Visibility="{x:Bind ViewModel.MainContentVisibility, Mode=OneWay}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                <views:ControlPanelControl x:Name="ControlPanel"
-                                            Grid.Row="1"
-                                            ViewModel="{x:Bind ViewModel.ControlPanel, Mode=OneWay}" />
+                    <views:ServerDetailControl Grid.Row="0"
+                                               x:Name="ServerDetail"
+                                               ViewModel="{x:Bind ViewModel.ServerDetail, Mode=OneWay}" />
+
+                    <views:ControlPanelControl x:Name="ControlPanel"
+                                               Grid.Row="1"
+                                               ViewModel="{x:Bind ViewModel.ControlPanel, Mode=OneWay}" />
+                </Grid>
+
+                <!-- Personalize view -->
+                <views:PersonalizeControl Visibility="{x:Bind ViewModel.PersonalizeVisibility, Mode=OneWay}"
+                                          ViewModel="{x:Bind ViewModel.Personalize, Mode=OneWay}" />
+
             </Grid>
         </Grid>
     </Grid>

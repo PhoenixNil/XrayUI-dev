@@ -4,9 +4,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.UI;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
-using Windows.UI;
 using XrayUI.Models;
 using XrayUI.Services;
 
@@ -14,12 +13,8 @@ namespace XrayUI.ViewModels
 {
     public partial class ServerDetailViewModel : ObservableObject
     {
-        private static readonly Color NeutralLatencyColor = Color.FromArgb(255, 156, 163, 175);
-
-        // AI unlock indicator brushes
-        private static readonly SolidColorBrush GrayBrush   = new(Color.FromArgb(255, 120, 120, 130));
-        private static readonly SolidColorBrush GreenBrush  = new(Color.FromArgb(255,  72, 199, 142));
-        private static readonly SolidColorBrush RedBrush    = new(Color.FromArgb(255, 239,  68,  68));
+        private static SolidColorBrush GetBrush(string key) =>
+            (SolidColorBrush)Application.Current.Resources[key];
 
         private readonly LatencyProbeService _latencyProbe;
         private readonly AiUnlockCheckService _aiUnlockCheck;
@@ -34,14 +29,15 @@ namespace XrayUI.ViewModels
         private ServerEntry? _selectedServer;
         private string _latencyText = "Not tested";
         private bool _isTestingLatency;
-        private SolidColorBrush _openAiStatusBrush = GrayBrush;
-        private SolidColorBrush _claudeStatusBrush = GrayBrush;
-        private SolidColorBrush _geminiStatusBrush = GrayBrush;
+        private SolidColorBrush _openAiStatusBrush = null!;
+        private SolidColorBrush _claudeStatusBrush = null!;
+        private SolidColorBrush _geminiStatusBrush = null!;
 
         public ServerDetailViewModel(LatencyProbeService latencyProbe, AiUnlockCheckService aiUnlockCheck)
         {
             _latencyProbe = latencyProbe;
             _aiUnlockCheck = aiUnlockCheck;
+            ResetAiUnlockDisplay();
         }
 
         public ServerEntry? SelectedServer
@@ -258,9 +254,10 @@ namespace XrayUI.ViewModels
 
         private void ResetAiUnlockDisplay()
         {
-            OpenAiStatusBrush = GrayBrush;
-            ClaudeStatusBrush = GrayBrush;
-            GeminiStatusBrush = GrayBrush;
+            var neutral = GetBrush("StateNeutralBrush");
+            OpenAiStatusBrush = neutral;
+            ClaudeStatusBrush = neutral;
+            GeminiStatusBrush = neutral;
         }
 
         private void ClearAiUnlockResults()
@@ -285,9 +282,9 @@ namespace XrayUI.ViewModels
 
         private static SolidColorBrush ResolveAiUnlockBrush(AiUnlockStatus? status) => status switch
         {
-            AiUnlockStatus.Unlocked => GreenBrush,
-            AiUnlockStatus.Blocked => RedBrush,
-            _ => GrayBrush
+            AiUnlockStatus.Unlocked => GetBrush("StateSuccessBrush"),
+            AiUnlockStatus.Blocked  => GetBrush("StateErrorBrush"),
+            _                       => GetBrush("StateNeutralBrush")
         };
 
         private void CancelPendingLatencyTest()

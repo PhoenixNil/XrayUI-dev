@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -20,8 +20,6 @@ namespace XrayUI.ViewModels
         private bool _isTunMode;
         private int _localPort = 16890;
         private string _routingMode = "智能分流";
-        private bool _isThemePickerOpen;
-
         // Guards OnIsTunModeChanged from firing the dialog when we update internally
         private bool _isTunInternalUpdate;
 
@@ -35,6 +33,7 @@ namespace XrayUI.ViewModels
         private string _activeServerName = string.Empty;
 
         public event EventHandler? ShowLogsRequested;
+        public event EventHandler? ShowPersonalizeRequested;
 
         public ControlPanelViewModel(
             IDialogService dialogs,
@@ -483,6 +482,9 @@ namespace XrayUI.ViewModels
         [RelayCommand]
         private void ShowLogs() => ShowLogsRequested?.Invoke(this, EventArgs.Empty);
 
+        [RelayCommand]
+        private void ShowPersonalize() => ShowPersonalizeRequested?.Invoke(this, EventArgs.Empty);
+
         // ── Routing mode ──────────────────────────────────────────────────────
 
         public string RoutingMode
@@ -496,33 +498,18 @@ namespace XrayUI.ViewModels
 
         // ── Theme ─────────────────────────────────────────────────────────────
 
-        public ElementTheme LightTheme   => ElementTheme.Light;
-        public ElementTheme DarkTheme    => ElementTheme.Dark;
-        public ElementTheme DefaultTheme => ElementTheme.Default;
-
-        public bool IsLightThemeEnabled   => ThemeHelper.ActualTheme != ElementTheme.Light;
-        public bool IsDarkThemeEnabled    => ThemeHelper.ActualTheme != ElementTheme.Dark;
-        public bool IsDefaultThemeEnabled => true;
-
-        public bool IsThemePickerOpen
+        public void InitializePersonalize(AppSettings settings)
         {
-            get => _isThemePickerOpen;
-            set => SetProperty(ref _isThemePickerOpen, value);
-        }
+            ProtocolColorStore.LoadFrom(settings);
 
-        [RelayCommand]
-        private void ToggleThemePicker() => IsThemePickerOpen = !IsThemePickerOpen;
+            var theme = settings.ThemeSetting switch
+            {
+                "Light"  => ElementTheme.Light,
+                "Dark"   => ElementTheme.Dark,
+                _        => ElementTheme.Default
+            };
 
-        [RelayCommand]
-        private void ChangeTheme(ElementTheme? theme)
-        {
-            if (!theme.HasValue) return;
-
-            ThemeHelper.ApplyTheme(theme.Value);
-            OnPropertyChanged(nameof(IsLightThemeEnabled));
-            OnPropertyChanged(nameof(IsDarkThemeEnabled));
-            OnPropertyChanged(nameof(IsDefaultThemeEnabled));
-            IsThemePickerOpen = false;
+            ThemeHelper.ApplyTheme(theme);
         }
 
         private async Task TrySaveSettingsAsync(AppSettings settings, string scenario)
@@ -538,5 +525,3 @@ namespace XrayUI.ViewModels
         }
     }
 }
-
-

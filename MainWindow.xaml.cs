@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -7,6 +7,7 @@ using Microsoft.UI;
 using Windows.Graphics;
 using Windows.UI;
 using WinUIEx;
+using WinUIEx.Messaging;
 using XrayUI.Helpers;
 using XrayUI.Services;
 
@@ -16,9 +17,14 @@ namespace XrayUI
     {
         private readonly FrameworkElement _rootElement;
         private readonly WindowManager _windowManager;
+        private readonly WindowMessageMonitor _windowMessageMonitor;
+        private bool _isSessionEnding;
         private bool _allowClose;
         private bool _initialized;
         private bool _isHiddenToTray;
+
+        private const uint WmQueryEndSession = 0x0011;
+        private const uint WmEndSession = 0x0016;
 
         public MainViewModel ViewModel { get; }
 
@@ -38,6 +44,8 @@ namespace XrayUI
             var scale = GetWindowScale(hWnd);
             AppWindow.Resize(new SizeInt32((int)Math.Round(950 * scale), (int)Math.Round(600 * scale)));
             _windowManager = WindowManager.Get(this);
+            _windowMessageMonitor = new WindowMessageMonitor(this);
+            _windowMessageMonitor.WindowMessageReceived += OnWindowMessageReceived;
 
             _rootElement = (FrameworkElement)Content;
             ThemeHelper.RootElement = _rootElement;
@@ -58,6 +66,14 @@ namespace XrayUI
             Activated -= OnFirstActivated;
             _initialized = true;
             await ViewModel.InitializeAsync();
+        }
+
+        private void AppTitleBar_BackRequested(Microsoft.UI.Xaml.Controls.TitleBar sender, object args)
+        {
+            if (ViewModel.GoBackCommand.CanExecute(null))
+            {
+                ViewModel.GoBackCommand.Execute(null);
+            }
         }
 
         private void ConfigureTray()
@@ -88,7 +104,7 @@ namespace XrayUI
             };
             AppWindow.Closing += (_, args) =>
             {
-                if (_allowClose)
+                if (_allowClose || _isSessionEnding)
                 {
                     return;
                 }
@@ -151,8 +167,8 @@ namespace XrayUI
                         return;
                     }
 
-                    StopBackgroundServicesOnExit();
                     SystemProxyService.ClearProxy();
+                    StopBackgroundServicesOnExit();
                 }
                 catch (Exception ex)
                 {
@@ -162,6 +178,9 @@ namespace XrayUI
                 Environment.Exit(0);
             });
         }
+
+
+
 
         private void OnRootElementActualThemeChanged(FrameworkElement sender, object args)
         {
@@ -199,7 +218,37 @@ namespace XrayUI
         private void OnClosed(object sender, WindowEventArgs args)
         {
             _rootElement.ActualThemeChanged -= OnRootElementActualThemeChanged;
+            _windowMessageMonitor.WindowMessageReceived -= OnWindowMessageReceived;
+            _windowMessageMonitor.Dispose();
             AppWindow.IsShownInSwitchers = true;
+        }
+
+        private void OnWindowMessageReceived(object? sender, WindowMessageEventArgs e)
+        {
+            if (e.Message.MessageId == WmQueryEndSession)
+            {
+                Debug.WriteLine("[Shutdown] WM_QUERYENDSESSION received");
+                return;
+            }
+
+            if (e.Message.MessageId != WmEndSession || e.Message.WParam == 0)
+            {
+                return;
+            }
+
+            Debug.WriteLine("[Shutdown] WM_ENDSESSION received");
+            _isSessionEnding = true;
+            _allowClose = true;
+            _isHiddenToTray = false;
+
+            if (Microsoft.UI.Xaml.Application.Current is App app)
+            {
+                app.HandleSessionEnding();
+                return;
+            }
+
+            SystemProxyService.ClearProxy();
+            StopBackgroundServicesOnExit();
         }
 
         private static void ReleaseUiResources()

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using XrayUI.Helpers;
 using XrayUI.Models;
 using XrayUI.Services;
 
@@ -23,6 +24,12 @@ namespace XrayUI.ViewModels
         {
             _dialogs  = dialogs;
             _settings = settings;
+
+            ProtocolColorStore.ColorsChanged += (_, _) =>
+            {
+                foreach (var s in Servers)
+                    s.RefreshProtocolColor();
+            };
         }
 
         public ObservableCollection<ServerEntry> Servers

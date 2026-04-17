@@ -49,6 +49,11 @@ namespace XrayUI
             Environment.Exit(0);
         }
 
+        public void HandleSessionEnding()
+        {
+            CleanupOnExit();
+        }
+
         private void CleanupOnExit()
         {
             if (_cleanupStarted)
@@ -58,12 +63,12 @@ namespace XrayUI
 
             _cleanupStarted = true;
 
+            SystemProxyService.ClearProxy();
+
             if (_window is MainWindow mainWindow)
             {
                 mainWindow.StopBackgroundServicesOnExit();
             }
-
-            SystemProxyService.ClearProxy();
         }
 
         private static int? TryGetParentProcessId(string[] cmdArgs)

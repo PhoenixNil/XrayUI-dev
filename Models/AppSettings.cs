@@ -9,5 +9,16 @@ namespace XrayUI.Models
         /// <summary>TUN 模式是否已启用</summary>
         public bool IsTunMode { get; set; } = false;
         public string? LastTunServerHost { get; set; }
+        public bool IsStartupEnabled { get; set; } = false;
+        public bool IsAutoConnect    { get; set; } = false;
+
+        // ── Personalization ───────────────────────────────────────────────────
+        /// <summary>"Light" | "Dark" | "Default" (follows system)</summary>
+        public string? ThemeSetting { get; set; }
+        public string? ColorSs        { get; set; }
+        public string? ColorVless     { get; set; }
+        public string? ColorVmess     { get; set; }
+        public string? ColorHysteria2 { get; set; }
+        public string? ColorFallback  { get; set; }
     }
 }

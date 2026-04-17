@@ -443,6 +443,61 @@ namespace XrayUI.Services
             await dialog.ShowAsync();
         }
 
+        // ── Startup ───────────────────────────────────────────────────────────
+
+        public async Task<(bool enabled, bool autoConnect)?> ShowStartupDialogAsync(bool currentEnabled, bool currentAutoConnect)
+        {
+            var toggle = new ToggleSwitch
+            {
+                IsOn       = currentEnabled,
+                OnContent  = "开",
+                OffContent = "关",
+                MinWidth   = 0,
+                Margin     = new Thickness(0),
+            };
+
+            var toggleLabel = new TextBlock
+            {
+                Text              = "开机自动启动",
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+
+            var toggleRow = new Grid { ColumnSpacing = 8 };
+            toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(toggleLabel, 0);
+            Grid.SetColumn(toggle,      1);
+            toggleRow.Children.Add(toggleLabel);
+            toggleRow.Children.Add(toggle);
+
+            var checkBox = new CheckBox
+            {
+                Content   = "自动连接上次节点",
+                IsChecked = currentAutoConnect,
+                IsEnabled = currentEnabled,
+                Margin    = new Thickness(16, 0, 0, 0),
+            };
+
+            toggle.Toggled += (_, _) => checkBox.IsEnabled = toggle.IsOn;
+
+            var dialog = CreateDialog();
+            dialog.Title             = "开机启动";
+            dialog.PrimaryButtonText = "确认";
+            dialog.CloseButtonText   = "取消";
+            dialog.DefaultButton     = ContentDialogButton.Primary;
+            dialog.Content = new StackPanel
+            {
+                Width    = 260,
+                Spacing  = 12,
+                Children = { toggleRow, checkBox },
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary) return null;
+
+            return (toggle.IsOn, checkBox.IsChecked == true);
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────
 
         /// <summary>

@@ -1,6 +1,6 @@
 using System;
 using System.Text;
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using XrayUI.Models;
 
 namespace XrayUI.Services
@@ -54,26 +54,26 @@ namespace XrayUI.Services
             // "tls" when security == tls, else empty — mirrors ParseVmess reading
             var tls = s.Security?.ToLowerInvariant() == "tls" ? "tls" : "";
 
-            var obj = new
+            var payload = new JsonObject
             {
-                v             = "2",
-                ps            = s.Name ?? string.Empty,
-                add           = s.Host ?? string.Empty,
-                port          = s.Port,
-                id            = s.Uuid ?? string.Empty,
-                aid           = s.AlterId,
-                net           = string.IsNullOrEmpty(s.Network) ? "tcp" : s.Network,
-                type          = "none",
-                host          = s.WsHost ?? string.Empty,
-                path          = s.Path   ?? string.Empty,
-                tls           = tls,
-                sni           = s.Sni    ?? string.Empty,
-                fp            = s.Fingerprint ?? string.Empty,
+                ["v"] = "2",
+                ["ps"] = s.Name ?? string.Empty,
+                ["add"] = s.Host ?? string.Empty,
+                ["port"] = s.Port,
+                ["id"] = s.Uuid ?? string.Empty,
+                ["aid"] = s.AlterId,
+                ["net"] = string.IsNullOrEmpty(s.Network) ? "tcp" : s.Network,
+                ["type"] = "none",
+                ["host"] = s.WsHost ?? string.Empty,
+                ["path"] = s.Path ?? string.Empty,
+                ["tls"] = tls,
+                ["sni"] = s.Sni ?? string.Empty,
+                ["fp"] = s.Fingerprint ?? string.Empty,
                 // IsTruthy("1") = true, IsTruthy("") = false — clean round-trip
-                allowInsecure = s.AllowInsecure ? "1" : ""
+                ["allowInsecure"] = s.AllowInsecure ? "1" : ""
             };
 
-            var json   = JsonSerializer.Serialize(obj);
+            var json   = payload.ToJsonString();
             var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
             return $"vmess://{base64}";
         }

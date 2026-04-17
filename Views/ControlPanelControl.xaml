@@ -16,14 +16,22 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- ── Row 0: 单独的齿轮入口 ─────────────────────────────────── -->
+        <!-- ── Row 0: small button ─────────────────────────────────── -->
         <Grid Grid.Row="0">
             <StackPanel Orientation="Horizontal"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Center"
                         Spacing="2">
 
-
+                <Button Background="Transparent"
+                        BorderBrush="Transparent"
+                        VerticalAlignment="Center"
+                        Padding="8"
+                        Command="{x:Bind ViewModel.ShowPersonalizeCommand}"
+                        ToolTipService.ToolTip="个性化">
+                    <FontIcon Glyph="&#xE771;" FontSize="16" />
+                </Button>
+                
                 <Button Background="Transparent"
                         BorderBrush="Transparent"
                         VerticalAlignment="Center"
@@ -35,8 +43,6 @@
                                             Command="{x:Bind ViewModel.EditLocalPortCommand}" />
                             <MenuFlyoutItem Text="查看日志"
                                             Command="{x:Bind ViewModel.ShowLogsCommand}" />
-                            <MenuFlyoutItem Text="设置主题"
-                                            Command="{x:Bind ViewModel.ToggleThemePickerCommand}" />
                             <MenuFlyoutSeparator />
                             <ToggleMenuFlyoutItem Text="开机启动" />
                             <MenuFlyoutSubItem Text="路由设置">
@@ -142,55 +148,5 @@
             </StackPanel>
         </Grid>
 
-        <!-- TeachingTip 主题选择器（保持不变） -->
-        <TeachingTip Grid.Row="0" Title="色彩模式"
-                     PreferredPlacement="Auto"
-                     IsOpen="{x:Bind ViewModel.IsThemePickerOpen, Mode=TwoWay}"
-                     PlacementMargin="20">
-            <TeachingTip.Content>
-                <StackPanel Orientation="Horizontal"
-                            Spacing="10">
-                    <Button MinWidth="70"
-                            Padding="12,8"
-                            Command="{x:Bind ViewModel.ChangeThemeCommand}"
-                            CommandParameter="{x:Bind ViewModel.LightTheme, Mode=OneWay}"
-                            IsEnabled="{x:Bind ViewModel.IsLightThemeEnabled, Mode=OneWay}">
-                        <StackPanel Orientation="Horizontal"
-                                    Spacing="6">
-                            <FontIcon Glyph="&#xE706;"
-                                      FontSize="14" />
-                            <TextBlock Text="浅色"
-                                       FontSize="14" />
-                        </StackPanel>
-                    </Button>
-                    <Button MinWidth="70"
-                            Padding="12,8"
-                            Command="{x:Bind ViewModel.ChangeThemeCommand}"
-                            CommandParameter="{x:Bind ViewModel.DarkTheme, Mode=OneWay}"
-                            IsEnabled="{x:Bind ViewModel.IsDarkThemeEnabled, Mode=OneWay}">
-                        <StackPanel Orientation="Horizontal"
-                                    Spacing="6">
-                            <FontIcon Glyph="&#xE708;"
-                                      FontSize="14" />
-                            <TextBlock Text="深色"
-                                       FontSize="14" />
-                        </StackPanel>
-                    </Button>
-                    <Button MinWidth="70"
-                            Padding="12,8"
-                            Command="{x:Bind ViewModel.ChangeThemeCommand}"
-                            CommandParameter="{x:Bind ViewModel.DefaultTheme, Mode=OneWay}"
-                            IsEnabled="{x:Bind ViewModel.IsDefaultThemeEnabled, Mode=OneWay}">
-                        <StackPanel Orientation="Horizontal"
-                                    Spacing="6">
-                            <FontIcon Glyph="&#xE770;"
-                                      FontSize="14" />
-                            <TextBlock Text="跟随系统"
-                                       FontSize="14" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </TeachingTip.Content>
-        </TeachingTip>
     </Grid>
 </UserControl>
