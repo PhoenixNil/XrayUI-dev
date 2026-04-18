@@ -14,6 +14,11 @@ namespace XrayUI.Views
         // at most 1 re-render per interval instead of one per line.
         private static readonly TimeSpan FlushInterval = TimeSpan.FromMilliseconds(100);
 
+        private static readonly SolidColorBrush RunningBrush =
+            new(Windows.UI.Color.FromArgb(255, 34, 197, 94));   // green
+        private static readonly SolidColorBrush StoppedBrush =
+            new(Windows.UI.Color.FromArgb(255, 156, 163, 175)); // grey
+
         private readonly XrayService     _xray;
         private readonly DispatcherQueue _queue;
         private readonly DispatcherQueueTimer _flushTimer;
@@ -35,7 +40,6 @@ namespace XrayUI.Views
             _xray.LogReceived     += OnLogReceived;
             _xray.RunningChanged  += OnRunningChanged;
 
-            // Initial render of any already-buffered lines.
             RenderLog();
             UpdateStatus();
 
@@ -94,10 +98,7 @@ namespace XrayUI.Views
         {
             var running = _xray.IsRunning;
             StatusText.Text = running ? "运行中" : "未运行";
-            StatusDot.Fill  = new SolidColorBrush(
-                running
-                    ? Windows.UI.Color.FromArgb(255, 34, 197, 94)    // green
-                    : Windows.UI.Color.FromArgb(255, 156, 163, 175)); // grey
+            StatusDot.Fill  = running ? RunningBrush : StoppedBrush;
         }
 
         // ── Button handlers ────────────────────────────────────────────────────

@@ -76,10 +76,10 @@ namespace XrayUI.ViewModels
             ControlPanel.InitializePersonalize(s);
 
             // Reconcile external state vs persisted setting (external is ground truth)
-            var registryEnabled = _startupService.IsStartupEnabled();
-            if (s.IsStartupEnabled != registryEnabled)
+            var externalEnabled = _startupService.IsStartupEnabled();
+            if (s.IsStartupEnabled != externalEnabled)
             {
-                s.IsStartupEnabled = registryEnabled;
+                s.IsStartupEnabled = externalEnabled;
                 await _settings.SaveSettingsAsync(s);
             }
             ControlPanel.IsStartupEnabled = s.IsStartupEnabled;

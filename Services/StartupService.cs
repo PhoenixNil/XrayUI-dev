@@ -9,6 +9,8 @@ namespace XrayUI.Services
 {
     public class StartupService
     {
+        public const string StartupMinimizedArgument = "--startup-minimized";
+
         private const string TaskName = "XrayUI_Autostart";
         private const string RootFolder = "\\";
 
@@ -150,7 +152,7 @@ namespace XrayUI.Services
             var sid = WindowsIdentity.GetCurrent().User?.Value ?? "";
             var exe = SecurityElement.Escape(_exePath);
             var workingDir = SecurityElement.Escape(Path.GetDirectoryName(_exePath) ?? "");
-            var args = minimizeOnBoot ? "--startup-minimized" : "";
+            var args = minimizeOnBoot ? StartupMinimizedArgument : "";
 
             // Only the 3 Settings below are kept because their Windows defaults would break us:
             //   DisallowStartIfOnBatteries (default true)  -> laptop on battery won't start the app
