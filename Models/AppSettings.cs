@@ -11,6 +11,7 @@ namespace XrayUI.Models
         public string? LastTunServerHost { get; set; }
         public bool IsStartupEnabled { get; set; } = false;
         public bool IsAutoConnect    { get; set; } = false;
+        public string? LastAutoConnectServerName { get; set; }
 
         // ── Personalization ───────────────────────────────────────────────────
         /// <summary>"Light" | "Dark" | "Default" (follows system)</summary>

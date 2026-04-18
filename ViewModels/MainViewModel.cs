@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml;
@@ -10,6 +11,7 @@ namespace XrayUI.ViewModels
     public partial class MainViewModel : BaseViewModel
     {
         private readonly SettingsService _settings;
+        private readonly StartupService _startupService;
         private ServerEntry? _activeServer;
         private bool _showPersonalize;
 
@@ -26,9 +28,11 @@ namespace XrayUI.ViewModels
             IDialogService  dialogs,
             SettingsService settings,
             XrayService     xray,
-            TunService      tunService)
+            TunService      tunService,
+            StartupService  startupService)
         {
-            _settings = settings;
+            _settings       = settings;
+            _startupService = startupService;
             var latencyProbe = new LatencyProbeService(
                 new TcpConnectProbeService(),
                 new PingProbeService());
@@ -38,7 +42,7 @@ namespace XrayUI.ViewModels
 
             ServerList   = new ServerListViewModel(dialogs, settings);
             ServerDetail = new ServerDetailViewModel(latencyProbe, aiUnlockCheck);
-            ControlPanel = new ControlPanelViewModel(dialogs, settings, xray, tunService);
+            ControlPanel = new ControlPanelViewModel(dialogs, settings, xray, tunService, startupService);
             Personalize  = new PersonalizeViewModel(settings);
 
             // Wire ControlPanel so it knows the current selected server
@@ -70,6 +74,32 @@ namespace XrayUI.ViewModels
             ControlPanel.LocalPort    = s.LocalSocksPort;
             ControlPanel.RoutingMode  = s.RoutingMode == "global" ? "全局路由" : "智能分流";
             ControlPanel.InitializePersonalize(s);
+
+            // Reconcile registry vs persisted setting (registry is ground truth)
+            var registryEnabled = _startupService.IsStartupEnabled();
+            if (s.IsStartupEnabled != registryEnabled)
+            {
+                s.IsStartupEnabled = registryEnabled;
+                await _settings.SaveSettingsAsync(s);
+            }
+            ControlPanel.IsStartupEnabled = s.IsStartupEnabled;
+            ControlPanel.IsAutoConnect    = s.IsAutoConnect;
+
+            if (s.IsStartupEnabled && s.IsAutoConnect)
+                await TryAutoConnectAsync(s);
+        }
+
+        private async Task TryAutoConnectAsync(AppSettings s)
+        {
+            var target = (!string.IsNullOrEmpty(s.LastAutoConnectServerName)
+                ? ServerList.Servers.FirstOrDefault(
+                    x => string.Equals(x.Name, s.LastAutoConnectServerName, System.StringComparison.Ordinal))
+                : null)
+                ?? ServerList.Servers.FirstOrDefault();
+
+            if (target is null) return;
+            ServerList.SelectedServer = target;
+            await ControlPanel.StartStopCommand.ExecuteAsync(null);
         }
 
         // ── Personalize navigation ────────────────────────────────────────────

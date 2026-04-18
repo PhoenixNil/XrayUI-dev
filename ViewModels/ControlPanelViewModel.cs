@@ -14,12 +14,15 @@ namespace XrayUI.ViewModels
         private readonly SettingsService _settings;
         private readonly XrayService _xray;
         private readonly TunService _tunService;
+        private readonly StartupService _startupService;
         private string _startStopButtonContent = "启动";
         private bool _startStopButtonChecked;
         private bool _isRunning;
         private bool _isTunMode;
         private int _localPort = 16890;
         private string _routingMode = "智能分流";
+        private bool _isStartupEnabled;
+        private bool _isAutoConnect;
         // Guards OnIsTunModeChanged from firing the dialog when we update internally
         private bool _isTunInternalUpdate;
 
@@ -39,12 +42,14 @@ namespace XrayUI.ViewModels
             IDialogService dialogs,
             SettingsService settings,
             XrayService xray,
-            TunService tunService)
+            TunService tunService,
+            StartupService startupService)
         {
-            _dialogs    = dialogs;
-            _settings   = settings;
-            _xray       = xray;
-            _tunService = tunService;
+            _dialogs        = dialogs;
+            _settings       = settings;
+            _xray           = xray;
+            _tunService     = tunService;
+            _startupService = startupService;
         }
 
         // ── Running state ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -52,13 +57,13 @@ namespace XrayUI.ViewModels
         public string StartStopButtonContent
         {
             get => _startStopButtonContent;
-            set => SetProperty(ref _startStopButtonContent, value);
+            private set => SetProperty(ref _startStopButtonContent, value);
         }
 
         public bool StartStopButtonChecked
         {
             get => _startStopButtonChecked;
-            set => SetProperty(ref _startStopButtonChecked, value);
+            private set => SetProperty(ref _startStopButtonChecked, value);
         }
 
         public bool IsRunning
@@ -377,8 +382,7 @@ namespace XrayUI.ViewModels
             var confirmed = await _dialogs.ShowConfirmationAsync(
                 "开启TUN模式",
                 "开启 TUN 模式需要管理员权限，程序将会重启，是否继续？",
-                "继续",
-                "取消");
+                "确认");
 
             if (!confirmed) return;
 
@@ -413,10 +417,11 @@ namespace XrayUI.ViewModels
                     }
                     catch
                     {
+                        // ignored
                     }
                 });
 
-                if (global::Microsoft.UI.Xaml.Application.Current is App app)
+                if (Application.Current is App app)
                 {
                     app.RequestShutdown();
                 }
@@ -495,6 +500,54 @@ namespace XrayUI.ViewModels
 
         [RelayCommand]
         private void SetRoutingMode(string mode) => RoutingMode = mode;
+
+        // ── Startup ───────────────────────────────────────────────────────────
+
+        public bool IsStartupEnabled
+        {
+            get => _isStartupEnabled;
+            set
+            {
+                if (SetProperty(ref _isStartupEnabled, value))
+                    OnPropertyChanged(nameof(StartupMenuIcon));
+            }
+        }
+
+        public bool IsAutoConnect
+        {
+            get => _isAutoConnect;
+            set => SetProperty(ref _isAutoConnect, value);
+        }
+
+        /// <summary>
+        /// Returns a checkmark icon when auto-start is enabled, null otherwise.
+        /// Bound to MenuFlyoutItem.Icon so the item reflects current state without
+        /// using ToggleMenuFlyoutItem (which has timing issues with Command).
+        /// </summary>
+        public IconElement? StartupMenuIcon =>
+            _isStartupEnabled ? new FontIcon { Glyph = "\uE73E" } : null;
+
+        [RelayCommand]
+        private async Task OpenStartupSettings()
+        {
+            // Always open the dialog showing current state — no toggle logic needed.
+            // When startup is off, always show auto-connect as unchecked to avoid confusion.
+            var result = await _dialogs.ShowStartupDialogAsync(IsStartupEnabled, IsStartupEnabled && IsAutoConnect);
+            if (result is null) return;   // user cancelled — leave state unchanged
+
+            var (newEnabled, newAutoConnect) = result.Value;
+
+            _startupService.SetStartupEnabled(newEnabled);
+
+            var s = await _settings.LoadSettingsAsync();
+            s.IsStartupEnabled = newEnabled;
+            s.IsAutoConnect    = newAutoConnect;
+            s.LastAutoConnectServerName = newAutoConnect ? GetSelectedServer()?.Name : null;
+            await TrySaveSettingsAsync(s, "persist startup settings");
+
+            IsStartupEnabled = newEnabled;
+            IsAutoConnect    = newAutoConnect;
+        }
 
         // ── Theme ─────────────────────────────────────────────────────────────
 

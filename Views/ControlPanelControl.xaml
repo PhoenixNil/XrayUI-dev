@@ -35,17 +35,18 @@
                 <Button Background="Transparent"
                         BorderBrush="Transparent"
                         VerticalAlignment="Center"
-                        Padding="8">
+                        Padding="8" >
                     <FontIcon Glyph="&#xE713;" FontSize="16" />
                     <Button.Flyout>
                         <MenuFlyout>
-                            <MenuFlyoutItem Text="编辑本地端口"
+                            <MenuFlyoutItem Text="编辑本地端口" 
                                             Command="{x:Bind ViewModel.EditLocalPortCommand}" />
-                            <MenuFlyoutItem Text="查看日志"
+                            <MenuFlyoutItem Text="查看日志" 
                                             Command="{x:Bind ViewModel.ShowLogsCommand}" />
-                            <MenuFlyoutSeparator />
-                            <ToggleMenuFlyoutItem Text="开机启动" />
-                            <MenuFlyoutSubItem Text="路由设置">
+                            <MenuFlyoutItem Text="开机启动"
+                                            Command="{x:Bind ViewModel.OpenStartupSettingsCommand}"
+                                            Icon="{x:Bind ViewModel.StartupMenuIcon, Mode=OneWay}" />
+                            <MenuFlyoutSubItem Text="路由设置" >
                                 <MenuFlyoutItem Text="全局路由"
                                                 Command="{x:Bind ViewModel.SetRoutingModeCommand}"
                                                 CommandParameter="全局路由" />
