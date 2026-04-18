@@ -540,7 +540,7 @@ namespace XrayUI.ViewModels
             var (newEnabled, newAutoConnect) = result.Value;
 
             var s = await _settings.LoadSettingsAsync();
-            _startupService.SetStartupEnabled(newEnabled);
+            _startupService.SetStartupEnabled(newEnabled, newEnabled && newAutoConnect);
             s.IsStartupEnabled = newEnabled;
             s.IsAutoConnect    = newAutoConnect;
             s.LastAutoConnectServerName = newAutoConnect ? GetSelectedServer()?.Name : null;

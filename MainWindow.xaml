@@ -19,11 +19,48 @@
         </Grid.RowDefinitions>
 
         <!-- Custom title bar — registered via SetTitleBar() in code-behind -->
-        <TitleBar x:Name="AppTitleBar"
-          Grid.Row="0"
-          IsBackButtonVisible="{x:Bind ViewModel.IsBackButtonVisible, Mode=OneWay}"
-          BackRequested="AppTitleBar_BackRequested"
-          Title="代理控制台" />
+        <Grid x:Name="AppTitleBar"
+              Grid.Row="0"
+              Height="40">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0"
+                    Click="DockButton_Click"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    CornerRadius="4"
+                    Width="30" Height="28"
+                    Padding="0"
+                    Margin="8,0,0,0"
+                    VerticalAlignment="Center"
+                    ToolTipService.ToolTip="切换边栏">
+                <FontIcon Glyph="&#xE90C;"  FontSize="13"  />
+            </Button>
+
+            <Button Grid.Column="1"
+                    Click="AppTitleBar_BackRequested"
+                    Visibility="{x:Bind ViewModel.BackButtonVisibility, Mode=OneWay}"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    CornerRadius="4"
+                    Margin="6,0,0,0"
+                    Width="30" Height="28"
+                    Padding="0"
+                    VerticalAlignment="Center">
+                <FontIcon Glyph="&#xE72B;"  FontSize="12" />
+            </Button>
+
+            <TextBlock Grid.Column="2"
+                       Text="代理控制台"
+                       FontSize="13"
+                       VerticalAlignment="Center"
+                       Margin="8,0,0,0" />
+        </Grid>
 
         <Grid Grid.Row="1"
               Margin="16,0,16,16"

@@ -9,6 +9,7 @@ namespace XrayUI
     public partial class App
     {
         private const string ParentPidArgumentPrefix = "--parent-pid=";
+        private const string StartupMinimizedFlag = "--startup-minimized";
         private Window? _window;
         private bool _cleanupStarted;
 
@@ -24,8 +25,9 @@ namespace XrayUI
         {
             var cmdArgs = Environment.GetCommandLineArgs();
             var parentPid = TryGetParentProcessId(cmdArgs);
+            var startMinimized = cmdArgs.Contains(StartupMinimizedFlag, StringComparer.OrdinalIgnoreCase);
 
-            _window = new MainWindow();
+            _window = new MainWindow(startMinimized);
             _window.Closed += (_, _) => CleanupOnExit();
 
             // 检测 --tun 参数：以管理员身份重启后自动开启 TUN 模式

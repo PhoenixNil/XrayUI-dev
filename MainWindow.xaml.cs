@@ -22,14 +22,17 @@ namespace XrayUI
         private bool _allowClose;
         private bool _initialized;
         private bool _isHiddenToTray;
+        private readonly bool _startMinimized;
 
         private const uint WmQueryEndSession = 0x0011;
         private const uint WmEndSession = 0x0016;
 
         public MainViewModel ViewModel { get; }
 
-        public MainWindow()
+        public MainWindow(bool startMinimized = false)
         {
+            _startMinimized = startMinimized;
+
             // Build services before InitializeComponent so ViewModel is ready for x:Bind
             var settingsService = new SettingsService();
             var xrayService     = new XrayService();
@@ -66,15 +69,33 @@ namespace XrayUI
         {
             Activated -= OnFirstActivated;
             _initialized = true;
+
+            // For --startup-minimized we only hide the window here so the XamlRoot
+            // stays alive for any dialogs raised during InitializeAsync (e.g.
+            // auto-connect errors). The full tray transition (ReleaseUiResources)
+            // runs after init so resources are still freed in the minimized case.
+            if (_startMinimized)
+            {
+                AppWindow.IsShownInSwitchers = false;
+                AppWindow.Hide();
+            }
+
             await ViewModel.InitializeAsync();
+
+            if (_startMinimized) HideToTray();
         }
 
-        private void AppTitleBar_BackRequested(Microsoft.UI.Xaml.Controls.TitleBar sender, object args)
+        private void AppTitleBar_BackRequested(object sender, RoutedEventArgs e)
         {
             if (ViewModel.GoBackCommand.CanExecute(null))
             {
                 ViewModel.GoBackCommand.Execute(null);
             }
+        }
+
+        private void DockButton_Click(object sender, RoutedEventArgs e)
+        {
+            // TODO: wire up side-pane toggle when that feature lands.
         }
 
         private void ConfigureTray()
@@ -123,7 +144,7 @@ namespace XrayUI
             }
 
             _isHiddenToTray = true;
-            ControlPanel.CloseLogWindow();
+            ControlPanel?.CloseLogWindow();
 
             AppWindow.IsShownInSwitchers = false;
             AppWindow.Hide();

@@ -22,7 +22,7 @@ namespace XrayUI.ViewModels
 
         public Visibility MainContentVisibility => _showPersonalize ? Visibility.Collapsed : Visibility.Visible;
         public Visibility PersonalizeVisibility  => _showPersonalize ? Visibility.Visible   : Visibility.Collapsed;
-        public bool       IsBackButtonVisible    => _showPersonalize;
+        public Visibility BackButtonVisibility   => _showPersonalize ? Visibility.Visible   : Visibility.Collapsed;
 
         public MainViewModel(
             IDialogService  dialogs,
@@ -75,7 +75,7 @@ namespace XrayUI.ViewModels
             ControlPanel.RoutingMode  = s.RoutingMode == "global" ? "全局路由" : "智能分流";
             ControlPanel.InitializePersonalize(s);
 
-            // Reconcile registry vs persisted setting (registry is ground truth)
+            // Reconcile external state vs persisted setting (external is ground truth)
             var registryEnabled = _startupService.IsStartupEnabled();
             if (s.IsStartupEnabled != registryEnabled)
             {
@@ -110,7 +110,7 @@ namespace XrayUI.ViewModels
             _showPersonalize = true;
             OnPropertyChanged(nameof(MainContentVisibility));
             OnPropertyChanged(nameof(PersonalizeVisibility));
-            OnPropertyChanged(nameof(IsBackButtonVisible));
+            OnPropertyChanged(nameof(BackButtonVisibility));
         }
 
         private void ClosePersonalize()
@@ -118,7 +118,7 @@ namespace XrayUI.ViewModels
             _showPersonalize = false;
             OnPropertyChanged(nameof(MainContentVisibility));
             OnPropertyChanged(nameof(PersonalizeVisibility));
-            OnPropertyChanged(nameof(IsBackButtonVisible));
+            OnPropertyChanged(nameof(BackButtonVisibility));
         }
 
         // ── Back navigation (TitleBar back button) ────────────────────────────
