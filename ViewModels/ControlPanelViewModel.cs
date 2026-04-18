@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -377,7 +377,7 @@ namespace XrayUI.ViewModels
             var confirmed = await _dialogs.ShowConfirmationAsync(
                 "开启TUN模式",
                 "开启 TUN 模式需要管理员权限，程序将会重启，是否继续？",
-                "继续",
+                "确定",
                 "取消");
 
             if (!confirmed) return;
