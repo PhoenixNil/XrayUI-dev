@@ -1,3 +1,4 @@
+﻿using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using XrayUI.Models;
@@ -43,24 +44,15 @@ namespace XrayUI.Services
 
             AddNode(list, new JsonObject
             {
-                ["tag"] = "socks-in",
+                ["tag"] = "mixed-in",
                 ["protocol"] = "socks",
                 ["listen"] = "127.0.0.1",
-                ["port"] = settings.LocalSocksPort,
+                ["port"] = settings.LocalMixedPort,
                 ["settings"] = new JsonObject
                 {
                     ["auth"] = "noauth",
                     ["udp"] = true
                 }
-            });
-
-            AddNode(list, new JsonObject
-            {
-                ["tag"] = "http-in",
-                ["protocol"] = "http",
-                ["listen"] = "127.0.0.1",
-                ["port"] = settings.LocalHttpPort,
-                ["settings"] = new JsonObject()
             });
 
             return list;
@@ -103,7 +95,17 @@ namespace XrayUI.Services
             AddNode(list, proxy);
             AddNode(list, direct);
 
-            if (settings.IsTunMode)
+            // block outbound is needed by:
+            //   1. TUN mode's UDP:443 quench rule
+            //   2. Any enabled custom rule targeting "block" (smart mode only)
+            bool customRulesUseBlock =
+                settings.RoutingMode == "smart"
+                && settings.CustomRules is { } rules
+                && rules.Any(r => r.IsEnabled
+                                  && !string.IsNullOrWhiteSpace(r.Match)
+                                  && r.OutboundTag == "block");
+
+            if (settings.IsTunMode || customRulesUseBlock)
             {
                 AddNode(list, new JsonObject
                 {
@@ -323,7 +325,7 @@ namespace XrayUI.Services
                 JsonObject headers;
                 if (string.IsNullOrWhiteSpace(server.WsHost))
                 {
-                    headers = new JsonObject();
+                    headers = [];
                 }
                 else
                 {
@@ -381,14 +383,35 @@ namespace XrayUI.Services
                 };
             }
 
+            // User-defined custom rules run first (smart mode only, first-match-wins).
+            if (settings.CustomRules is { } customRules)
+            {
+                foreach (var rule in customRules)
+                {
+                    if (!rule.IsEnabled || string.IsNullOrWhiteSpace(rule.Match))
+                        continue;
+
+                    var node = new JsonObject
+                    {
+                        ["type"] = "field",
+                        ["outboundTag"] = rule.OutboundTag,
+                    };
+                    if (rule.Type == "ip")
+                        node["ip"] = CreateStringArray(rule.Match);
+                    else
+                        node["domain"] = CreateStringArray(rule.Match);
+
+                    AddNode(rules, node);
+                }
+            }
+
             AddNode(rules, new JsonObject
             {
                 ["type"] = "field",
                 ["outboundTag"] = "proxy",
                 ["domain"] = CreateStringArray(
-                    "fonts.gstatic.com",
-                    "fonts.googleapis.com"
-                )
+					"geosite:google"
+				)
             });
             AddNode(rules, new JsonObject
             {

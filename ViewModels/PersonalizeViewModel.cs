@@ -17,6 +17,7 @@ namespace XrayUI.ViewModels
         private Color _fallbackColor;
 
         private int _selectedThemeIndex;
+        private int _selectedBackdropIndex;
 
         public event EventHandler? CloseRequested;
 
@@ -112,6 +113,18 @@ namespace XrayUI.ViewModels
             }
         }
 
+        // ── Backdrop ──────────────────────────────────────────────────────────
+
+        public int SelectedBackdropIndex
+        {
+            get => _selectedBackdropIndex;
+            set
+            {
+                if (!SetProperty(ref _selectedBackdropIndex, value)) return;
+                ThemeHelper.ApplyBackdrop(value == 1 ? "Acrylic" : "Mica");
+            }
+        }
+
         // ── Commands ──────────────────────────────────────────────────────────
 
         [RelayCommand]
@@ -135,6 +148,7 @@ namespace XrayUI.ViewModels
                 ElementTheme.Dark    => "Dark",
                 _                    => "Default"
             };
+            s.BackdropSetting = ThemeHelper.CurrentBackdrop;
             await _settings.SaveSettingsAsync(s);
             CloseRequested?.Invoke(this, EventArgs.Empty);
         }
@@ -162,6 +176,9 @@ namespace XrayUI.ViewModels
                 _                  => 2,
             };
             OnPropertyChanged(nameof(SelectedThemeIndex));
+
+            _selectedBackdropIndex = ThemeHelper.CurrentBackdrop == "Acrylic" ? 1 : 0;
+            OnPropertyChanged(nameof(SelectedBackdropIndex));
         }
     }
 }

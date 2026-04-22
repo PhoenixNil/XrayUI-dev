@@ -7,163 +7,251 @@ using System.Security.Principal;
 
 namespace XrayUI.Services
 {
-    public class StartupService
+    /// <summary>
+    /// Manages autostart via a per-user Task Scheduler task, using direct COM
+    /// vtable dispatch (no RCW / ComWrappers) so it works cleanly under
+    /// NativeAOT without needing BuiltInComInteropSupport.
+    /// </summary>
+    public unsafe class StartupService
     {
+        // Shared with App.xaml.cs so the flag string lives in exactly one place.
+        // The boot task always passes this; auto-connect-on-boot is a separate
+        // setting (AppSettings.IsAutoConnect) evaluated by MainViewModel.
         public const string StartupMinimizedArgument = "--startup-minimized";
 
         private const string TaskName = "XrayUI_Autostart";
-        private const string RootFolder = "\\";
+        private const int TASK_CREATE_OR_UPDATE        = 6;
+        private const int TASK_LOGON_INTERACTIVE_TOKEN = 3;
+        private const uint CLSCTX_INPROC_SERVER        = 0x1;
+        private const int E_FILENOTFOUND               = unchecked((int)0x80070002);
+
+        private static readonly Guid CLSID_TaskScheduler = new("0F87369F-A4E5-4CFC-BD3E-73E6154572DD");
+        private static readonly Guid IID_ITaskService    = new("2FABA4C7-4DA9-4013-9697-20CC3FD40F85");
 
         private static readonly string _exePath =
             Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
 
         public bool IsStartupEnabled()
         {
-            return TaskExists();
-        }
-
-        public void SetStartupEnabled(bool enabled, bool minimizeOnBoot = false)
-        {
             try
             {
-                if (enabled)
+                IntPtr service = CreateAndConnectService();
+                try
                 {
-                    if (string.IsNullOrEmpty(_exePath))
-                        throw new InvalidOperationException("Cannot resolve exe path.");
-                    CreateTask(minimizeOnBoot);
+                    IntPtr folder = TaskServiceGetFolder(service, @"\");
+                    try
+                    {
+                        int hr = TaskFolderGetTask(folder, TaskName, out IntPtr pTask);
+                        if (hr == E_FILENOTFOUND) return false;
+                        Marshal.ThrowExceptionForHR(hr);
+                        Release(pTask);
+                        return true;
+                    }
+                    finally { Release(folder); }
                 }
-                else
-                {
-                    DeleteTask();
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[Startup] SetStartupEnabled({enabled}) failed: {ex.Message}");
-            }
-        }
-
-        private static bool TaskExists()
-        {
-            ITaskService? service = null;
-            ITaskFolder? folder = null;
-            IRegisteredTask? task = null;
-            try
-            {
-                service = CreateTaskService();
-                folder = service.GetFolder(RootFolder);
-                task = folder.GetTask(TaskName);
-                // A task that exists but is disabled in Task Scheduler won't be run
-                // by Windows at logon, so we treat that as "startup off" for UI/state.
-                return task != null && task.Enabled;
+                finally { Release(service); }
             }
             catch
             {
                 return false;
             }
-            finally
+        }
+
+        public void SetStartupEnabled(bool enabled)
+        {
+            if (enabled)
             {
-                ReleaseCom(task);
-                ReleaseCom(folder);
-                ReleaseCom(service);
+                if (string.IsNullOrEmpty(_exePath))
+                    throw new InvalidOperationException("Cannot resolve exe path.");
+                RegisterTaskXml();
+            }
+            else
+            {
+                DeleteTaskIfExists();
             }
         }
 
-        private static void CreateTask(bool minimizeOnBoot)
+        private static void RegisterTaskXml()
         {
-            var xml = BuildTaskXml(minimizeOnBoot);
-
-            ITaskService? service = null;
-            ITaskFolder? folder = null;
-            IRegisteredTask? task = null;
+            IntPtr service = CreateAndConnectService();
             try
             {
-                service = CreateTaskService();
-                folder = service.GetFolder(RootFolder);
-                task = folder.RegisterTask(
-                    TaskName,
-                    xml,
-                    (int)TASK_CREATION.TASK_CREATE_OR_UPDATE,
-                    null,
-                    null,
-                    TASK_LOGON_TYPE.TASK_LOGON_INTERACTIVE_TOKEN,
-                    null);
-                // CREATE_OR_UPDATE preserves the existing Enabled flag, so a task
-                // the user previously disabled would stay disabled. Force it on.
-                task.Enabled = true;
+                IntPtr folder = TaskServiceGetFolder(service, @"\");
+                try
+                {
+                    IntPtr registered = TaskFolderRegisterTask(
+                        folder, TaskName, BuildTaskXml(),
+                        TASK_CREATE_OR_UPDATE, TASK_LOGON_INTERACTIVE_TOKEN);
+                    Release(registered);
+                }
+                finally { Release(folder); }
             }
-            finally
-            {
-                ReleaseCom(task);
-                ReleaseCom(folder);
-                ReleaseCom(service);
-            }
+            finally { Release(service); }
         }
 
-        private static void DeleteTask()
+        private static void DeleteTaskIfExists()
         {
-            ITaskService? service = null;
-            ITaskFolder? folder = null;
+            IntPtr service = CreateAndConnectService();
             try
             {
-                service = CreateTaskService();
-                folder = service.GetFolder(RootFolder);
-                folder.DeleteTask(TaskName, 0);
+                IntPtr folder = TaskServiceGetFolder(service, @"\");
+                try
+                {
+                    int hr = TaskFolderDeleteTask(folder, TaskName);
+                    if (hr == E_FILENOTFOUND) return;
+                    Marshal.ThrowExceptionForHR(hr);
+                }
+                finally { Release(folder); }
             }
-            catch (Exception ex)
+            finally { Release(service); }
+        }
+
+        // ── COM vtable dispatch ───────────────────────────────────────────────
+        //
+        // Vtable layout for an IDispatch-derived interface:
+        //   [0..2]  IUnknown     (QueryInterface, AddRef, Release)
+        //   [3..6]  IDispatch    (GetTypeInfoCount, GetTypeInfo, GetIDsOfNames, Invoke)
+        //   [7..]   interface-specific methods in IDL declaration order
+        //
+        // ITaskService:  GetFolder=7, GetRunningTasks=8, NewTask=9, Connect=10, ...
+        // ITaskFolder:   get_Name=7, get_Path=8, GetFolder=9, GetFolders=10,
+        //                CreateFolder=11, DeleteFolder=12, GetTask=13, GetTasks=14,
+        //                DeleteTask=15, RegisterTask=16, ...
+
+        private static IntPtr CreateAndConnectService()
+        {
+            Guid clsid = CLSID_TaskScheduler;
+            Guid iid   = IID_ITaskService;
+            int hr = CoCreateInstance(ref clsid, IntPtr.Zero, CLSCTX_INPROC_SERVER, ref iid, out IntPtr pService);
+            Marshal.ThrowExceptionForHR(hr);
+
+            try
             {
-                // Task may not exist — treat as best-effort
-                Debug.WriteLine($"[Startup] DeleteTask: {ex.Message}");
+                Variant empty = default;
+                void** vtbl = *(void***)pService;
+                var fn = (delegate* unmanaged[Stdcall]<IntPtr, Variant, Variant, Variant, Variant, int>)vtbl[10];
+                int connectHr = fn(pService, empty, empty, empty, empty);
+                Marshal.ThrowExceptionForHR(connectHr);
+                return pService;
+            }
+            catch
+            {
+                Release(pService);
+                throw;
+            }
+        }
+
+        private static IntPtr TaskServiceGetFolder(IntPtr pService, string path)
+        {
+            IntPtr bstr = Marshal.StringToBSTR(path);
+            try
+            {
+                IntPtr pFolder;
+                void** vtbl = *(void***)pService;
+                var fn = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, IntPtr*, int>)vtbl[7];
+                int hr = fn(pService, bstr, &pFolder);
+                Marshal.ThrowExceptionForHR(hr);
+                return pFolder;
+            }
+            finally { Marshal.FreeBSTR(bstr); }
+        }
+
+        private static int TaskFolderGetTask(IntPtr pFolder, string name, out IntPtr pTask)
+        {
+            IntPtr bstr = Marshal.StringToBSTR(name);
+            try
+            {
+                IntPtr task;
+                void** vtbl = *(void***)pFolder;
+                var fn = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, IntPtr*, int>)vtbl[13];
+                int hr = fn(pFolder, bstr, &task);
+                pTask = task;
+                return hr;
+            }
+            finally { Marshal.FreeBSTR(bstr); }
+        }
+
+        private static int TaskFolderDeleteTask(IntPtr pFolder, string name)
+        {
+            IntPtr bstr = Marshal.StringToBSTR(name);
+            try
+            {
+                void** vtbl = *(void***)pFolder;
+                var fn = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, int, int>)vtbl[15];
+                return fn(pFolder, bstr, 0);
+            }
+            finally { Marshal.FreeBSTR(bstr); }
+        }
+
+        private static IntPtr TaskFolderRegisterTask(
+            IntPtr pFolder, string name, string xml, int createFlags, int logonType)
+        {
+            IntPtr bstrName = Marshal.StringToBSTR(name);
+            IntPtr bstrXml  = Marshal.StringToBSTR(xml);
+            try
+            {
+                Variant empty = default;
+                IntPtr registered;
+                void** vtbl = *(void***)pFolder;
+                var fn = (delegate* unmanaged[Stdcall]<
+                    IntPtr, IntPtr, IntPtr, int,
+                    Variant, Variant, int, Variant,
+                    IntPtr*, int>)vtbl[16];
+                int hr = fn(pFolder, bstrName, bstrXml, createFlags,
+                            empty, empty, logonType, empty, &registered);
+                Marshal.ThrowExceptionForHR(hr);
+                return registered;
             }
             finally
             {
-                ReleaseCom(folder);
-                ReleaseCom(service);
+                Marshal.FreeBSTR(bstrName);
+                Marshal.FreeBSTR(bstrXml);
             }
         }
 
-        // COM activation via CLSID does not go through a managed constructor — it calls
-        // CoCreateInstance in native code. Trim analyzer's PublicParameterlessConstructor
-        // requirement does not apply; the type is reached through [ComImport] interfaces.
-        [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
-            "Trimming", "IL2072:UnrecognizedReflectionPattern",
-            Justification = "COM class activated via CLSID; no managed ctor required.")]
-        private static ITaskService CreateTaskService()
+        private static uint Release(IntPtr pUnk)
         {
-            var type = Type.GetTypeFromCLSID(new Guid("0F87369F-A4E5-4CFC-BD3E-73E6154572DD"))
-                ?? throw new InvalidOperationException("Schedule.Service CLSID not registered.");
-            var instance = Activator.CreateInstance(type)
-                ?? throw new InvalidOperationException("Failed to create Schedule.Service instance.");
-            var service = (ITaskService)instance;
-            service.Connect();
-            return service;
+            if (pUnk == IntPtr.Zero) return 0;
+            void** vtbl = *(void***)pUnk;
+            var fn = (delegate* unmanaged[Stdcall]<IntPtr, uint>)vtbl[2];
+            return fn(pUnk);
         }
 
-        private static void ReleaseCom(object? com)
+        [DllImport("ole32.dll", ExactSpelling = true)]
+        private static extern int CoCreateInstance(
+            ref Guid rclsid, IntPtr pUnkOuter, uint dwClsContext,
+            ref Guid riid, out IntPtr ppv);
+
+        // Matches Win32 VARIANT: 16 bytes on x86, 24 on x64/ARM64.
+        // Zero-initialized → VT_EMPTY, which is what ITaskService/Register expect
+        // for "use default" in their optional VARIANT parameters.
+        [StructLayout(LayoutKind.Sequential)]
+        private struct Variant
         {
-            if (com != null && Marshal.IsComObject(com))
-            {
-                try { Marshal.ReleaseComObject(com); } catch { /* best-effort */ }
-            }
+            public ushort vt;
+            public ushort r1, r2, r3;
+            public IntPtr data1;
+            public IntPtr data2;
         }
 
-        private static string BuildTaskXml(bool minimizeOnBoot)
+        // ── Task XML ──────────────────────────────────────────────────────────
+
+        private static string BuildTaskXml()
         {
-            var sid = WindowsIdentity.GetCurrent().User?.Value ?? "";
-            var exe = SecurityElement.Escape(_exePath);
+            var sid        = WindowsIdentity.GetCurrent().User?.Value ?? "";
+            var exe        = SecurityElement.Escape(_exePath);
             var workingDir = SecurityElement.Escape(Path.GetDirectoryName(_exePath) ?? "");
-            var args = minimizeOnBoot ? StartupMinimizedArgument : "";
 
-            // Only the 3 Settings below are kept because their Windows defaults would break us:
-            //   DisallowStartIfOnBatteries (default true)  -> laptop on battery won't start the app
-            //   StopIfGoingOnBatteries    (default true)  -> app gets killed when unplugged
-            //   ExecutionTimeLimit        (default PT72H) -> app gets killed after 72h uptime
+            // ExecutionTimeLimit=PT0S avoids Windows' 72h default killing the app
+            // on long-running sessions. The other two Settings defaults (battery
+            // behavior) would otherwise refuse to start / kill us on unplug.
             return $@"<?xml version=""1.0"" encoding=""UTF-16""?>
 <Task version=""1.2"" xmlns=""http://schemas.microsoft.com/windows/2004/02/mit/task"">
   <Triggers>
     <LogonTrigger>
       <Enabled>true</Enabled>
       <UserId>{sid}</UserId>
+      <Delay>PT3S</Delay>
     </LogonTrigger>
   </Triggers>
   <Principals>
@@ -181,110 +269,11 @@ namespace XrayUI.Services
   <Actions Context=""Author"">
     <Exec>
       <Command>{exe}</Command>
-      <Arguments>{args}</Arguments>
+      <Arguments>{StartupMinimizedArgument}</Arguments>
       <WorkingDirectory>{workingDir}</WorkingDirectory>
     </Exec>
   </Actions>
 </Task>";
-        }
-
-        // ---------- Task Scheduler COM interop (minimal subset) ----------
-
-        private enum TASK_CREATION
-        {
-            TASK_CREATE_OR_UPDATE = 6,
-        }
-
-        private enum TASK_LOGON_TYPE
-        {
-            TASK_LOGON_INTERACTIVE_TOKEN = 3,
-        }
-
-        [ComImport]
-        [Guid("2FABA4C7-4DA9-4013-9697-20CC3FD40F85")]
-        [InterfaceType(ComInterfaceType.InterfaceIsDual)]
-        private interface ITaskService
-        {
-            [return: MarshalAs(UnmanagedType.Interface)]
-            ITaskFolder GetFolder([MarshalAs(UnmanagedType.BStr)] string path);
-
-            [return: MarshalAs(UnmanagedType.Interface)]
-            object GetRunningTasks(int flags);
-
-            [return: MarshalAs(UnmanagedType.Interface)]
-            object NewTask(uint flags);
-
-            void Connect(
-                [MarshalAs(UnmanagedType.Struct), In, Optional] object? serverName,
-                [MarshalAs(UnmanagedType.Struct), In, Optional] object? user,
-                [MarshalAs(UnmanagedType.Struct), In, Optional] object? domain,
-                [MarshalAs(UnmanagedType.Struct), In, Optional] object? password);
-        }
-
-        [ComImport]
-        [Guid("8CFAC062-A080-4C15-9A88-AA7C2AF80DFC")]
-        [InterfaceType(ComInterfaceType.InterfaceIsDual)]
-        private interface ITaskFolder
-        {
-            string Name { get; }
-
-            string Path { get; }
-
-            [return: MarshalAs(UnmanagedType.Interface)]
-            ITaskFolder GetFolder([MarshalAs(UnmanagedType.BStr)] string path);
-
-            [return: MarshalAs(UnmanagedType.Interface)]
-            object GetFolders(int flags);
-
-            [return: MarshalAs(UnmanagedType.Interface)]
-            ITaskFolder CreateFolder(
-                [MarshalAs(UnmanagedType.BStr)] string subFolderName,
-                [MarshalAs(UnmanagedType.Struct), In, Optional] object? sddl);
-
-            void DeleteFolder(
-                [MarshalAs(UnmanagedType.BStr)] string subFolderName,
-                int flags);
-
-            [return: MarshalAs(UnmanagedType.Interface)]
-            IRegisteredTask GetTask([MarshalAs(UnmanagedType.BStr)] string path);
-
-            [return: MarshalAs(UnmanagedType.Interface)]
-            object GetTasks(int flags);
-
-            void DeleteTask(
-                [MarshalAs(UnmanagedType.BStr)] string name,
-                int flags);
-
-            [return: MarshalAs(UnmanagedType.Interface)]
-            IRegisteredTask RegisterTask(
-                [MarshalAs(UnmanagedType.BStr)] string path,
-                [MarshalAs(UnmanagedType.BStr)] string xmlText,
-                int flags,
-                [MarshalAs(UnmanagedType.Struct), In, Optional] object? userId,
-                [MarshalAs(UnmanagedType.Struct), In, Optional] object? password,
-                TASK_LOGON_TYPE logonType,
-                [MarshalAs(UnmanagedType.Struct), In, Optional] object? sddl);
-        }
-
-        [ComImport]
-        [Guid("9C86F320-DEE3-4DD1-B972-A303F26B061E")]
-        [InterfaceType(ComInterfaceType.InterfaceIsDual)]
-        private interface IRegisteredTask
-        {
-            // Order must match the native IRegisteredTask vtable:
-            // Name, Path, State, Enabled, ... (only the members we use are declared,
-            // but every earlier slot must be present as a placeholder).
-            string Name { get; }
-
-            string Path { get; }
-
-            int State { get; }
-
-            bool Enabled
-            {
-                [return: MarshalAs(UnmanagedType.VariantBool)] get;
-                [param: MarshalAs(UnmanagedType.VariantBool)] set;
-            }
         }
     }
 }

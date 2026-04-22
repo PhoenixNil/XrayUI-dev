@@ -6,6 +6,9 @@ namespace XrayUI.Models
 {
     public class ServerEntry : INotifyPropertyChanged
     {
+        // Stable identifier for this entry; survives rename/dedupe.
+        // Auto-generated for new entries and for legacy entries loaded from JSON without an Id.
+        private string _id          = System.Guid.NewGuid().ToString("N");
         private string _name        = string.Empty;
         private string _host        = string.Empty;
         private int    _port;
@@ -36,6 +39,12 @@ namespace XrayUI.Models
         private string _flow        = string.Empty;
 
         // ── Base ──────────────────────────────────────────────────────────────
+        public string Id
+        {
+            get => _id;
+            set { _id = string.IsNullOrWhiteSpace(value) ? System.Guid.NewGuid().ToString("N") : value; OnPropertyChanged(); }
+        }
+
         public string Name
         {
             get => _name;

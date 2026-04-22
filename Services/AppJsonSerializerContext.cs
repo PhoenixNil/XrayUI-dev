@@ -10,6 +10,8 @@ namespace XrayUI.Services;
 [JsonSerializable(typeof(AppSettings))]
 [JsonSerializable(typeof(List<ServerEntry>))]
 [JsonSerializable(typeof(ServerEntry))]
+[JsonSerializable(typeof(List<CustomRoutingRule>))]
+[JsonSerializable(typeof(CustomRoutingRule))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext
 {
 }

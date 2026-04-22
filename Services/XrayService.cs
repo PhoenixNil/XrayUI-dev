@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -225,7 +225,7 @@ namespace XrayUI.Services
                 if (!process.HasExited)
                 {
                     process.Kill(entireProcessTree: true);
-                    process.WaitForExit(3000);
+                    process.WaitForExit(500);
                 }
             }
             catch

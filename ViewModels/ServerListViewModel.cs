@@ -12,24 +12,39 @@ using XrayUI.Services;
 
 namespace XrayUI.ViewModels
 {
-    public partial class ServerListViewModel : ObservableObject
+    public partial class ServerListViewModel : ObservableObject, IDisposable
     {
+        private static readonly HttpClient Http = new()
+        {
+            Timeout = TimeSpan.FromSeconds(15)
+        };
+
         private readonly IDialogService  _dialogs;
         private readonly SettingsService _settings;
         private ObservableCollection<ServerEntry> _servers = new();
         private ServerEntry? _selectedServer;
         private bool _isProxyRunning;
+        private bool _disposed;
 
         public ServerListViewModel(IDialogService dialogs, SettingsService settings)
         {
             _dialogs  = dialogs;
             _settings = settings;
 
-            ProtocolColorStore.ColorsChanged += (_, _) =>
-            {
-                foreach (var s in Servers)
-                    s.RefreshProtocolColor();
-            };
+            ProtocolColorStore.ColorsChanged += OnProtocolColorsChanged;
+        }
+
+        private void OnProtocolColorsChanged(object? sender, EventArgs e)
+        {
+            foreach (var s in Servers)
+                s.RefreshProtocolColor();
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            ProtocolColorStore.ColorsChanged -= OnProtocolColorsChanged;
         }
 
         public ObservableCollection<ServerEntry> Servers
@@ -177,9 +192,7 @@ namespace XrayUI.ViewModels
             string raw;
             try
             {
-                using var http = new HttpClient();
-                http.Timeout = TimeSpan.FromSeconds(15);
-                raw = await http.GetStringAsync(sub.Url);
+                raw = await Http.GetStringAsync(sub.Url);
             }
             catch (Exception ex)
             {

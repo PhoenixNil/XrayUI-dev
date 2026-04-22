@@ -60,7 +60,23 @@
                     </controls:SegmentedItem>
                 </controls:Segmented>
             </StackPanel>
-
+            <!-- ── Backdrop ────────────────────────────────────────────────── -->
+            <StackPanel Spacing="10">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="背景效果"
+                               FontSize="15"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="选择窗口背景材质"
+                               FontSize="13"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <ComboBox HorizontalAlignment="Left"
+                          MinWidth="160"
+                          SelectedIndex="{x:Bind ViewModel.SelectedBackdropIndex, Mode=TwoWay}">
+                    <ComboBoxItem Content="Mica" />
+                    <ComboBoxItem Content="亚克力" />
+                </ComboBox>
+            </StackPanel>
             <!-- ── Protocol Colors ─────────────────────────────────────────── -->
             <StackPanel Spacing="10">
                 <Grid>

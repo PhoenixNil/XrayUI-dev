@@ -1,9 +1,9 @@
 using System;
-using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
+using XrayUI.Helpers;
 using XrayUI.Services;
 
 namespace XrayUI.Views
@@ -33,7 +33,7 @@ namespace XrayUI.Views
             _queue = DispatcherQueue.GetForCurrentThread();
 
             var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            var scale = GetWindowScale(hWnd);
+            var scale = DpiHelper.GetWindowScale(hWnd);
             AppWindow.Resize(new SizeInt32((int)Math.Round(900 * scale), (int)Math.Round(600 * scale)));
             AppWindow.Title = "代理日志";
 
@@ -102,23 +102,6 @@ namespace XrayUI.Views
         }
 
         // ── Button handlers ────────────────────────────────────────────────────
-
-        private static double GetWindowScale(IntPtr hwnd)
-        {
-            try
-            {
-                if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 14393))
-                {
-                    var dpi = GetDpiForWindow(hwnd);
-                    if (dpi > 0) return dpi / 96.0;
-                }
-            }
-            catch { }
-            return 1.0;
-        }
-
-        [DllImport("user32.dll")]
-        private static extern int GetDpiForWindow(IntPtr hWnd);
 
         private void CopyButton_Click(object sender, RoutedEventArgs e)
         {

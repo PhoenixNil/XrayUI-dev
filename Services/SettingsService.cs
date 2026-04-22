@@ -58,8 +58,15 @@ namespace XrayUI.Services
                     return new List<ServerEntry>();
 
                 var json = await File.ReadAllTextAsync(ServersFile).ConfigureAwait(false);
-                return JsonSerializer.Deserialize(json, AppJsonSerializerContext.Default.ListServerEntry)
-                       ?? new List<ServerEntry>();
+                var list = JsonSerializer.Deserialize(json, AppJsonSerializerContext.Default.ListServerEntry)
+                           ?? new List<ServerEntry>();
+
+                // Persist once if legacy JSON has no Id keys, so field-initializer-generated
+                // Ids don't regenerate on every launch and break LastAutoConnectServerId.
+                if (list.Count > 0 && !json.Contains("\"Id\":", StringComparison.Ordinal))
+                    await SaveServersAsync(list).ConfigureAwait(false);
+
+                return list;
             }
             catch (Exception ex)
             {
