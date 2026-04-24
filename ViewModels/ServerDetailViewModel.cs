@@ -290,9 +290,31 @@ namespace XrayUI.ViewModels
         private void CancelPendingLatencyTest()
         {
             _latencyTestVersion++;
-            _latencyTestCts?.Cancel();
+            var cts = _latencyTestCts;
             _latencyTestCts = null;
             IsTestingLatency = false;
+
+            if (cts is not null)
+            {
+                _ = CancelLatencyTestAsync(cts);
+            }
+        }
+
+        private static Task CancelLatencyTestAsync(CancellationTokenSource cts)
+        {
+            return Task.Run(() =>
+            {
+                try
+                {
+                    cts.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+                catch (Exception)
+                {
+                }
+            });
         }
 
         private void CancelPendingAiCheck()
@@ -369,16 +391,15 @@ namespace XrayUI.ViewModels
 
             IsTestingLatency = true;
             LatencyText = "测试中...";
-            
 
             try
             {
-                var result = await _latencyProbe.ProbeAsync(
-                    server,
-                    TimeSpan.FromSeconds(3),
-                    cts.Token);
+                var token = cts.Token;
+                var result = await Task.Run(
+                    () => _latencyProbe.ProbeAsync(server, TimeSpan.FromSeconds(3), token),
+                    token);
 
-                if (version != _latencyTestVersion || cts.IsCancellationRequested)
+                if (!IsCurrentLatencyTest(version, cts, server))
                 {
                     return;
                 }
@@ -389,13 +410,14 @@ namespace XrayUI.ViewModels
                     LatencyProbeStatus.Timeout => "超时",
                     _ => "失败"
                 };
-                
             }
             catch (OperationCanceledException) when (cts.IsCancellationRequested)
             {
             }
             finally
             {
+                var isCurrentTest = IsCurrentLatencyTest(version, cts, server);
+
                 cts.Dispose();
 
                 if (ReferenceEquals(_latencyTestCts, cts))
@@ -403,11 +425,21 @@ namespace XrayUI.ViewModels
                     _latencyTestCts = null;
                 }
 
-                if (version == _latencyTestVersion)
+                if (isCurrentTest)
                 {
                     IsTestingLatency = false;
                 }
             }
+        }
+
+        private bool IsCurrentLatencyTest(
+            int version,
+            CancellationTokenSource cts,
+            ServerEntry server)
+        {
+            return version == _latencyTestVersion
+                   && !cts.IsCancellationRequested
+                   && ReferenceEquals(SelectedServer, server);
         }
     }
 }

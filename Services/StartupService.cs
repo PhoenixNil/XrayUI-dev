@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -251,7 +251,7 @@ namespace XrayUI.Services
     <LogonTrigger>
       <Enabled>true</Enabled>
       <UserId>{sid}</UserId>
-      <Delay>PT3S</Delay>
+      <Delay>PT5S</Delay>
     </LogonTrigger>
   </Triggers>
   <Principals>

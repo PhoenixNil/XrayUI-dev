@@ -33,5 +33,9 @@ namespace XrayUI.Models
         // ── Custom routing rules ──────────────────────────────────────────────
         /// <summary>User-defined routing rules. Applied only when RoutingMode == "smart".</summary>
         public List<CustomRoutingRule>? CustomRules { get; set; }
+
+        // ── Subscriptions ─────────────────────────────────────────────────────
+        /// <summary>Persisted subscription sources. Nodes derived from these carry SubscriptionId = the entry's Id.</summary>
+        public List<SubscriptionEntry>? Subscriptions { get; set; }
     }
 }

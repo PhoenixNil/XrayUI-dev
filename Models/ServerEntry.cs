@@ -9,6 +9,7 @@ namespace XrayUI.Models
         // Stable identifier for this entry; survives rename/dedupe.
         // Auto-generated for new entries and for legacy entries loaded from JSON without an Id.
         private string _id          = System.Guid.NewGuid().ToString("N");
+        private string _subscriptionId = string.Empty;
         private string _name        = string.Empty;
         private string _host        = string.Empty;
         private int    _port;
@@ -43,6 +44,13 @@ namespace XrayUI.Models
         {
             get => _id;
             set { _id = string.IsNullOrWhiteSpace(value) ? System.Guid.NewGuid().ToString("N") : value; OnPropertyChanged(); }
+        }
+
+        /// <summary>Id of the subscription this node was imported from; empty = manually added.</summary>
+        public string SubscriptionId
+        {
+            get => _subscriptionId;
+            set { _subscriptionId = value ?? string.Empty; OnPropertyChanged(); }
         }
 
         public string Name

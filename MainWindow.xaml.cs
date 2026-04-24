@@ -382,7 +382,7 @@ namespace XrayUI
                     Debug.WriteLine($"[Shutdown] cleanup error: {ex}");
                 }
             });
-            cleanupTask.Wait(TimeSpan.FromMilliseconds(800));
+            cleanupTask.Wait(TimeSpan.FromMilliseconds(600));
             Environment.Exit(0);
         }
 

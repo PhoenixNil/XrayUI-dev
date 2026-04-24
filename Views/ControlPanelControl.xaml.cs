@@ -31,7 +31,7 @@ namespace XrayUI.Views
 
         private async void GitHubButton_Click(object sender, RoutedEventArgs e)
         {
-            await Launcher.LaunchUriAsync(new Uri("https://github.com/PhoenixNil/XrayUI"));
+            await Launcher.LaunchUriAsync(new Uri("https://github.com/PhoenixNil/XrayUI-dev"));
         }
 
         public void CloseLogWindow()

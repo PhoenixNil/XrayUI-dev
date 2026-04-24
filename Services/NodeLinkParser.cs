@@ -70,18 +70,18 @@ namespace XrayUI.Services
                     }
                     else
                     {
-                        // Might be a raw (un-encoded) SIP002 like method:password@host:port
-                        // Check if it looks like that
-                        if (userinfoPart.Contains(':'))
+                        // Raw SIP002: method:password@host:port — userinfo may be percent-encoded.
+                        // SS2022 keys contain '+' '/' '=' which many generators escape as %2B %2F %3D.
+                        var unescaped = Uri.UnescapeDataString(userinfoPart);
+                        if (unescaped.Contains(':'))
                         {
-                            var colonIdx = userinfoPart.IndexOf(':');
-                            method   = userinfoPart.Substring(0, colonIdx);
-                            password = userinfoPart.Substring(colonIdx + 1);
+                            var colonIdx = unescaped.IndexOf(':');
+                            method   = unescaped.Substring(0, colonIdx);
+                            password = unescaped.Substring(colonIdx + 1);
                             (host, port) = SplitHostPort(hostPart);
                         }
                         else
                         {
-                            // Fall through to legacy
                             return ParseSsLegacy(rest, name);
                         }
                     }

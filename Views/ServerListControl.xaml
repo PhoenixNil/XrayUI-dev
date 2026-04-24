@@ -34,21 +34,21 @@
                     </DropDownButton.Content>
                     <DropDownButton.Flyout>
                         <MenuFlyout Placement="BottomEdgeAlignedLeft">
-                            <MenuFlyoutItem Text="导入节点链接"
+                            <MenuFlyoutItem Text="导入节点"
                                             Command="{x:Bind ViewModel.ImportFromLinkCommand}"
                                             FontWeight="Normal">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE77F;" />
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
-                            <MenuFlyoutItem Text="添加订阅地址"
-                                            Command="{x:Bind ViewModel.AddSubscriptionCommand}"
+                            <MenuFlyoutItem Text="添加订阅"
+                                            Command="{x:Bind ViewModel.OpenSubscriptionsCommand}"
                                             FontWeight="Normal">
                                 <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xED0E;" />
+                                    <FontIcon Glyph="&#xED11;" />
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
-                            <MenuFlyoutItem Text="手动添加新服务器"
+                            <MenuFlyoutItem Text="手动添加"
                                             Command="{x:Bind ViewModel.AddManualCommand}"
                                             FontWeight="Normal">
                                 <MenuFlyoutItem.Icon>

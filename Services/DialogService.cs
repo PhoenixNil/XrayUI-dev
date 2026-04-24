@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Threading.Tasks;
+using System.ComponentModel;
 using Windows.ApplicationModel.DataTransfer;
 using XrayUI.Helpers;
 using XrayUI.Models;
+using XrayUI.ViewModels;
+using XrayUI.Views;
 
 namespace XrayUI.Services
 {
@@ -63,68 +66,43 @@ namespace XrayUI.Services
             return string.IsNullOrEmpty(text) ? null : text;
         }
 
-        // ── Add subscription ──────────────────────────────────────────────────
+        // ── Subscriptions ─────────────────────────────────────────────────────
 
-        public async Task<SubscriptionEntry?> ShowAddSubscriptionDialogAsync()
+        public async Task<SubscriptionEntry?> ShowSubscriptionsDialogAsync(ManageSubscriptionsViewModel vm)
         {
-            var txtUrl = new TextBox
-            {
-                Header          = "订阅链接",
-                PlaceholderText = "https://...",
-                Width           = 320,
-                TextWrapping    = TextWrapping.Wrap,
-            };
-
-            var txtName = new TextBox
-            {
-                Header          = "备注名称（可选）",
-                PlaceholderText = "留空则使用链接域名",
-                Width           = 320,
-            };
-
-            var hint = new TextBlock
-            {
-                Text    = "将自动拉取并导入订阅中的全部节点",
-                FontSize = 12,
-                Opacity  = 0.65,
-            };
-
-            var content = new StackPanel
-            {
-                Width    = 320,
-                Spacing  = 14,
-                Margin   = new Thickness(0, 4, 0, 0),
-                Children = { txtUrl, txtName, hint }
-            };
-
             var dialog = CreateDialog();
-            dialog.Title                  = "添加订阅";
-            dialog.PrimaryButtonText      = "添加";
-            dialog.CloseButtonText        = "取消";
-            dialog.DefaultButton          = ContentDialogButton.Primary;
-            dialog.IsPrimaryButtonEnabled = false;
-            dialog.Content                = content;
+            dialog.Content = new ManageSubscriptionsDialog(vm);
 
-            txtUrl.TextChanged += (_, _) =>
-                dialog.IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(txtUrl.Text);
+            void SyncDialogButtons()
+            {
+                if (vm.IsAddPage)
+                {
+                    dialog.PrimaryButtonText      = "添加";
+                    dialog.CloseButtonText        = "取消";
+                    dialog.DefaultButton          = ContentDialogButton.Primary;
+                    dialog.IsPrimaryButtonEnabled = vm.CanAddSubscription;
+                    return;
+                }
 
-            var result = await dialog.ShowAsync();
-            if (result != ContentDialogResult.Primary) return null;
+                dialog.PrimaryButtonText      = string.Empty;
+                dialog.CloseButtonText        = "完成";
+                dialog.DefaultButton          = ContentDialogButton.Close;
+                dialog.IsPrimaryButtonEnabled = false;
+            }
 
-            var url = txtUrl.Text.Trim();
-            if (string.IsNullOrEmpty(url)) return null;
+            PropertyChangedEventHandler handler = (_, _) => SyncDialogButtons();
+            vm.PropertyChanged += handler;
+            SyncDialogButtons();
 
-            var name = string.IsNullOrWhiteSpace(txtName.Text)
-                ? TryGetHost(url)
-                : txtName.Text.Trim();
-
-            return new SubscriptionEntry { Url = url, Name = name };
-        }
-
-        private static string TryGetHost(string url)
-        {
-            try { return new Uri(url).Host; }
-            catch { return url; }
+            try
+            {
+                var result = await dialog.ShowAsync();
+                return result == ContentDialogResult.Primary ? vm.CreateSubscription() : null;
+            }
+            finally
+            {
+                vm.PropertyChanged -= handler;
+            }
         }
 
         // ── Edit server ───────────────────────────────────────────────────────

@@ -34,7 +34,7 @@
                     Padding="0"
                     Margin="8,0,0,0"
                     VerticalAlignment="Center"
-                    ToolTipService.ToolTip="切换smart窗口">
+                    ToolTipService.ToolTip="切换mini窗口">
                 <FontIcon Glyph="&#xE90C;"  FontSize="13"  />
             </Button>
 

@@ -1,12 +1,13 @@
 using System.Threading.Tasks;
 using XrayUI.Models;
+using XrayUI.ViewModels;
 
 namespace XrayUI.Services
 {
     public interface IDialogService
     {
         Task<string?> ShowImportLinkDialogAsync();
-        Task<SubscriptionEntry?> ShowAddSubscriptionDialogAsync();
+        Task<SubscriptionEntry?> ShowSubscriptionsDialogAsync(ManageSubscriptionsViewModel vm);
         Task<ServerEntry?> ShowEditServerDialogAsync(ServerEntry? existing);
         Task<int?> ShowEditPortDialogAsync(int currentPort);
         Task ShowErrorAsync(string title, string message);

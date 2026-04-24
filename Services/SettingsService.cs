@@ -44,7 +44,7 @@ namespace XrayUI.Services
 
         public async Task SaveSettingsAsync(AppSettings settings)
         {
-            var json = JsonSerializer.Serialize(settings, AppJsonSerializerContext.Default.AppSettings);
+            var json = JsonSerializer.Serialize(settings, AppJsonSerializerContext.Readable<AppSettings>());
             await File.WriteAllTextAsync(SettingsFile, json).ConfigureAwait(false);
         }
 
@@ -78,7 +78,7 @@ namespace XrayUI.Services
         public async Task SaveServersAsync(IEnumerable<ServerEntry> servers)
         {
             var serverList = servers as List<ServerEntry> ?? servers.ToList();
-            var json = JsonSerializer.Serialize(serverList, AppJsonSerializerContext.Default.ListServerEntry);
+            var json = JsonSerializer.Serialize(serverList, AppJsonSerializerContext.Readable<List<ServerEntry>>());
             await File.WriteAllTextAsync(ServersFile, json).ConfigureAwait(false);
         }
     }
