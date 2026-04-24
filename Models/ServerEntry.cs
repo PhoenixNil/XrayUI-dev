@@ -1,90 +1,114 @@
-﻿using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 
 namespace XrayUI.Models
 {
-    public class ServerEntry : INotifyPropertyChanged
+    public partial class ServerEntry : ObservableObject
     {
         // Stable identifier for this entry; survives rename/dedupe.
-        // Auto-generated for new entries and for legacy entries loaded from JSON without an Id.
-        private string _id          = System.Guid.NewGuid().ToString("N");
-        private string _subscriptionId = string.Empty;
-        private string _name        = string.Empty;
-        private string _host        = string.Empty;
-        private int    _port;
-        private string _protocol    = string.Empty;
-        private string _encryption  = string.Empty;
-        private bool   _isActive;
+        // Auto-generated for new entries and for legacy entries loaded from JSON without an ID.
+        private string _id = System.Guid.NewGuid().ToString("N");
 
-        // ── Auth ──────────────────────────────────────────────────────────────
-        private string _password    = string.Empty;
-        private string _uuid        = string.Empty;
+        public ServerEntry()
+        {
+            SubscriptionId = string.Empty;
+            Name = string.Empty;
+            Host = string.Empty;
+            Protocol = string.Empty;
+            Encryption = string.Empty;
+            Password = string.Empty;
+            Uuid = string.Empty;
+            Network = "tcp";
+            Path = string.Empty;
+            WsHost = string.Empty;
+            Security = string.Empty;
+            Sni = string.Empty;
+            Fingerprint = string.Empty;
+            PublicKey = string.Empty;
+            ShortId = string.Empty;
+            SpiderX = string.Empty;
+            Flow = string.Empty;
+        }
 
-        // ── Transport ─────────────────────────────────────────────────────────
-        private string _network     = "tcp";   // tcp | ws | grpc | udp
-        private string _path        = string.Empty;
-        private string _wsHost      = string.Empty;
-        private int    _alterId;
+        /// <summary>ID of the subscription this node was imported from; empty = manually added.</summary>
+        [ObservableProperty]
+        public partial string SubscriptionId { get; set; }
 
-        // ── TLS / Security ────────────────────────────────────────────────────
-        private string _security    = string.Empty;  // none | tls | reality
-        private string _sni         = string.Empty;
-        private string _fingerprint = string.Empty;
-        private bool   _allowInsecure;
+        [ObservableProperty]
+        public partial string Name { get; set; }
 
-        // ── VLESS Reality ─────────────────────────────────────────────────────
-        private string _publicKey   = string.Empty;
-        private string _shortId     = string.Empty;
-        private string _spiderX     = string.Empty;
-        private string _flow        = string.Empty;
+        [ObservableProperty]
+        public partial string Host { get; set; }
 
-        // ── Base ──────────────────────────────────────────────────────────────
+        [ObservableProperty]
+        public partial int Port { get; set; }
+
+        /// <summary>ss | vmess | vless | hysteria2</summary>
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(DisplayProtocol))]
+        public partial string Protocol { get; set; }
+
+        /// <summary>Cipher for ss; "TLS" or "Reality" label for vless/vmess/hysteria2</summary>
+        [ObservableProperty]
+        public partial string Encryption { get; set; }
+
+        [ObservableProperty]
+        public partial bool IsActive { get; set; }
+
+        // Auth
+        [ObservableProperty]
+        public partial string Password { get; set; }
+
+        [ObservableProperty]
+        public partial string Uuid { get; set; }
+
+        // Transport
+        [ObservableProperty]
+        public partial string Network { get; set; }
+
+        [ObservableProperty]
+        public partial string Path { get; set; }
+
+        [ObservableProperty]
+        public partial string WsHost { get; set; }
+
+        [ObservableProperty]
+        public partial int AlterId { get; set; }
+
+        // TLS / Security
+        [ObservableProperty]
+        public partial string Security { get; set; }
+
+        [ObservableProperty]
+        public partial string Sni { get; set; }
+
+        [ObservableProperty]
+        public partial string Fingerprint { get; set; }
+
+        [ObservableProperty]
+        public partial bool AllowInsecure { get; set; }
+
+        // VLESS Reality
+        [ObservableProperty]
+        public partial string PublicKey { get; set; }
+
+        [ObservableProperty]
+        public partial string ShortId { get; set; }
+
+        [ObservableProperty]
+        public partial string SpiderX { get; set; }
+
+        /// <summary>VLESS flow: "xtls-rprx-vision" or empty string.</summary>
+        [ObservableProperty]
+        public partial string Flow { get; set; }
+
         public string Id
         {
             get => _id;
-            set { _id = string.IsNullOrWhiteSpace(value) ? System.Guid.NewGuid().ToString("N") : value; OnPropertyChanged(); }
-        }
-
-        /// <summary>Id of the subscription this node was imported from; empty = manually added.</summary>
-        public string SubscriptionId
-        {
-            get => _subscriptionId;
-            set { _subscriptionId = value ?? string.Empty; OnPropertyChanged(); }
-        }
-
-        public string Name
-        {
-            get => _name;
-            set { _name = value; OnPropertyChanged(); }
-        }
-
-        public string Host
-        {
-            get => _host;
-            set { _host = value; OnPropertyChanged(); }
-        }
-
-        public int Port
-        {
-            get => _port;
-            set { _port = value; OnPropertyChanged(); }
-        }
-
-        /// <summary>ss | vmess | vless | hysteria2</summary>
-        public string Protocol
-        {
-            get => _protocol;
-            set
-            {
-                _protocol = value;
-                OnPropertyChanged();
-                OnPropertyChanged(nameof(DisplayProtocol));
-            }
+            set => SetProperty(ref _id, string.IsNullOrWhiteSpace(value) ? System.Guid.NewGuid().ToString("N") : value);
         }
 
         [JsonIgnore]
-        public string DisplayProtocol => (Protocol).ToLowerInvariant() switch
+        public string DisplayProtocol => Protocol.ToLowerInvariant() switch
         {
             "ss" => "Shadowsocks",
             "vmess" => "VMess",
@@ -93,116 +117,6 @@ namespace XrayUI.Models
             _ => Protocol ?? string.Empty
         };
 
-        /// <summary>Cipher for ss; "TLS" or "Reality" label for vless/vmess/hysteria2</summary>
-        public string Encryption
-        {
-            get => _encryption;
-            set { _encryption = value; OnPropertyChanged(); }
-        }
-
-        public bool IsActive
-        {
-            get => _isActive;
-            set { _isActive = value; OnPropertyChanged(); }
-        }
-
-        // ── Auth ──────────────────────────────────────────────────────────────
-        public string Password
-        {
-            get => _password;
-            set { _password = value; OnPropertyChanged(); }
-        }
-
-        public string Uuid
-        {
-            get => _uuid;
-            set { _uuid = value; OnPropertyChanged(); }
-        }
-
-        // ── Transport ─────────────────────────────────────────────────────────
-        public string Network
-        {
-            get => _network;
-            set { _network = value; OnPropertyChanged(); }
-        }
-
-        public string Path
-        {
-            get => _path;
-            set { _path = value; OnPropertyChanged(); }
-        }
-
-        public string WsHost
-        {
-            get => _wsHost;
-            set { _wsHost = value; OnPropertyChanged(); }
-        }
-
-        public int AlterId
-        {
-            get => _alterId;
-            set { _alterId = value; OnPropertyChanged(); }
-        }
-
-        // ── TLS / Security ────────────────────────────────────────────────────
-        public string Security
-        {
-            get => _security;
-            set { _security = value; OnPropertyChanged(); }
-        }
-
-        public string Sni
-        {
-            get => _sni;
-            set { _sni = value; OnPropertyChanged(); }
-        }
-
-        public string Fingerprint
-        {
-            get => _fingerprint;
-            set { _fingerprint = value; OnPropertyChanged(); }
-        }
-
-        public bool AllowInsecure
-        {
-            get => _allowInsecure;
-            set { _allowInsecure = value; OnPropertyChanged(); }
-        }
-
-        // ── VLESS Reality ─────────────────────────────────────────────────────
-        public string PublicKey
-        {
-            get => _publicKey;
-            set { _publicKey = value; OnPropertyChanged(); }
-        }
-
-        public string ShortId
-        {
-            get => _shortId;
-            set { _shortId = value; OnPropertyChanged(); }
-        }
-
-        public string SpiderX
-        {
-            get => _spiderX;
-            set { _spiderX = value; OnPropertyChanged(); }
-        }
-
-        /// <summary>VLESS flow: "xtls-rprx-vision" 或空字符串（无 flow）</summary>
-        public string Flow
-        {
-            get => _flow;
-            set { _flow = value; OnPropertyChanged(); }
-        }
-
-        // ── Color refresh ─────────────────────────────────────────────────────
-
         public void RefreshProtocolColor() => OnPropertyChanged(nameof(Protocol));
-
-        // ── INotifyPropertyChanged ────────────────────────────────────────────
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
