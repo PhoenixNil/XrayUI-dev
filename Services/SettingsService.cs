@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -59,7 +59,7 @@ namespace XrayUI.Services
 
                 var json = await File.ReadAllTextAsync(ServersFile).ConfigureAwait(false);
                 var list = JsonSerializer.Deserialize(json, AppJsonSerializerContext.Default.ListServerEntry)
-                           ?? new List<ServerEntry>();
+                           ?? [];
 
                 // Persist once if legacy JSON has no Id keys, so field-initializer-generated
                 // Ids don't regenerate on every launch and break LastAutoConnectServerId.
@@ -71,7 +71,7 @@ namespace XrayUI.Services
             catch (Exception ex)
             {
                 Debug.WriteLine($"[SettingsService] Failed to load servers: {ex.Message}");
-                return new List<ServerEntry>();
+                return [];
             }
         }
 

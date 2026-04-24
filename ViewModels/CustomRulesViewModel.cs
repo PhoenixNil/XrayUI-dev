@@ -152,7 +152,7 @@ namespace XrayUI.ViewModels
         // ── Update geo data ──────────────────────────────────────────────────
 
         /// <summary>
-        /// Invoked from the View after the user confirms in the refresh button's Flyout.
+        /// Invoked directly when the user clicks the refresh button.
         /// Shows a modal progress dialog, downloads (or skips if already latest), restarts xray
         /// if something actually changed, then surfaces the result. All dialogs are rooted in
         /// the CustomRulesWindow via <see cref="GetXamlRoot"/>.
