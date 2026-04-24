@@ -143,6 +143,22 @@ namespace XrayUI.ViewModels
 
         // ── Personalize navigation ────────────────────────────────────────────
 
+        private bool CanSwitchToSelectedServer()
+        {
+            return ControlPanel.IsRunning
+                && !ControlPanel.IsReapplying
+                && ServerList.SelectedServer is not null
+                && !ReferenceEquals(ServerList.SelectedServer, _activeServer);
+        }
+
+        [RelayCommand(CanExecute = nameof(CanSwitchToSelectedServer))]
+        private async Task SwitchToSelectedServer()
+        {
+            if (!CanSwitchToSelectedServer()) return;
+
+            await ControlPanel.SwitchToSelectedServerAsync();
+        }
+
         private void OpenPersonalize()
         {
             Personalize.LoadFromStore();
@@ -178,6 +194,7 @@ namespace XrayUI.ViewModels
             {
                 ServerDetail.SelectedServer = ServerList.SelectedServer;
                 OnPropertyChanged(nameof(ActiveServerName));
+                SwitchToSelectedServerCommand.NotifyCanExecuteChanged();
             }
         }
 
@@ -194,6 +211,12 @@ namespace XrayUI.ViewModels
 
         private void OnControlPanelPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
+            if (e.PropertyName == nameof(ControlPanelViewModel.IsReapplying))
+            {
+                SwitchToSelectedServerCommand.NotifyCanExecuteChanged();
+                return;
+            }
+
             if (e.PropertyName != nameof(ControlPanelViewModel.IsRunning)) return;
 
             var isRunning = ControlPanel.IsRunning;
@@ -202,6 +225,7 @@ namespace XrayUI.ViewModels
             OnPropertyChanged(nameof(ActiveServerName));
             OnPropertyChanged(nameof(MiniStatusText));
             OnPropertyChanged(nameof(MiniDotVisibility));
+            SwitchToSelectedServerCommand.NotifyCanExecuteChanged();
 
             ServerDetail.OnProxyRunningChanged(isRunning, ControlPanel.LocalPort);
         }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using System.ComponentModel;
 using Windows.ApplicationModel.DataTransfer;
@@ -308,13 +309,90 @@ namespace XrayUI.Services
             return result == ContentDialogResult.Primary;
         }
 
-        public async Task ShowErrorAsync(string title, string message)
+        public async Task ShowErrorAsync(string title, string message, XamlRoot? xamlRoot = null)
         {
-            var dialog = CreateDialog();
+            var dialog = CreateDialog(xamlRoot);
             dialog.Title           = title;
             dialog.Content         = message;
             dialog.CloseButtonText = "确定";
             await dialog.ShowAsync();
+        }
+
+        // ── Progress ──────────────────────────────────────────────────────────
+
+        public async Task ShowProgressDialogAsync(string title, Func<IProgress<string>, CancellationToken, Task> work, XamlRoot? xamlRoot = null)
+        {
+            using var cts = new CancellationTokenSource();
+
+            var statusText = new TextBlock
+            {
+                Text         = "正在准备…",
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth     = 320,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            };
+
+            var ring = new ProgressRing
+            {
+                IsActive = true,
+                Width    = 36,
+                Height   = 36,
+            };
+
+            var dialog = CreateDialog(xamlRoot);
+            dialog.Title           = title;
+            dialog.CloseButtonText = "取消";
+            dialog.Content = new StackPanel
+            {
+                Spacing             = 16,
+                MinWidth            = 320,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Children            = { ring, statusText }
+            };
+
+            // Progress<T> captures the current SynchronizationContext — since we're on the UI
+            // thread here, reports from the worker thread are marshalled back automatically.
+            var progress = new Progress<string>(s => statusText.Text = s);
+
+            Exception? error   = null;
+            bool workFinished = false;
+
+            var workTask = Task.Run(async () =>
+            {
+                try
+                {
+                    await work(progress, cts.Token);
+                }
+                catch (OperationCanceledException) when (cts.IsCancellationRequested)
+                {
+                    // Real user cancel — swallow here, we rethrow a fresh OCE below based on cts state.
+                    // Any *other* OperationCanceledException (e.g. HttpClient.Timeout throwing
+                    // TaskCanceledException with its own internal token) must not be swallowed —
+                    // it falls through to the generic catch so the caller can surface the failure.
+                }
+                catch (Exception ex)
+                {
+                    error = ex;
+                }
+                finally
+                {
+                    workFinished = true;
+                    dialog.DispatcherQueue.TryEnqueue(() =>
+                    {
+                        try { dialog.Hide(); } catch { }
+                    });
+                }
+            });
+
+            await dialog.ShowAsync();
+
+            // If the dialog closed because the user clicked Cancel (work still running), signal it.
+            if (!workFinished) cts.Cancel();
+
+            await workTask;
+
+            if (error != null) throw error;
+            if (cts.IsCancellationRequested) throw new OperationCanceledException();
         }
 
         // ── Share link ────────────────────────────────────────────────────────
@@ -482,9 +560,10 @@ namespace XrayUI.Services
         /// Creates a ContentDialog pre-wired with the correct XamlRoot and theme.
         /// Use object-initializer syntax to set the remaining properties.
         /// </summary>
-        private ContentDialog CreateDialog() => new ContentDialog
+        /// <param name="xamlRootOverride">If supplied, roots the dialog in this window instead of the MainWindow factory.</param>
+        private ContentDialog CreateDialog(XamlRoot? xamlRootOverride = null) => new ContentDialog
         {
-            XamlRoot       = XamlRoot,
+            XamlRoot       = xamlRootOverride ?? XamlRoot,
             RequestedTheme = ThemeHelper.ActualTheme,
         };
 

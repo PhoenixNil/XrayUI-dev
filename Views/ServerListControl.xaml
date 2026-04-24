@@ -115,7 +115,8 @@
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="models:ServerEntry">
                     <Grid Background="Transparent"
-                          ContextRequested="ServerItem_ContextRequested">
+                          ContextRequested="ServerItem_ContextRequested"
+                          DoubleTapped="ServerItem_DoubleTapped">
                         <StackPanel Orientation="Vertical"
                                     Spacing="6"
                                     Margin="0,12,0,12">

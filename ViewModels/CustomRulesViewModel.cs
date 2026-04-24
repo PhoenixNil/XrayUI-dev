@@ -13,7 +13,11 @@ namespace XrayUI.ViewModels
     {
         private readonly SettingsService _settings;
         private readonly XrayService _xray;
+        private readonly GeoDataUpdateService _geoUpdate;
+        private readonly IDialogService _dialogs;
         private readonly Func<Task>? _reapplyRouting;
+        private readonly Func<bool>? _isTunMode;
+        private readonly Func<string?>? _getProxyUrl;
 
         private bool _isEffectiveNow;
 
@@ -49,11 +53,29 @@ namespace XrayUI.ViewModels
         /// <summary>View closes the window when this fires.</summary>
         public event EventHandler? CloseRequested;
 
-        public CustomRulesViewModel(SettingsService settings, XrayService xray, Func<Task>? reapplyRouting)
+        /// <summary>
+        /// Returns the XamlRoot of the hosting CustomRulesWindow. Set by the View in its ctor.
+        /// Used so dialogs raised from this VM (progress, success/error toasts) render on the
+        /// CustomRulesWindow instead of behind it on MainWindow.
+        /// </summary>
+        public Func<XamlRoot?>? GetXamlRoot { get; set; }
+
+        public CustomRulesViewModel(
+            SettingsService settings,
+            XrayService xray,
+            GeoDataUpdateService geoUpdate,
+            IDialogService dialogs,
+            Func<Task>? reapplyRouting,
+            Func<bool>? isTunMode,
+            Func<string?>? getProxyUrl = null)
         {
             _settings       = settings;
             _xray           = xray;
+            _geoUpdate      = geoUpdate;
+            _dialogs        = dialogs;
             _reapplyRouting = reapplyRouting;
+            _isTunMode      = isTunMode;
+            _getProxyUrl    = getProxyUrl;
         }
 
         public async Task LoadAsync()
@@ -126,5 +148,88 @@ namespace XrayUI.ViewModels
 
         [RelayCommand]
         private void Cancel() => CloseRequested?.Invoke(this, EventArgs.Empty);
+
+        // ── Update geo data ──────────────────────────────────────────────────
+
+        /// <summary>
+        /// Invoked from the View after the user confirms in the refresh button's Flyout.
+        /// Shows a modal progress dialog, downloads (or skips if already latest), restarts xray
+        /// if something actually changed, then surfaces the result. All dialogs are rooted in
+        /// the CustomRulesWindow via <see cref="GetXamlRoot"/>.
+        /// </summary>
+        [RelayCommand]
+        private async Task UpdateGeoData()
+        {
+            var xamlRoot = GetXamlRoot?.Invoke();
+
+            // Route through xray's local SOCKS5 port when it's running — in mainland China
+            // GitHub's releases CDN is often unreachable or painfully slow, and the user
+            // already has a working tunnel up. Null = direct connection.
+            var proxyUrl = _getProxyUrl?.Invoke();
+
+            GeoDataUpdateService.UpdateResult result = default;
+
+            try
+            {
+                await _dialogs.ShowProgressDialogAsync(
+                    "正在更新路由数据",
+                    async (progress, ct) => result = await _geoUpdate.UpdateAsync(progress, proxyUrl, ct),
+                    xamlRoot);
+            }
+            catch (OperationCanceledException ex) when (ex.GetType() == typeof(OperationCanceledException))
+            {
+                // DialogService throws exactly `new OperationCanceledException()` for user cancel.
+                // Any subclass (e.g. TaskCanceledException from HttpClient.Timeout) falls through
+                // to the generic Exception catch below so the failure is surfaced, not swallowed.
+                return;
+            }
+            catch (Exception ex)
+            {
+                await _dialogs.ShowErrorAsync("更新失败", ex.Message, xamlRoot);
+                return;
+            }
+
+            // Everything was already current — don't bother restarting xray.
+            if (!result.AnyUpdated)
+            {
+                await _dialogs.ShowErrorAsync(
+                    "已是最新",
+                    "geoip.dat 和 geosite.dat 都已是最新版本，无需下载。",
+                    xamlRoot);
+                return;
+            }
+
+            // At least one file changed — decide whether to reload xray.
+            string message;
+            if (_xray.IsRunning)
+            {
+                if (_isTunMode?.Invoke() == true)
+                {
+                    message = "已更新。TUN 模式下请手动重启以生效。";
+                }
+                else if (_reapplyRouting != null)
+                {
+                    try
+                    {
+                        await _reapplyRouting();
+                        message = "已更新并重新加载 xray。";
+                    }
+                    catch (Exception ex)
+                    {
+                        message = $"已更新数据文件，但重启 xray 失败：{ex.Message}";
+                    }
+                }
+                else
+                {
+                    message = "已更新。请重启 xray 以生效。";
+                }
+            }
+            else
+            {
+                message = "已更新。下次启动 xray 时生效。";
+            }
+
+            await _dialogs.ShowErrorAsync("更新成功", message, xamlRoot);
+        }
     }
 }

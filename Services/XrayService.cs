@@ -12,7 +12,7 @@ namespace XrayUI.Services
         private static readonly string ExePath = Path.Combine(
             AppContext.BaseDirectory, "Assets", "engine", "xray.exe");
 
-        private static readonly string RulesDir = Path.Combine(
+        public static readonly string RulesDir = Path.Combine(
             AppContext.BaseDirectory, "Assets", "rules");
 
         private static readonly string ConfigPath = Path.Combine(

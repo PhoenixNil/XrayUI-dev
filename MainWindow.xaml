@@ -169,7 +169,8 @@
 
             <views:ServerListControl Grid.Column="0"
                                       x:Name="ServerList"
-                                      ViewModel="{x:Bind ViewModel.ServerList, Mode=OneWay}" />
+                                      ViewModel="{x:Bind ViewModel.ServerList, Mode=OneWay}"
+                                      SwitchToSelectedServerCommand="{x:Bind ViewModel.SwitchToSelectedServerCommand, Mode=OneWay}" />
 
             <Grid Grid.Column="1"
                   VerticalAlignment="Stretch">

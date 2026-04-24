@@ -52,6 +52,10 @@ namespace XrayUI.Views
             //    window has any prior presenter state.
             AppWindow.Show();
 
+            // Let the VM route dialogs (progress / success / error) to this window's XamlRoot
+            // instead of falling back to MainWindow's — otherwise they render behind.
+            ViewModel.GetXamlRoot = () => Content?.XamlRoot;
+
             // VM events
             ViewModel.ShowAddOrEditDialogRequested += OnShowAddOrEditDialogRequested;
             ViewModel.CloseRequested               += OnCloseRequested;
@@ -93,6 +97,23 @@ namespace XrayUI.Views
         {
             if (sender is FrameworkElement { DataContext: CustomRoutingRule rule })
                 ViewModel.DeleteRuleCommand.Execute(rule);
+        }
+
+        // ── Update GeoFiles flyout ────────────────────────────────────────────
+        // Flyout lives anchored to the refresh button inside THIS window, so its XamlRoot
+        // is correct by construction. On confirm: hide the flyout first, then kick the
+        // command — the command shows a modal progress dialog, which needs the flyout
+        // dismissed so it doesn't compete for focus / z-order.
+
+        private void ConfirmUpdateGeo_Click(object sender, RoutedEventArgs e)
+        {
+            UpdateGeoFlyout.Hide();
+            ViewModel.UpdateGeoDataCommand.Execute(null);
+        }
+
+        private void CancelUpdateGeo_Click(object sender, RoutedEventArgs e)
+        {
+            UpdateGeoFlyout.Hide();
         }
 
         private void SetWindowOwner(Window owner)
