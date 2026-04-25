@@ -174,31 +174,35 @@ namespace XrayUI.Services
                 bool isVless     = proto == "vless";
                 bool isHysteria2 = proto == "hysteria2";
                 bool isTrojan    = proto == "trojan";
-                bool hasWs       = net == "ws";
-                bool hasXhttp    = net == "xhttp";
-                bool hasTls      = sec == "tls" || sec == "reality";
-                bool hasReality  = sec == "reality";
+                bool hasWs       = !isHysteria2 && net == "ws";
+                bool hasXhttp    = !isHysteria2 && net == "xhttp";
+                bool hasGrpc     = !isHysteria2 && net == "grpc";
+                bool hasTls      = !isHysteria2 && (sec == "tls" || sec == "reality");
+                bool hasReality  = !isHysteria2 && sec == "reality";
 
-                rowEncryption.Visibility = isSs                     ? Visibility.Visible : Visibility.Collapsed;
+                cmbNetwork .Visibility = isHysteria2                 ? Visibility.Collapsed : Visibility.Visible;
+                cmbSecurity.Visibility = isHysteria2                 ? Visibility.Collapsed : Visibility.Visible;
+
+                rowEncryption.Visibility = isSs                       ? Visibility.Visible : Visibility.Collapsed;
                 rowPassword  .Visibility = (isSs || isHysteria2 || isTrojan)
-                                                                        ? Visibility.Visible : Visibility.Collapsed;
-                rowUuid      .Visibility = (isVmess || isVless)      ? Visibility.Visible : Visibility.Collapsed;
-                rowAlterId   .Visibility = isVmess                   ? Visibility.Visible : Visibility.Collapsed;
-                rowPath      .Visibility = (hasWs || hasXhttp || net == "grpc")
-                                                                        ? Visibility.Visible : Visibility.Collapsed;
-                rowWsHost    .Visibility = (hasWs || hasXhttp)       ? Visibility.Visible : Visibility.Collapsed;
-                rowSni       .Visibility = hasTls                    ? Visibility.Visible : Visibility.Collapsed;
-                rowFp        .Visibility = hasTls                    ? Visibility.Visible : Visibility.Collapsed;
-                rowAllowInsecure.Visibility = hasTls                ? Visibility.Visible : Visibility.Collapsed;
-                rowPk        .Visibility = hasReality                ? Visibility.Visible : Visibility.Collapsed;
-                rowSid       .Visibility = hasReality                ? Visibility.Visible : Visibility.Collapsed;
-                rowSpx       .Visibility = hasReality                ? Visibility.Visible : Visibility.Collapsed;
-                rowFlow      .Visibility = isVless                   ? Visibility.Visible : Visibility.Collapsed;
+                                                                          ? Visibility.Visible : Visibility.Collapsed;
+                rowUuid      .Visibility = (isVmess || isVless)       ? Visibility.Visible : Visibility.Collapsed;
+                rowAlterId   .Visibility = isVmess                    ? Visibility.Visible : Visibility.Collapsed;
+                rowPath      .Visibility = (hasWs || hasXhttp || hasGrpc) ? Visibility.Visible : Visibility.Collapsed;
+                rowWsHost    .Visibility = (hasWs || hasXhttp)        ? Visibility.Visible : Visibility.Collapsed;
+                rowSni       .Visibility = (hasTls || isHysteria2)    ? Visibility.Visible : Visibility.Collapsed;
+                rowFp        .Visibility = hasTls                     ? Visibility.Visible : Visibility.Collapsed;
+                rowAllowInsecure.Visibility = (hasTls || isHysteria2) ? Visibility.Visible : Visibility.Collapsed;
+                rowPk        .Visibility = hasReality                 ? Visibility.Visible : Visibility.Collapsed;
+                rowSid       .Visibility = hasReality                 ? Visibility.Visible : Visibility.Collapsed;
+                rowSpx       .Visibility = hasReality                 ? Visibility.Visible : Visibility.Collapsed;
+                rowFlow      .Visibility = isVless                    ? Visibility.Visible : Visibility.Collapsed;
             }
 
             cmbProtocol.SelectionChanged += (_, _) =>
             {
-                if (cmbProtocol.SelectedItem?.ToString() == "trojan"
+                var proto = cmbProtocol.SelectedItem?.ToString();
+                if ((proto == "trojan" || proto == "hysteria2")
                     && cmbSecurity.SelectedItem?.ToString() == "none")
                 {
                     cmbSecurity.SelectedItem = "tls";
@@ -259,6 +263,11 @@ namespace XrayUI.Services
             entry.ShortId     = txtSid.Text.Trim();
             entry.SpiderX     = txtSpx.Text.Trim();
             entry.Flow        = txtFlow.Text.Trim();
+
+            if (entry.Protocol == "hysteria2")
+            {
+                entry.Security = "tls";
+            }
 
             if (entry.Protocol != "ss")
             {

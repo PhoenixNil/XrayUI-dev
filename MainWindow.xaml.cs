@@ -178,7 +178,7 @@ namespace XrayUI
             ReleaseUiResources();
         }
 
-        private void RestoreFromTray()
+        internal void RestoreFromTray()
         {
             _isHiddenToTray = false;
             AppWindow.IsShownInSwitchers = true;

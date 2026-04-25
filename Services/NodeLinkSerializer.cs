@@ -167,7 +167,7 @@ namespace XrayUI.Services
                     first = false;
                 }
                 if (s.AllowInsecure)
-                    AppendParam(sb, "allowInsecure", "1", first: first);
+                    AppendParam(sb, "insecure", "1", first: first);
             }
 
             if (!string.IsNullOrEmpty(s.Name))
