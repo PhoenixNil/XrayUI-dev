@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
@@ -37,8 +37,9 @@ namespace XrayUI.Views
                 (int)Math.Round(620 * scale),
                 (int)Math.Round(460 * scale)));
             AppWindow.Title = "自定义路由规则";
+			AppWindow.TitleBar.PreferredTheme = TitleBarTheme.UseDefaultAppMode;
 
-            var presenter = OverlappedPresenter.CreateForDialog();
+			var presenter = OverlappedPresenter.CreateForDialog();
 
             // 1. Set Win32 owner BEFORE IsModal — IsModal requires an owner.
             SetWindowOwner(owner);
