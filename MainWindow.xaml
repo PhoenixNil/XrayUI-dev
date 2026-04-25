@@ -8,10 +8,6 @@
         mc:Ignorable="d"
         Title="代理控制台">
 
-    <Window.SystemBackdrop>
-        <MicaBackdrop />
-    </Window.SystemBackdrop>
-
     <Grid Background="Transparent">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -22,20 +18,148 @@
         <Grid x:Name="AppTitleBar"
               Grid.Row="0"
               Height="40">
-            <StackPanel Orientation="Horizontal"
-                        Spacing="10"
-                        VerticalAlignment="Center"
-                        Margin="16,0,0,0">
-                <FontIcon Glyph="&#xE705;"
-                          FontSize="14"
-                          VerticalAlignment="Center" />
-                <TextBlock Text="代理控制台"
-                           FontSize="12"
-                           VerticalAlignment="Center" />
-            </StackPanel>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0"
+                    Click="DockButton_Click"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    CornerRadius="4"
+                    Width="30" Height="28"
+                    Padding="0"
+                    Margin="8,0,0,0"
+                    VerticalAlignment="Center"
+                    ToolTipService.ToolTip="切换mini窗口">
+                <FontIcon Glyph="&#xE90C;"  FontSize="13"  />
+            </Button>
+
+            <Button Grid.Column="1"
+                    Click="AppTitleBar_BackRequested"
+                    Visibility="{x:Bind ViewModel.BackButtonVisibility, Mode=OneWay}"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    CornerRadius="4"
+                    Margin="6,0,0,0"
+                    Width="30" Height="28"
+                    Padding="0"
+                    VerticalAlignment="Center">
+                <FontIcon Glyph="&#xE72B;"  FontSize="12" />
+            </Button>
+
+            <TextBlock Grid.Column="2"
+                       Text="代理控制台"
+                       FontSize="13"
+                       VerticalAlignment="Center"
+                       Margin="8,0,0,0" />
+        </Grid>
+
+        <!-- Mini mode compact panel -->
+        <Grid Grid.Row="1"
+              Visibility="{x:Bind ViewModel.MiniModeVisibility, Mode=OneWay}"
+              Margin="16,0,16,0">
+            <!-- Mini content: tighten vertical rhythm to match the mockup -->
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Server name + routing mode -->
+                <StackPanel Grid.Row="0"
+                            Margin="2,18,20,0"
+                            VerticalAlignment="Top"
+                            Spacing="6">
+                    <TextBlock Text="{x:Bind ViewModel.ActiveServerName, Mode=OneWay}"
+                               FontSize="16"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="{x:Bind ViewModel.ControlPanel.RoutingMode, Mode=OneWay}"
+                               FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+
+                <!-- Power button (left) + status indicator (right) -->
+                <Grid Grid.Row="2"
+                      Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ToggleButton Grid.Column="0"
+                                  Command="{x:Bind ViewModel.ControlPanel.StartStopCommand, Mode=OneWay}"
+                                  IsChecked="{x:Bind ViewModel.ControlPanel.IsRunning, Mode=OneWay}"
+                                  Width="40" Height="40"
+                                  CornerRadius="20"
+                                  Padding="0"
+                                  BorderThickness="0"
+                                  VerticalAlignment="Bottom">
+                        <FontIcon Glyph="&#xE7E8;" FontSize="16" />
+                    </ToggleButton>
+
+                    <StackPanel Grid.Column="2"
+                                Orientation="Horizontal"
+                                Spacing="5"
+                                VerticalAlignment="Center">
+                        <Ellipse Width="6"
+                                 Height="6"
+                                 Fill="{StaticResource StateSuccessBrush}"
+                                 VerticalAlignment="Center"
+                                 Visibility="{x:Bind ViewModel.MiniDotVisibility, Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.MiniStatusText, Mode=OneWay}"
+                                   FontSize="13"
+                                   FontWeight="Medium"
+                                   VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <Border x:Name="MiniDragRegion"
+                    Height="32"
+                    Margin="0,0,56,0"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Top"
+                    Background="Transparent" />
+
+            <Grid HorizontalAlignment="Right"
+                  VerticalAlignment="Top"
+                  Margin="0,4,-10,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Button x:Name="MiniExpandButton"
+                        Grid.Column="0"
+                        Width="28" Height="22"
+                        Padding="0"
+                        BorderThickness="0"
+                        Background="Transparent"
+                        ToolTipService.ToolTip="返回完整窗口">
+                    <FontIcon Glyph="&#xE740;" FontSize="12" />
+                </Button>
+
+                <Button x:Name="MinicloseButton"
+                        Grid.Column="1"
+                        Width="28" Height="22"
+                        Padding="0"
+                        BorderThickness="0"
+                        Background="Transparent"
+                        ToolTipService.ToolTip="关闭">
+                    <FontIcon Glyph="&#xE711;" FontSize="12" />
+                </Button>
+            </Grid>
         </Grid>
 
         <Grid Grid.Row="1"
+              Visibility="{x:Bind ViewModel.FullModeVisibility, Mode=OneWay}"
               Margin="16,0,16,16"
               ColumnSpacing="16">
             <Grid.ColumnDefinitions>
@@ -45,22 +169,32 @@
 
             <views:ServerListControl Grid.Column="0"
                                       x:Name="ServerList"
-                                      ViewModel="{x:Bind ViewModel.ServerList, Mode=OneWay}" />
+                                      ViewModel="{x:Bind ViewModel.ServerList, Mode=OneWay}"
+                                      SwitchToSelectedServerCommand="{x:Bind ViewModel.SwitchToSelectedServerCommand, Mode=OneWay}" />
 
             <Grid Grid.Column="1"
                   VerticalAlignment="Stretch">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
 
-                <views:ServerDetailControl Grid.Row="0"
-                                            x:Name="ServerDetail"
-                                            ViewModel="{x:Bind ViewModel.ServerDetail, Mode=OneWay}" />
+                <!-- Main view: server detail + control panel -->
+                <Grid Visibility="{x:Bind ViewModel.MainContentVisibility, Mode=OneWay}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                <views:ControlPanelControl x:Name="ControlPanel"
-                                            Grid.Row="1"
-                                            ViewModel="{x:Bind ViewModel.ControlPanel, Mode=OneWay}" />
+                    <views:ServerDetailControl Grid.Row="0"
+                                               x:Name="ServerDetail"
+                                               ViewModel="{x:Bind ViewModel.ServerDetail, Mode=OneWay}" />
+
+                    <views:ControlPanelControl x:Name="ControlPanel"
+                                               Grid.Row="1"
+                                               ViewModel="{x:Bind ViewModel.ControlPanel, Mode=OneWay}" />
+                </Grid>
+
+                <!-- Personalize view -->
+                <views:PersonalizeControl Visibility="{x:Bind ViewModel.PersonalizeVisibility, Mode=OneWay}"
+                                          ViewModel="{x:Bind ViewModel.Personalize, Mode=OneWay}" />
+
             </Grid>
         </Grid>
     </Grid>

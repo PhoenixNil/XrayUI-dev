@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -12,18 +12,22 @@ namespace XrayUI.Services
         private static readonly string ExePath = Path.Combine(
             AppContext.BaseDirectory, "Assets", "engine", "xray.exe");
 
-        private static readonly string RulesDir = Path.Combine(
+        public static readonly string RulesDir = Path.Combine(
             AppContext.BaseDirectory, "Assets", "rules");
 
         private static readonly string ConfigPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "XrayUI", "xray_config.json");
 
-        private const int LogBufferMax = 2000;
+        private const int LogBufferMax = 500;
 
         private Process? _process;
         private readonly StringBuilder _startupLog = new();
-        private readonly List<string> _logBuffer = new();
+
+        // Fixed-size ring buffer: O(1) append + oldest-drop, no array shifting.
+        private readonly string[] _logBuffer = new string[LogBufferMax];
+        private int _logHead;    // index of the next write slot
+        private int _logCount;   // number of valid entries (<= LogBufferMax)
         private readonly object _bufferLock = new();
 
         public bool IsRunning => _process is { HasExited: false };
@@ -38,7 +42,25 @@ namespace XrayUI.Services
         {
             lock (_bufferLock)
             {
-                return new List<string>(_logBuffer);
+                if (_logCount == 0)
+                {
+                    return Array.Empty<string>();
+                }
+
+                var snapshot = new string[_logCount];
+                if (_logCount < LogBufferMax)
+                {
+                    // Not yet wrapped — data is contiguous in [0, _logCount)
+                    Array.Copy(_logBuffer, 0, snapshot, 0, _logCount);
+                }
+                else
+                {
+                    // Wrapped — oldest at _logHead, newest at _logHead-1
+                    int tailCount = LogBufferMax - _logHead;
+                    Array.Copy(_logBuffer, _logHead, snapshot, 0, tailCount);
+                    Array.Copy(_logBuffer, 0, snapshot, tailCount, _logHead);
+                }
+                return snapshot;
             }
         }
 
@@ -46,7 +68,9 @@ namespace XrayUI.Services
         {
             lock (_bufferLock)
             {
-                _logBuffer.Clear();
+                Array.Clear(_logBuffer, 0, _logBuffer.Length);
+                _logHead = 0;
+                _logCount = 0;
             }
         }
 
@@ -54,10 +78,11 @@ namespace XrayUI.Services
         {
             lock (_bufferLock)
             {
-                _logBuffer.Add(line);
-                if (_logBuffer.Count > LogBufferMax)
+                _logBuffer[_logHead] = line;
+                _logHead = (_logHead + 1) % LogBufferMax;
+                if (_logCount < LogBufferMax)
                 {
-                    _logBuffer.RemoveAt(0);
+                    _logCount++;
                 }
             }
 
@@ -200,7 +225,7 @@ namespace XrayUI.Services
                 if (!process.HasExited)
                 {
                     process.Kill(entireProcessTree: true);
-                    process.WaitForExit(3000);
+                    process.WaitForExit(500);
                 }
             }
             catch

@@ -1,12 +1,10 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
 namespace XrayUI.Services
 {
-    /// <summary>
-    /// 设置 / 清除 Windows 系统代理（WinInet / IE 代理，浏览器及大多数应用遵循此设置）。
-    /// </summary>
+    // 设置 / 清除 Windows 系统代理（WinInet / IE 代理，浏览器及大多数应用遵循此设置）。
     public static class SystemProxyService
     {
         private const string RegPath =
@@ -37,6 +35,7 @@ namespace XrayUI.Services
                     "172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;" +
                     "172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*;<local>",
                     RegistryValueKind.String);
+                key.Flush();
 
                 NotifyWindows();
             }
@@ -55,6 +54,8 @@ namespace XrayUI.Services
                 if (key == null) return;
 
                 key.SetValue("ProxyEnable", 0, RegistryValueKind.DWord);
+                key.DeleteValue("ProxyServer", throwOnMissingValue: false);
+                key.Flush();
                 NotifyWindows();
             }
             catch (Exception ex)

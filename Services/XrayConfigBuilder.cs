@@ -1,346 +1,507 @@
-using System.Collections.Generic;
+﻿using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 using XrayUI.Models;
 
 namespace XrayUI.Services
 {
     /// <summary>
     /// Builds an xray-core JSON configuration string for the given server and app settings.
+    /// Uses JsonObject/JsonArray so Native AOT does not need reflection-based serialization.
     /// </summary>
     public static class XrayConfigBuilder
     {
         private static readonly JsonSerializerOptions JsonOpts = new()
         {
-            WriteIndented = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            WriteIndented = true
         };
 
-        /// <param name="outboundInterface">
-        /// TUN 模式下检测到的出站物理网卡名称（如 "WLAN" 或 "以太网"）。
-        /// 非 TUN 模式传 null，此时 sockopt 不注入。
-        /// </param>
         public static string Build(ServerEntry server, AppSettings settings, string? outboundInterface = null)
         {
-            var config = new Dictionary<string, object>
+            var config = new JsonObject
             {
-                ["log"] = new { loglevel = "debug" },
+                ["log"] = new JsonObject
+                {
+                    ["loglevel"] = "debug"
+                },
                 ["dns"] = BuildDns(settings),
                 ["inbounds"] = BuildInbounds(settings),
                 ["outbounds"] = BuildOutbounds(server, settings, outboundInterface),
                 ["routing"] = BuildRouting(settings)
             };
 
-            return JsonSerializer.Serialize(config, JsonOpts);
+            return config.ToJsonString(JsonOpts);
         }
 
-        // ── Inbounds ──────────────────────────────────────────────────────────
-
-        private static object[] BuildInbounds(AppSettings settings)
+        private static JsonArray BuildInbounds(AppSettings settings)
         {
-            var list = new List<object>
-            {
-                new
-                {
-                    tag = "socks-in",
-                    protocol = "socks",
-                    listen = "127.0.0.1",
-                    port = settings.LocalSocksPort,
-                    settings = new { auth = "noauth", udp = true }
-                },
-                new
-                {
-                    tag = "http-in",
-                    protocol = "http",
-                    listen = "127.0.0.1",
-                    port = settings.LocalHttpPort,
-                    settings = new { }
-                }
-            };
+            var list = new JsonArray();
 
             if (settings.IsTunMode)
-                list.Insert(0, BuildTunInbound());
+            {
+                AddNode(list, BuildTunInbound());
+            }
 
-            return list.ToArray();
+            AddNode(list, new JsonObject
+            {
+                ["tag"] = "mixed-in",
+                ["protocol"] = "socks",
+                ["listen"] = "127.0.0.1",
+                ["port"] = settings.LocalMixedPort,
+                ["settings"] = new JsonObject
+                {
+                    ["auth"] = "noauth",
+                    ["udp"] = true
+                }
+            });
+
+            return list;
         }
 
-        private static object BuildTunInbound() => new
+        private static JsonObject BuildTunInbound()
         {
-            tag = "tun-in",
-            protocol = "tun",
-            settings = new
+            return new JsonObject
             {
-                // name 决定 wintun 接口名称，必须与 TunService.DefaultTunInterfaceName 一致
-                name = "xray-tun",
-                address = "10.255.0.1/24",
-                mtu = 1500
-            },
-            sniffing = new
-            {
-                enabled = true,
-                destOverride = new[] { "http", "tls", "quic" }
-            }
-        };
+                ["tag"] = "tun-in",
+                ["protocol"] = "tun",
+                ["settings"] = new JsonObject
+                {
+                    ["name"] = "xray-tun",
+                    ["address"] = "10.255.0.1/24",
+                    ["mtu"] = 1500
+                },
+                ["sniffing"] = new JsonObject
+                {
+                    ["enabled"] = true,
+                    ["destOverride"] = CreateStringArray("http", "tls", "quic")
+                }
+            };
+        }
 
-        // ── Outbounds ─────────────────────────────────────────────────────────
-
-        private static object[] BuildOutbounds(ServerEntry server, AppSettings settings, string? outboundInterface)
+        private static JsonArray BuildOutbounds(ServerEntry server, AppSettings settings, string? outboundInterface)
         {
             var proxy = BuildProxyOutbound(server);
             InjectSockopt(proxy, outboundInterface);
 
-            var direct = new Dictionary<string, object?>
+            var direct = new JsonObject
             {
                 ["tag"] = "direct",
                 ["protocol"] = "freedom",
-                ["settings"] = new { }
+                ["settings"] = new JsonObject()
             };
             InjectSockopt(direct, outboundInterface);
 
-            var list = new List<object> { proxy, direct };
+            var list = new JsonArray();
+            AddNode(list, proxy);
+            AddNode(list, direct);
 
-            // TUN 模式需要 blackhole 出站来承接 QUIC 阻断规则
-            if (settings.IsTunMode)
-                list.Add(new { tag = "block", protocol = "blackhole", settings = new { } });
+            // block outbound is needed by:
+            //   1. TUN mode's UDP:443 quench rule
+            //   2. Any enabled custom rule targeting "block" (smart mode only)
+            bool customRulesUseBlock =
+                settings.RoutingMode == "smart"
+                && settings.CustomRules is { } rules
+                && rules.Any(r => r.IsEnabled
+                                  && !string.IsNullOrWhiteSpace(r.Match)
+                                  && r.OutboundTag == "block");
 
-            return list.ToArray();
+            if (settings.IsTunMode || customRulesUseBlock)
+            {
+                AddNode(list, new JsonObject
+                {
+                    ["tag"] = "block",
+                    ["protocol"] = "blackhole",
+                    ["settings"] = new JsonObject()
+                });
+            }
+
+            return list;
         }
 
-        /// <summary>
-        /// 向出站的 streamSettings 注入 sockopt.interface，防止出站流量回流进 TUN 接口。
-        /// iface 为 null 时不注入（非 TUN 模式）。
-        /// </summary>
-        private static void InjectSockopt(Dictionary<string, object?> outbound, string? iface)
+        private static void InjectSockopt(JsonObject outbound, string? iface)
         {
-            if (iface == null) return;
-
-            var sockopt = new Dictionary<string, object?> { ["interface"] = iface };
-
-            if (outbound.TryGetValue("streamSettings", out var ss) && ss is Dictionary<string, object?> streamDict)
+            if (string.IsNullOrWhiteSpace(iface))
             {
-                streamDict["sockopt"] = sockopt;
+                return;
+            }
+
+            var sockopt = new JsonObject
+            {
+                ["interface"] = iface
+            };
+
+            if (outbound["streamSettings"] is JsonObject streamSettings)
+            {
+                streamSettings["sockopt"] = sockopt;
             }
             else
             {
-                outbound["streamSettings"] = new Dictionary<string, object?> { ["sockopt"] = sockopt };
+                outbound["streamSettings"] = new JsonObject
+                {
+                    ["sockopt"] = sockopt
+                };
             }
         }
 
-        private static Dictionary<string, object?> BuildProxyOutbound(ServerEntry server) =>
-            server.Protocol.ToLowerInvariant() switch
+        private static JsonObject BuildProxyOutbound(ServerEntry server)
+        {
+            return server.Protocol.ToLowerInvariant() switch
             {
                 "vmess" => BuildVmessOutbound(server),
                 "vless" => BuildVlessOutbound(server),
                 "hysteria2" => BuildHysteria2Outbound(server),
+                "trojan" => BuildTrojanOutbound(server),
                 _ => BuildSsOutbound(server)
             };
+        }
 
-        private static Dictionary<string, object?> BuildSsOutbound(ServerEntry s) => new()
+        private static JsonObject BuildSsOutbound(ServerEntry server)
         {
-            ["tag"] = "proxy",
-            ["protocol"] = "shadowsocks",
-            ["settings"] = new
+            var servers = new JsonArray();
+            AddNode(servers, new JsonObject
             {
-                servers = new[]
-                {
-                    new { address = s.Host, port = s.Port, method = s.Encryption, password = s.Password }
-                }
-            },
-            ["streamSettings"] = new Dictionary<string, object?> { ["network"] = "tcp" }
-        };
+                ["address"] = server.Host,
+                ["port"] = server.Port,
+                ["method"] = server.Encryption,
+                ["password"] = server.Password
+            });
 
-        private static Dictionary<string, object?> BuildVmessOutbound(ServerEntry s)
+            return new JsonObject
+            {
+                ["tag"] = "proxy",
+                ["protocol"] = "shadowsocks",
+                ["settings"] = new JsonObject
+                {
+                    ["servers"] = servers
+                },
+                ["streamSettings"] = new JsonObject
+                {
+                    ["network"] = "tcp"
+                }
+            };
+        }
+
+        private static JsonObject BuildVmessOutbound(ServerEntry server)
         {
-            var streamSettings = BuildStreamSettings(s);
-            return new()
+            var users = new JsonArray();
+            AddNode(users, new JsonObject
+            {
+                ["id"] = server.Uuid,
+                ["alterId"] = server.AlterId,
+                ["security"] = "auto"
+            });
+
+            var vnext = new JsonArray();
+            AddNode(vnext, new JsonObject
+            {
+                ["address"] = server.Host,
+                ["port"] = server.Port,
+                ["users"] = users
+            });
+
+            return new JsonObject
             {
                 ["tag"] = "proxy",
                 ["protocol"] = "vmess",
-                ["settings"] = new
+                ["settings"] = new JsonObject
                 {
-                    vnext = new[]
-                    {
-                        new
-                        {
-                            address = s.Host,
-                            port = s.Port,
-                            users = new[]
-                            {
-                                new { id = s.Uuid, alterId = s.AlterId, security = "auto" }
-                            }
-                        }
-                    }
+                    ["vnext"] = vnext
                 },
-                ["streamSettings"] = streamSettings
+                ["streamSettings"] = BuildStreamSettings(server)
             };
         }
 
-        private static Dictionary<string, object?> BuildVlessOutbound(ServerEntry s)
+        private static JsonObject BuildVlessOutbound(ServerEntry server)
         {
-            var streamSettings = BuildStreamSettings(s);
+            var user = new JsonObject
+            {
+                ["id"] = server.Uuid,
+                ["encryption"] = "none"
+            };
 
-            var flowValue = !string.IsNullOrWhiteSpace(s.Flow) ? s.Flow : null;
+            if (!string.IsNullOrWhiteSpace(server.Flow))
+            {
+                user["flow"] = server.Flow;
+            }
 
-            var userDict = new Dictionary<string, object?> { ["id"] = s.Uuid, ["encryption"] = "none" };
-            if (flowValue != null)
-                userDict["flow"] = flowValue;
+            var users = new JsonArray();
+            AddNode(users, user);
 
-            return new()
+            var vnext = new JsonArray();
+            AddNode(vnext, new JsonObject
+            {
+                ["address"] = server.Host,
+                ["port"] = server.Port,
+                ["users"] = users
+            });
+
+            return new JsonObject
             {
                 ["tag"] = "proxy",
                 ["protocol"] = "vless",
-                ["settings"] = new
+                ["settings"] = new JsonObject
                 {
-                    vnext = new[]
-                    {
-                        new
-                        {
-                            address = s.Host,
-                            port = s.Port,
-                            users = new[] { userDict }
-                        }
-                    }
+                    ["vnext"] = vnext
                 },
-                ["streamSettings"] = streamSettings
+                ["streamSettings"] = BuildStreamSettings(server)
             };
         }
 
-        private static Dictionary<string, object?> BuildHysteria2Outbound(ServerEntry s)
+        private static JsonObject BuildHysteria2Outbound(ServerEntry server)
         {
-            var sni = string.IsNullOrEmpty(s.Sni) ? s.Host : s.Sni;
-            return new()
+            var sni = string.IsNullOrWhiteSpace(server.Sni) ? server.Host : server.Sni;
+
+            return new JsonObject
             {
                 ["tag"] = "proxy",
                 ["protocol"] = "hysteria",
-                ["settings"] = new
+                ["settings"] = new JsonObject
                 {
-                    version = 2,
-                    address = s.Host,
-                    port = s.Port
+                    ["version"] = 2,
+                    ["address"] = server.Host,
+                    ["port"] = server.Port
                 },
-                ["streamSettings"] = new Dictionary<string, object?>
+                ["streamSettings"] = new JsonObject
                 {
                     ["network"] = "hysteria",
                     ["security"] = "tls",
-                    ["tlsSettings"] = new { serverName = sni, allowInsecure = s.AllowInsecure },
-                    ["hysteriaSettings"] = new { version = 2, auth = s.Password }
+                    ["tlsSettings"] = new JsonObject
+                    {
+                        ["serverName"] = sni,
+                        ["allowInsecure"] = server.AllowInsecure
+                    },
+                    ["hysteriaSettings"] = new JsonObject
+                    {
+                        ["version"] = 2,
+                        ["auth"] = server.Password
+                    }
                 }
             };
         }
 
-        private static Dictionary<string, object?> BuildStreamSettings(ServerEntry s)
+        private static JsonObject BuildTrojanOutbound(ServerEntry server)
         {
-            var network = string.IsNullOrEmpty(s.Network) ? "tcp" : s.Network.ToLowerInvariant();
-            var security = string.IsNullOrEmpty(s.Security) ? "none" : s.Security.ToLowerInvariant();
-
-            object? tlsSettings = null;
-            object? realitySettings = null;
-
-            if (security == "tls")
+            return new JsonObject
             {
-                var sni = string.IsNullOrEmpty(s.Sni) ? s.Host : s.Sni;
-                var fp = string.IsNullOrEmpty(s.Fingerprint) ? "chrome" : s.Fingerprint;
-                tlsSettings = new { serverName = sni, fingerprint = fp, allowInsecure = s.AllowInsecure };
-            }
-            else if (security == "reality")
-            {
-                var sni = string.IsNullOrEmpty(s.Sni) ? s.Host : s.Sni;
-                var fp = string.IsNullOrEmpty(s.Fingerprint) ? "chrome" : s.Fingerprint;
-                var spx = string.IsNullOrEmpty(s.SpiderX) ? "/" : s.SpiderX;
-                realitySettings = new
+                ["tag"] = "proxy",
+                ["protocol"] = "trojan",
+                ["settings"] = new JsonObject
                 {
-                    serverName = sni,
-                    fingerprint = fp,
-                    publicKey = s.PublicKey,
-                    shortId = s.ShortId,
-                    spiderX = spx
-                };
-                security = "reality";
-            }
-
-            if (network == "ws")
-            {
-                var headers = string.IsNullOrEmpty(s.WsHost)
-                    ? (object)new { }
-                    : new { Host = s.WsHost };
-
-                return BuildStreamObject(network, security, tlsSettings, realitySettings,
-                    wsSettings: new { path = s.Path, headers });
-            }
-
-            if (network == "grpc")
-            {
-                return BuildStreamObject(network, security, tlsSettings, realitySettings,
-                    grpcSettings: new { serviceName = s.Path });
-            }
-
-            return BuildStreamObject(network, security, tlsSettings, realitySettings);
+                    ["address"] = server.Host,
+                    ["port"] = server.Port,
+                    ["password"] = server.Password
+                },
+                ["streamSettings"] = BuildStreamSettings(server)
+            };
         }
 
-        private static Dictionary<string, object?> BuildStreamObject(
-            string network,
-            string security,
-            object? tlsSettings,
-            object? realitySettings,
-            object? wsSettings = null,
-            object? grpcSettings = null)
+        private static JsonObject BuildStreamSettings(ServerEntry server)
         {
-            var d = new Dictionary<string, object?>
+            var network = string.IsNullOrWhiteSpace(server.Network)
+                ? "tcp"
+                : server.Network.ToLowerInvariant();
+            var security = string.IsNullOrWhiteSpace(server.Security)
+                ? "none"
+                : server.Security.ToLowerInvariant();
+
+            var stream = new JsonObject
             {
                 ["network"] = network,
                 ["security"] = security
             };
 
-            if (tlsSettings != null)   d["tlsSettings"]    = tlsSettings;
-            if (realitySettings != null) d["realitySettings"] = realitySettings;
-            if (wsSettings != null)    d["wsSettings"]     = wsSettings;
-            if (grpcSettings != null)  d["grpcSettings"]   = grpcSettings;
+            if (security == "tls")
+            {
+                var sni = string.IsNullOrWhiteSpace(server.Sni) ? server.Host : server.Sni;
+                var fingerprint = string.IsNullOrWhiteSpace(server.Fingerprint) ? "chrome" : server.Fingerprint;
+                stream["tlsSettings"] = new JsonObject
+                {
+                    ["serverName"] = sni,
+                    ["fingerprint"] = fingerprint,
+                    ["allowInsecure"] = server.AllowInsecure
+                };
+            }
+            else if (security == "reality")
+            {
+                var sni = string.IsNullOrWhiteSpace(server.Sni) ? server.Host : server.Sni;
+                var fingerprint = string.IsNullOrWhiteSpace(server.Fingerprint) ? "chrome" : server.Fingerprint;
+                var spiderX = string.IsNullOrWhiteSpace(server.SpiderX) ? "/" : server.SpiderX;
 
-            return d;
+                stream["realitySettings"] = new JsonObject
+                {
+                    ["serverName"] = sni,
+                    ["fingerprint"] = fingerprint,
+                    ["publicKey"] = server.PublicKey,
+                    ["shortId"] = server.ShortId,
+                    ["spiderX"] = spiderX
+                };
+            }
+
+            if (network == "ws")
+            {
+                JsonObject headers;
+                if (string.IsNullOrWhiteSpace(server.WsHost))
+                {
+                    headers = [];
+                }
+                else
+                {
+                    headers = new JsonObject
+                    {
+                        ["Host"] = server.WsHost
+                    };
+                }
+
+                stream["wsSettings"] = new JsonObject
+                {
+                    ["path"] = server.Path,
+                    ["headers"] = headers
+                };
+            }
+            else if (network == "grpc")
+            {
+                stream["grpcSettings"] = new JsonObject
+                {
+                    ["serviceName"] = server.Path
+                };
+            }
+            else if (network == "xhttp")
+            {
+                var settings = new JsonObject
+                {
+                    ["path"] = server.Path
+                };
+
+                if (!string.IsNullOrWhiteSpace(server.WsHost))
+                {
+                    settings["host"] = server.WsHost;
+                }
+
+                stream["xhttpSettings"] = settings;
+            }
+
+            return stream;
         }
 
-        // ── Routing ───────────────────────────────────────────────────────────
-
-        private static object BuildRouting(AppSettings settings)
+        private static JsonObject BuildRouting(AppSettings settings)
         {
-            var rules = new List<object>();
+            var rules = new JsonArray();
 
-            // TUN 模式：首条规则阻断 UDP/443（QUIC），防止浏览器绕过代理
             if (settings.IsTunMode)
             {
-                rules.Add(new { type = "field", outboundTag = "block", network = "udp", port = "443" });
+                AddNode(rules, new JsonObject
+                {
+                    ["type"] = "field",
+                    ["outboundTag"] = "block",
+                    ["network"] = "udp",
+                    ["port"] = "443"
+                });
             }
 
             if (settings.RoutingMode == "global")
             {
-                rules.Add(new { type = "field", outboundTag = "proxy", network = "tcp,udp" });
-
-                return new
+                AddNode(rules, new JsonObject
                 {
-                    domainStrategy = "AsIs",
-                    rules = rules.ToArray()
+                    ["type"] = "field",
+                    ["outboundTag"] = "proxy",
+                    ["network"] = "tcp,udp"
+                });
+
+                return new JsonObject
+                {
+                    ["domainStrategy"] = "AsIs",
+                    ["rules"] = rules
                 };
             }
 
-            rules.Add(new { type = "field", outboundTag = "direct", domain = new[] { "geosite:cn", "geosite:private" } });
-            rules.Add(new { type = "field", outboundTag = "direct", ip = new[] { "geoip:cn", "geoip:private" } });
-            rules.Add(new { type = "field", outboundTag = "proxy", network = "tcp,udp" });
-
-            return new
+            // User-defined custom rules run first (smart mode only, first-match-wins).
+            if (settings.CustomRules is { } customRules)
             {
-                domainStrategy = "IPIfNonMatch",
-                rules = rules.ToArray()
+                foreach (var rule in customRules)
+                {
+                    if (!rule.IsEnabled || string.IsNullOrWhiteSpace(rule.Match))
+                        continue;
+
+                    var node = new JsonObject
+                    {
+                        ["type"] = "field",
+                        ["outboundTag"] = rule.OutboundTag,
+                    };
+                    if (rule.Type == "ip")
+                        node["ip"] = CreateStringArray(rule.Match);
+                    else
+                        node["domain"] = CreateStringArray(rule.Match);
+
+                    AddNode(rules, node);
+                }
+            }
+
+            AddNode(rules, new JsonObject
+            {
+                ["type"] = "field",
+                ["outboundTag"] = "proxy",
+                ["domain"] = CreateStringArray(
+					"geosite:google"
+				)
+            });
+            AddNode(rules, new JsonObject
+            {
+                ["type"] = "field",
+                ["outboundTag"] = "direct",
+                ["domain"] = CreateStringArray("geosite:cn", "geosite:private")
+            });
+            AddNode(rules, new JsonObject
+            {
+                ["type"] = "field",
+                ["outboundTag"] = "direct",
+                ["ip"] = CreateStringArray("geoip:cn", "geoip:private")
+            });
+            AddNode(rules, new JsonObject
+            {
+                ["type"] = "field",
+                ["outboundTag"] = "proxy",
+                ["network"] = "tcp,udp"
+            });
+
+            return new JsonObject
+            {
+                ["domainStrategy"] = "IPIfNonMatch",
+                ["rules"] = rules
             };
         }
 
-        // ── DNS ───────────────────────────────────────────────────────────────
-
-        private static object BuildDns(AppSettings settings)
+        private static JsonObject BuildDns(AppSettings settings)
         {
-            // TUN 模式下使用国内 DNS，防止 DNS 泄漏到隧道外
             return settings.IsTunMode
-                ? new { servers = new[] { "223.5.5.5", "119.29.29.29", "localhost" } }
-                : new { servers = new[] { "8.8.8.8", "114.114.114.114", "localhost" } };
+                ? new JsonObject
+                {
+                    ["servers"] = CreateStringArray("223.5.5.5", "119.29.29.29", "localhost")
+                }
+                : new JsonObject
+                {
+                    ["servers"] = CreateStringArray("8.8.8.8", "114.114.114.114", "localhost")
+                };
+        }
+
+        private static JsonArray CreateStringArray(params string[] values)
+        {
+            var array = new JsonArray();
+            foreach (var value in values)
+            {
+                AddValue(array, value);
+            }
+
+            return array;
+        }
+
+        private static void AddNode(JsonArray array, JsonNode node)
+        {
+            array.Add(node);
+        }
+
+        private static void AddValue(JsonArray array, string value)
+        {
+            array.Add((JsonNode?)JsonValue.Create(value));
         }
     }
 }

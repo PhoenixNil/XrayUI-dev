@@ -1,19 +1,30 @@
-using System.Collections.Generic;
+using System;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
+using XrayUI.Helpers;
 using XrayUI.Services;
 
 namespace XrayUI.Views
 {
     public sealed partial class LogWindow
     {
-        private const int MaxLines = 2000;
+        // UI-update throttle: burst traffic (many lines/sec) collapses into
+        // at most 1 re-render per interval instead of one per line.
+        private static readonly TimeSpan FlushInterval = TimeSpan.FromMilliseconds(100);
 
-        private readonly XrayService    _xray;
-        private readonly List<string>   _lines = new();
+        private static readonly SolidColorBrush RunningBrush =
+            new(Windows.UI.Color.FromArgb(255, 34, 197, 94));   // green
+        private static readonly SolidColorBrush StoppedBrush =
+            new(Windows.UI.Color.FromArgb(255, 156, 163, 175)); // grey
+
+        private readonly XrayService     _xray;
         private readonly DispatcherQueue _queue;
+        private readonly DispatcherQueueTimer _flushTimer;
+
+        // Set from background thread when new lines arrive; consumed on UI thread.
+        private volatile bool _dirty;
 
         public LogWindow(XrayService xray)
         {
@@ -21,22 +32,26 @@ namespace XrayUI.Views
             _xray  = xray;
             _queue = DispatcherQueue.GetForCurrentThread();
 
-            AppWindow.Resize(new SizeInt32(900, 600));
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            var scale = DpiHelper.GetWindowScale(hWnd);
+            AppWindow.Resize(new SizeInt32((int)Math.Round(900 * scale), (int)Math.Round(600 * scale)));
             AppWindow.Title = "代理日志";
 
-            // Load existing log buffer from service
-            foreach (var line in xray.GetLogBuffer())
-                _lines.Add(line);
-
-            FlushToTextBlock();
-            UpdateStatus();
-
-            // Subscribe to new log lines
             _xray.LogReceived     += OnLogReceived;
             _xray.RunningChanged  += OnRunningChanged;
 
+            RenderLog();
+            UpdateStatus();
+
+            _flushTimer = _queue.CreateTimer();
+            _flushTimer.Interval = FlushInterval;
+            _flushTimer.IsRepeating = true;
+            _flushTimer.Tick += OnFlushTick;
+            _flushTimer.Start();
+
             this.Closed += (_, _) =>
             {
+                _flushTimer.Stop();
                 _xray.LogReceived    -= OnLogReceived;
                 _xray.RunningChanged -= OnRunningChanged;
             };
@@ -46,13 +61,9 @@ namespace XrayUI.Views
 
         private void OnLogReceived(object? sender, string line)
         {
-            // Called from background thread — marshal to UI
-            _queue.TryEnqueue(() =>
-            {
-                AddLine(line);
-                if (AutoScrollToggle.IsChecked == true)
-                    LogScrollViewer.ChangeView(null, double.MaxValue, null, disableAnimation: true);
-            });
+            // Called from background thread. Do NOT touch the UI here —
+            // just mark dirty; the timer will re-render on the UI thread.
+            _dirty = true;
         }
 
         private void OnRunningChanged(object? sender, bool running)
@@ -60,43 +71,34 @@ namespace XrayUI.Views
             _queue.TryEnqueue(UpdateStatus);
         }
 
-        // ── Helpers ────────────────────────────────────────────────────────────
-
-        private void AddLine(string line)
+        private void OnFlushTick(DispatcherQueueTimer sender, object args)
         {
-            _lines.Add(line);
+            if (!_dirty) return;
+            _dirty = false;
 
-            // Trim excess lines
-            if (_lines.Count > MaxLines)
-                _lines.RemoveRange(0, _lines.Count - MaxLines);
+            RenderLog();
 
-            // Append to TextBlock directly (faster than full rebuild)
-            LogTextBlock.Text = LogTextBlock.Text.Length == 0
-                ? line
-                : LogTextBlock.Text + "\n" + line;
-
-            UpdateLineCount();
+            if (AutoScrollToggle.IsChecked == true)
+            {
+                LogScrollViewer.ChangeView(null, double.MaxValue, null, disableAnimation: true);
+            }
         }
 
-        private void FlushToTextBlock()
-        {
-            LogTextBlock.Text = string.Join("\n", _lines);
-            UpdateLineCount();
-        }
+        // ── Rendering ──────────────────────────────────────────────────────────
 
-        private void UpdateLineCount()
+        private void RenderLog()
         {
-            LineCountText.Text = $"({_lines.Count} 行)";
+            // XrayService owns the single source of truth; we just render a snapshot.
+            var lines = _xray.GetLogBuffer();
+            LogTextBlock.Text = string.Join('\n', lines);
+            LineCountText.Text = $"({lines.Count} 行)";
         }
 
         private void UpdateStatus()
         {
             var running = _xray.IsRunning;
             StatusText.Text = running ? "运行中" : "未运行";
-            StatusDot.Fill   = new SolidColorBrush(
-                running
-                    ? Windows.UI.Color.FromArgb(255, 34, 197, 94)   // green
-                    : Windows.UI.Color.FromArgb(255, 156, 163, 175)); // grey
+            StatusDot.Fill  = running ? RunningBrush : StoppedBrush;
         }
 
         // ── Button handlers ────────────────────────────────────────────────────
@@ -110,10 +112,8 @@ namespace XrayUI.Views
 
         private void ClearButton_Click(object sender, RoutedEventArgs e)
         {
-            _lines.Clear();
             _xray.ClearLogBuffer();
-            LogTextBlock.Text = string.Empty;
-            UpdateLineCount();
+            RenderLog();
         }
     }
 }

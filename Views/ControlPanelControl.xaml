@@ -16,13 +16,21 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- ── Row 0: 单独的齿轮入口 ─────────────────────────────────── -->
+        <!-- ── Row 0: small button ─────────────────────────────────── -->
         <Grid Grid.Row="0">
             <StackPanel Orientation="Horizontal"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Center"
                         Spacing="2">
 
+                <Button Background="Transparent"
+                        BorderBrush="Transparent"
+                        VerticalAlignment="Center"
+                        Padding="8"
+                        Command="{x:Bind ViewModel.ShowPersonalizeCommand}"
+                        ToolTipService.ToolTip="个性化">
+                    <FontIcon Glyph="&#xE771;" FontSize="16" />
+                </Button>
 
                 <Button Background="Transparent"
                         BorderBrush="Transparent"
@@ -31,21 +39,41 @@
                     <FontIcon Glyph="&#xE713;" FontSize="16" />
                     <Button.Flyout>
                         <MenuFlyout>
-                            <MenuFlyoutItem Text="编辑本地端口"
+                            <MenuFlyoutItem Text="编辑本地端口" 
                                             Command="{x:Bind ViewModel.EditLocalPortCommand}" />
-                            <MenuFlyoutItem Text="查看日志"
+                            <MenuFlyoutItem Text="查看日志" 
                                             Command="{x:Bind ViewModel.ShowLogsCommand}" />
-                            <MenuFlyoutItem Text="设置主题"
-                                            Command="{x:Bind ViewModel.ToggleThemePickerCommand}" />
-                            <MenuFlyoutSeparator />
-                            <ToggleMenuFlyoutItem Text="开机启动" />
-                            <MenuFlyoutSubItem Text="路由设置">
+                            <MenuFlyoutSubItem Text="代理设置">
+                                <RadioMenuFlyoutItem Text="全局代理"
+                                                     GroupName="ProxyModeGroup"
+                                                     IsChecked="{x:Bind ViewModel.IsGlobalProxyChecked, Mode=OneWay}"
+                                                     IsEnabled="{x:Bind ViewModel.IsModeToggleEnabled, Mode=OneWay}"
+                                                     Command="{x:Bind ViewModel.SetProxyModeCommand}"
+                                                     CommandParameter="全局代理" />
+                                <RadioMenuFlyoutItem Text="不接管代理"
+                                                     GroupName="ProxyModeGroup"
+                                                     IsChecked="{x:Bind ViewModel.IsNoTakeoverChecked, Mode=OneWay}"
+                                                     IsEnabled="{x:Bind ViewModel.IsModeToggleEnabled, Mode=OneWay}"
+                                                     Command="{x:Bind ViewModel.SetProxyModeCommand}"
+                                                     CommandParameter="不接管代理" />
+                            </MenuFlyoutSubItem>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutItem Text="开机启动"
+                                            Command="{x:Bind ViewModel.OpenStartupSettingsCommand}"
+                                            Icon="{x:Bind ViewModel.StartupMenuIcon, Mode=OneWay}" />
+                            <MenuFlyoutSubItem Text="路由设置" >
                                 <MenuFlyoutItem Text="全局路由"
+                                                IsEnabled="{x:Bind ViewModel.IsModeToggleEnabled, Mode=OneWay}"
                                                 Command="{x:Bind ViewModel.SetRoutingModeCommand}"
                                                 CommandParameter="全局路由" />
                                 <MenuFlyoutItem Text="智能分流"
+                                                IsEnabled="{x:Bind ViewModel.IsModeToggleEnabled, Mode=OneWay}"
                                                 Command="{x:Bind ViewModel.SetRoutingModeCommand}"
                                                 CommandParameter="智能分流" />
+                                <MenuFlyoutSeparator/>
+                                <MenuFlyoutItem Text="自定义规则..."
+                                                IsEnabled="{x:Bind ViewModel.IsModeToggleEnabled, Mode=OneWay}"
+                                                Command="{x:Bind ViewModel.ShowCustomRulesCommand}" />
                             </MenuFlyoutSubItem>
                         </MenuFlyout>
                     </Button.Flyout>
@@ -84,6 +112,7 @@
                 <ToggleButton MinWidth="88"
                               Content="{x:Bind ViewModel.StartStopButtonContent, Mode=OneWay}"
                               IsChecked="{x:Bind ViewModel.StartStopButtonChecked, Mode=OneWay}"
+                              IsEnabled="{x:Bind ViewModel.IsNotReapplying, Mode=OneWay}"
                               Command="{x:Bind ViewModel.StartStopCommand}" />
                 <StackPanel Orientation="Horizontal"
                             VerticalAlignment="Center"
@@ -119,7 +148,7 @@
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            VerticalAlignment="Center" />
                 <ToggleSwitch IsOn="{x:Bind ViewModel.IsTunMode, Mode=TwoWay}"
-                              IsEnabled="{x:Bind ViewModel.IsTunModeToggleEnabled, Mode=OneWay}"
+                              IsEnabled="{x:Bind ViewModel.IsTunToggleEnabled, Mode=OneWay}"
                               OnContent=""
                               OffContent=""
                               MinWidth="0"
@@ -142,55 +171,5 @@
             </StackPanel>
         </Grid>
 
-        <!-- TeachingTip 主题选择器（保持不变） -->
-        <TeachingTip Grid.Row="0" Title="色彩模式"
-                     PreferredPlacement="Auto"
-                     IsOpen="{x:Bind ViewModel.IsThemePickerOpen, Mode=TwoWay}"
-                     PlacementMargin="20">
-            <TeachingTip.Content>
-                <StackPanel Orientation="Horizontal"
-                            Spacing="10">
-                    <Button MinWidth="70"
-                            Padding="12,8"
-                            Command="{x:Bind ViewModel.ChangeThemeCommand}"
-                            CommandParameter="{x:Bind ViewModel.LightTheme, Mode=OneWay}"
-                            IsEnabled="{x:Bind ViewModel.IsLightThemeEnabled, Mode=OneWay}">
-                        <StackPanel Orientation="Horizontal"
-                                    Spacing="6">
-                            <FontIcon Glyph="&#xE706;"
-                                      FontSize="14" />
-                            <TextBlock Text="浅色"
-                                       FontSize="14" />
-                        </StackPanel>
-                    </Button>
-                    <Button MinWidth="70"
-                            Padding="12,8"
-                            Command="{x:Bind ViewModel.ChangeThemeCommand}"
-                            CommandParameter="{x:Bind ViewModel.DarkTheme, Mode=OneWay}"
-                            IsEnabled="{x:Bind ViewModel.IsDarkThemeEnabled, Mode=OneWay}">
-                        <StackPanel Orientation="Horizontal"
-                                    Spacing="6">
-                            <FontIcon Glyph="&#xE708;"
-                                      FontSize="14" />
-                            <TextBlock Text="深色"
-                                       FontSize="14" />
-                        </StackPanel>
-                    </Button>
-                    <Button MinWidth="70"
-                            Padding="12,8"
-                            Command="{x:Bind ViewModel.ChangeThemeCommand}"
-                            CommandParameter="{x:Bind ViewModel.DefaultTheme, Mode=OneWay}"
-                            IsEnabled="{x:Bind ViewModel.IsDefaultThemeEnabled, Mode=OneWay}">
-                        <StackPanel Orientation="Horizontal"
-                                    Spacing="6">
-                            <FontIcon Glyph="&#xE770;"
-                                      FontSize="14" />
-                            <TextBlock Text="跟随系统"
-                                       FontSize="14" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </TeachingTip.Content>
-        </TeachingTip>
     </Grid>
 </UserControl>

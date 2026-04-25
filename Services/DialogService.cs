@@ -1,8 +1,12 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
+using System.ComponentModel;
 using Windows.ApplicationModel.DataTransfer;
 using XrayUI.Helpers;
 using XrayUI.Models;
+using XrayUI.ViewModels;
+using XrayUI.Views;
 
 namespace XrayUI.Services
 {
@@ -63,68 +67,43 @@ namespace XrayUI.Services
             return string.IsNullOrEmpty(text) ? null : text;
         }
 
-        // ── Add subscription ──────────────────────────────────────────────────
+        // ── Subscriptions ─────────────────────────────────────────────────────
 
-        public async Task<SubscriptionEntry?> ShowAddSubscriptionDialogAsync()
+        public async Task<SubscriptionEntry?> ShowSubscriptionsDialogAsync(ManageSubscriptionsViewModel vm)
         {
-            var txtUrl = new TextBox
-            {
-                Header          = "订阅链接",
-                PlaceholderText = "https://...",
-                Width           = 320,
-                TextWrapping    = TextWrapping.Wrap,
-            };
-
-            var txtName = new TextBox
-            {
-                Header          = "备注名称（可选）",
-                PlaceholderText = "留空则使用链接域名",
-                Width           = 320,
-            };
-
-            var hint = new TextBlock
-            {
-                Text    = "将自动拉取并导入订阅中的全部节点",
-                FontSize = 12,
-                Opacity  = 0.65,
-            };
-
-            var content = new StackPanel
-            {
-                Width    = 320,
-                Spacing  = 14,
-                Margin   = new Thickness(0, 4, 0, 0),
-                Children = { txtUrl, txtName, hint }
-            };
-
             var dialog = CreateDialog();
-            dialog.Title                  = "添加订阅";
-            dialog.PrimaryButtonText      = "添加";
-            dialog.CloseButtonText        = "取消";
-            dialog.DefaultButton          = ContentDialogButton.Primary;
-            dialog.IsPrimaryButtonEnabled = false;
-            dialog.Content                = content;
+            dialog.Content = new ManageSubscriptionsDialog(vm);
 
-            txtUrl.TextChanged += (_, _) =>
-                dialog.IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(txtUrl.Text);
+            void SyncDialogButtons()
+            {
+                if (vm.IsAddPage)
+                {
+                    dialog.PrimaryButtonText      = "添加";
+                    dialog.CloseButtonText        = "取消";
+                    dialog.DefaultButton          = ContentDialogButton.Primary;
+                    dialog.IsPrimaryButtonEnabled = vm.CanAddSubscription;
+                    return;
+                }
 
-            var result = await dialog.ShowAsync();
-            if (result != ContentDialogResult.Primary) return null;
+                dialog.PrimaryButtonText      = string.Empty;
+                dialog.CloseButtonText        = "完成";
+                dialog.DefaultButton          = ContentDialogButton.Close;
+                dialog.IsPrimaryButtonEnabled = false;
+            }
 
-            var url = txtUrl.Text.Trim();
-            if (string.IsNullOrEmpty(url)) return null;
+            PropertyChangedEventHandler handler = (_, _) => SyncDialogButtons();
+            vm.PropertyChanged += handler;
+            SyncDialogButtons();
 
-            var name = string.IsNullOrWhiteSpace(txtName.Text)
-                ? TryGetHost(url)
-                : txtName.Text.Trim();
-
-            return new SubscriptionEntry { Url = url, Name = name };
-        }
-
-        private static string TryGetHost(string url)
-        {
-            try { return new Uri(url).Host; }
-            catch { return url; }
+            try
+            {
+                var result = await dialog.ShowAsync();
+                return result == ContentDialogResult.Primary ? vm.CreateSubscription() : null;
+            }
+            finally
+            {
+                vm.PropertyChanged -= handler;
+            }
         }
 
         // ── Edit server ───────────────────────────────────────────────────────
@@ -136,21 +115,26 @@ namespace XrayUI.Services
             var txtHost     = new TextBox { Header = "地址 / 域名", Text = existing?.Host ?? string.Empty };
             var numPort     = new NumberBox { Header = "端口", Value = existing?.Port ?? 443, Minimum = 1, Maximum = 65535, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline };
             var cmbProtocol = new ComboBox  { Header = "协议", MinWidth = 200 };
-            foreach (var p in new[] { "ss", "vmess", "vless", "hysteria2" })
+            foreach (var p in new[] { "ss", "vmess", "vless", "hysteria2", "trojan" })
                 cmbProtocol.Items.Add(p);
             cmbProtocol.SelectedItem = existing?.Protocol?.ToLower() ?? "ss";
 
-            var txtEncryption = new TextBox { Header = "加密方式 (SS)", Text = existing?.Encryption ?? string.Empty };
+            var cmbEncryption = new ComboBox { Header = "加密方式 (SS)", MinWidth = 200 };
+            foreach (var m in new[] { "aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305", "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm", "2022-blake3-chacha20-poly1305" })
+                cmbEncryption.Items.Add(m);
+            if (existing?.Encryption is { Length: > 0 } existingEnc && !cmbEncryption.Items.Contains(existingEnc))
+                cmbEncryption.Items.Add(existingEnc);
+            cmbEncryption.SelectedItem = existing?.Encryption ?? "aes-128-gcm";
             var txtPassword   = new PasswordBox { Header = "密码", Password = existing?.Password ?? string.Empty };
             var txtUuid       = new TextBox { Header = "UUID (VMess / VLESS)", Text = existing?.Uuid ?? string.Empty };
             var numAlterId    = new NumberBox { Header = "AlterId (VMess)", Value = existing?.AlterId ?? 0, Minimum = 0, Maximum = 65535 };
             var cmbNetwork    = new ComboBox { Header = "传输协议", MinWidth = 200 };
-            foreach (var n in new[] { "tcp", "ws", "grpc" })
+            foreach (var n in new[] { "tcp", "ws", "grpc", "xhttp" })
                 cmbNetwork.Items.Add(n);
             cmbNetwork.SelectedItem = existing?.Network ?? "tcp";
 
-            var txtPath     = new TextBox { Header = "路径 (WS/gRPC)", Text = existing?.Path ?? string.Empty };
-            var txtWsHost   = new TextBox { Header = "WS Host 头", Text = existing?.WsHost ?? string.Empty };
+            var txtPath     = new TextBox { Header = "路径 (WS/gRPC/XHTTP)", Text = existing?.Path ?? string.Empty };
+            var txtWsHost   = new TextBox { Header = "Host 头 (WS/XHTTP)", Text = existing?.WsHost ?? string.Empty };
             var cmbSecurity = new ComboBox { Header = "安全", MinWidth = 200 };
             foreach (var s in new[] { "none", "tls", "reality" })
                 cmbSecurity.Items.Add(s);
@@ -165,7 +149,7 @@ namespace XrayUI.Services
             var txtFlow = new TextBox { Header = "Flow (VLESS)", PlaceholderText = "xtls-rprx-vision 或留空", Text = existing?.Flow ?? string.Empty };
 
             // Row containers for conditional visibility
-            var rowEncryption = Wrap(txtEncryption);
+            var rowEncryption = Wrap(cmbEncryption);
             var rowPassword   = Wrap(txtPassword);
             var rowUuid       = Wrap(txtUuid);
             var rowAlterId    = Wrap(numAlterId);
@@ -189,16 +173,20 @@ namespace XrayUI.Services
                 bool isVmess     = proto == "vmess";
                 bool isVless     = proto == "vless";
                 bool isHysteria2 = proto == "hysteria2";
+                bool isTrojan    = proto == "trojan";
                 bool hasWs       = net == "ws";
+                bool hasXhttp    = net == "xhttp";
                 bool hasTls      = sec == "tls" || sec == "reality";
                 bool hasReality  = sec == "reality";
 
                 rowEncryption.Visibility = isSs                     ? Visibility.Visible : Visibility.Collapsed;
-                rowPassword  .Visibility = (isSs || isHysteria2)    ? Visibility.Visible : Visibility.Collapsed;
+                rowPassword  .Visibility = (isSs || isHysteria2 || isTrojan)
+                                                                        ? Visibility.Visible : Visibility.Collapsed;
                 rowUuid      .Visibility = (isVmess || isVless)      ? Visibility.Visible : Visibility.Collapsed;
                 rowAlterId   .Visibility = isVmess                   ? Visibility.Visible : Visibility.Collapsed;
-                rowPath      .Visibility = (hasWs || net == "grpc")  ? Visibility.Visible : Visibility.Collapsed;
-                rowWsHost    .Visibility = hasWs                     ? Visibility.Visible : Visibility.Collapsed;
+                rowPath      .Visibility = (hasWs || hasXhttp || net == "grpc")
+                                                                        ? Visibility.Visible : Visibility.Collapsed;
+                rowWsHost    .Visibility = (hasWs || hasXhttp)       ? Visibility.Visible : Visibility.Collapsed;
                 rowSni       .Visibility = hasTls                    ? Visibility.Visible : Visibility.Collapsed;
                 rowFp        .Visibility = hasTls                    ? Visibility.Visible : Visibility.Collapsed;
                 rowAllowInsecure.Visibility = hasTls                ? Visibility.Visible : Visibility.Collapsed;
@@ -208,7 +196,16 @@ namespace XrayUI.Services
                 rowFlow      .Visibility = isVless                   ? Visibility.Visible : Visibility.Collapsed;
             }
 
-            cmbProtocol.SelectionChanged += (_, _) => UpdateVisibility();
+            cmbProtocol.SelectionChanged += (_, _) =>
+            {
+                if (cmbProtocol.SelectedItem?.ToString() == "trojan"
+                    && cmbSecurity.SelectedItem?.ToString() == "none")
+                {
+                    cmbSecurity.SelectedItem = "tls";
+                }
+
+                UpdateVisibility();
+            };
             cmbNetwork .SelectionChanged += (_, _) => UpdateVisibility();
             cmbSecurity.SelectionChanged += (_, _) => UpdateVisibility();
             UpdateVisibility();
@@ -247,7 +244,7 @@ namespace XrayUI.Services
             entry.Host        = txtHost.Text.Trim();
             entry.Port        = (int)numPort.Value;
             entry.Protocol    = cmbProtocol.SelectedItem?.ToString() ?? "ss";
-            entry.Encryption  = txtEncryption.Text.Trim();
+            entry.Encryption  = cmbEncryption.SelectedItem?.ToString() ?? string.Empty;
             entry.Password    = txtPassword.Password.Trim();
             entry.Uuid        = txtUuid.Text.Trim();
             entry.AlterId     = (int)numAlterId.Value;
@@ -262,6 +259,13 @@ namespace XrayUI.Services
             entry.ShortId     = txtSid.Text.Trim();
             entry.SpiderX     = txtSpx.Text.Trim();
             entry.Flow        = txtFlow.Text.Trim();
+
+            if (entry.Protocol != "ss")
+            {
+                entry.Encryption = entry.Security == "reality" ? "Reality"
+                                 : entry.Security == "tls"     ? "TLS"
+                                                               : "None";
+            }
 
             return entry;
         }
@@ -330,13 +334,90 @@ namespace XrayUI.Services
             return result == ContentDialogResult.Primary;
         }
 
-        public async Task ShowErrorAsync(string title, string message)
+        public async Task ShowErrorAsync(string title, string message, XamlRoot? xamlRoot = null)
         {
-            var dialog = CreateDialog();
+            var dialog = CreateDialog(xamlRoot);
             dialog.Title           = title;
             dialog.Content         = message;
             dialog.CloseButtonText = "确定";
             await dialog.ShowAsync();
+        }
+
+        // ── Progress ──────────────────────────────────────────────────────────
+
+        public async Task ShowProgressDialogAsync(string title, Func<IProgress<string>, CancellationToken, Task> work, XamlRoot? xamlRoot = null)
+        {
+            using var cts = new CancellationTokenSource();
+
+            var statusText = new TextBlock
+            {
+                Text         = "正在准备…",
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth     = 320,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            };
+
+            var ring = new ProgressRing
+            {
+                IsActive = true,
+                Width    = 36,
+                Height   = 36,
+            };
+
+            var dialog = CreateDialog(xamlRoot);
+            dialog.Title           = title;
+            dialog.CloseButtonText = "取消";
+            dialog.Content = new StackPanel
+            {
+                Spacing             = 16,
+                MinWidth            = 320,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Children            = { ring, statusText }
+            };
+
+            // Progress<T> captures the current SynchronizationContext — since we're on the UI
+            // thread here, reports from the worker thread are marshalled back automatically.
+            var progress = new Progress<string>(s => statusText.Text = s);
+
+            Exception? error   = null;
+            bool workFinished = false;
+
+            var workTask = Task.Run(async () =>
+            {
+                try
+                {
+                    await work(progress, cts.Token);
+                }
+                catch (OperationCanceledException) when (cts.IsCancellationRequested)
+                {
+                    // Real user cancel — swallow here, we rethrow a fresh OCE below based on cts state.
+                    // Any *other* OperationCanceledException (e.g. HttpClient.Timeout throwing
+                    // TaskCanceledException with its own internal token) must not be swallowed —
+                    // it falls through to the generic catch so the caller can surface the failure.
+                }
+                catch (Exception ex)
+                {
+                    error = ex;
+                }
+                finally
+                {
+                    workFinished = true;
+                    dialog.DispatcherQueue.TryEnqueue(() =>
+                    {
+                        try { dialog.Hide(); } catch { }
+                    });
+                }
+            });
+
+            await dialog.ShowAsync();
+
+            // If the dialog closed because the user clicked Cancel (work still running), signal it.
+            if (!workFinished) cts.Cancel();
+
+            await workTask;
+
+            if (error != null) throw error;
+            if (cts.IsCancellationRequested) throw new OperationCanceledException();
         }
 
         // ── Share link ────────────────────────────────────────────────────────
@@ -443,15 +524,71 @@ namespace XrayUI.Services
             await dialog.ShowAsync();
         }
 
+        // ── Startup ───────────────────────────────────────────────────────────
+
+        public async Task<(bool enabled, bool autoConnect)?> ShowStartupDialogAsync(bool currentEnabled, bool currentAutoConnect)
+        {
+            var toggle = new ToggleSwitch
+            {
+                IsOn       = currentEnabled,
+                OnContent  = "开",
+                OffContent = "关",
+                MinWidth   = 0,
+                Margin     = new Thickness(0),
+            };
+
+            var toggleLabel = new TextBlock
+            {
+                Text              = "开机自动启动",
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+
+            var toggleRow = new Grid { ColumnSpacing = 8 };
+            toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(toggleLabel, 0);
+            Grid.SetColumn(toggle,      1);
+            toggleRow.Children.Add(toggleLabel);
+            toggleRow.Children.Add(toggle);
+
+            var checkBox = new CheckBox
+            {
+                Content   = "自动连接上次节点",
+                IsChecked = currentAutoConnect,
+                IsEnabled = currentEnabled,
+                Margin    = new Thickness(16, 0, 0, 0),
+            };
+
+            toggle.Toggled += (_, _) => checkBox.IsEnabled = toggle.IsOn;
+
+            var dialog = CreateDialog();
+            dialog.Title             = "开机启动";
+            dialog.PrimaryButtonText = "确认";
+            dialog.CloseButtonText   = "取消";
+            dialog.DefaultButton     = ContentDialogButton.Primary;
+            dialog.Content = new StackPanel
+            {
+                Width    = 260,
+                Spacing  = 12,
+                Children = { toggleRow, checkBox },
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary) return null;
+
+            return (toggle.IsOn, checkBox.IsChecked == true);
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────
 
         /// <summary>
         /// Creates a ContentDialog pre-wired with the correct XamlRoot and theme.
         /// Use object-initializer syntax to set the remaining properties.
         /// </summary>
-        private ContentDialog CreateDialog() => new ContentDialog
+        /// <param name="xamlRootOverride">If supplied, roots the dialog in this window instead of the MainWindow factory.</param>
+        private ContentDialog CreateDialog(XamlRoot? xamlRootOverride = null) => new ContentDialog
         {
-            XamlRoot       = XamlRoot,
+            XamlRoot       = xamlRootOverride ?? XamlRoot,
             RequestedTheme = ThemeHelper.ActualTheme,
         };
 

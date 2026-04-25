@@ -4,9 +4,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.UI;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
-using Windows.UI;
 using XrayUI.Models;
 using XrayUI.Services;
 
@@ -14,12 +13,8 @@ namespace XrayUI.ViewModels
 {
     public partial class ServerDetailViewModel : ObservableObject
     {
-        private static readonly Color NeutralLatencyColor = Color.FromArgb(255, 156, 163, 175);
-
-        // AI unlock indicator brushes
-        private static readonly SolidColorBrush GrayBrush   = new(Color.FromArgb(255, 120, 120, 130));
-        private static readonly SolidColorBrush GreenBrush  = new(Color.FromArgb(255,  72, 199, 142));
-        private static readonly SolidColorBrush RedBrush    = new(Color.FromArgb(255, 239,  68,  68));
+        private static SolidColorBrush GetBrush(string key) =>
+            (SolidColorBrush)Application.Current.Resources[key];
 
         private readonly LatencyProbeService _latencyProbe;
         private readonly AiUnlockCheckService _aiUnlockCheck;
@@ -31,15 +26,32 @@ namespace XrayUI.ViewModels
         private AiUnlockStatus? _openAiStatus;
         private AiUnlockStatus? _claudeStatus;
         private AiUnlockStatus? _geminiStatus;
+        private ServerEntry? _selectedServer;
+        private string _latencyText = "Not tested";
+        private bool _isTestingLatency;
+        private SolidColorBrush _openAiStatusBrush = null!;
+        private SolidColorBrush _claudeStatusBrush = null!;
+        private SolidColorBrush _geminiStatusBrush = null!;
 
         public ServerDetailViewModel(LatencyProbeService latencyProbe, AiUnlockCheckService aiUnlockCheck)
         {
             _latencyProbe = latencyProbe;
             _aiUnlockCheck = aiUnlockCheck;
+            ResetAiUnlockDisplay();
         }
 
-        [ObservableProperty]
-        private ServerEntry? selectedServer;
+        public ServerEntry? SelectedServer
+        {
+            get => _selectedServer;
+            set
+            {
+                var oldValue = _selectedServer;
+                if (SetProperty(ref _selectedServer, value))
+                {
+                    OnSelectedServerChanged(oldValue, value);
+                }
+            }
+        }
 
         public ServerEntry? ActiveServer
         {
@@ -107,32 +119,53 @@ namespace XrayUI.ViewModels
                 {
                     "ws" => "WebSocket",
                     "grpc" => "gRPC",
+                    "xhttp" => "XHTTP",
                     _ => "TCP"
                 };
             }
         }
 
-        [ObservableProperty]
-        private string latencyText = "Not tested";
+        public string LatencyText
+        {
+            get => _latencyText;
+            set => SetProperty(ref _latencyText, value);
+        }
 
-
-        [ObservableProperty]
-        private bool isTestingLatency;
+        public bool IsTestingLatency
+        {
+            get => _isTestingLatency;
+            set
+            {
+                if (SetProperty(ref _isTestingLatency, value))
+                {
+                    OnIsTestingLatencyChanged(value);
+                }
+            }
+        }
 
         public bool CanTestLatency => !IsTestingLatency && SelectedServer is not null;
 
         // ── AI Unlock indicators ──────────────────────────────────────────────
 
-        [ObservableProperty]
-        private SolidColorBrush openAiStatusBrush = GrayBrush;
+        public SolidColorBrush OpenAiStatusBrush
+        {
+            get => _openAiStatusBrush;
+            set => SetProperty(ref _openAiStatusBrush, value);
+        }
 
-        [ObservableProperty]
-        private SolidColorBrush claudeStatusBrush = GrayBrush;
+        public SolidColorBrush ClaudeStatusBrush
+        {
+            get => _claudeStatusBrush;
+            set => SetProperty(ref _claudeStatusBrush, value);
+        }
 
-        [ObservableProperty]
-        private SolidColorBrush geminiStatusBrush = GrayBrush;
+        public SolidColorBrush GeminiStatusBrush
+        {
+            get => _geminiStatusBrush;
+            set => SetProperty(ref _geminiStatusBrush, value);
+        }
 
-        partial void OnSelectedServerChanged(ServerEntry? oldValue, ServerEntry? newValue)
+        private void OnSelectedServerChanged(ServerEntry? oldValue, ServerEntry? newValue)
         {
             if (oldValue is not null)
             {
@@ -157,7 +190,7 @@ namespace XrayUI.ViewModels
             _ = TestLatency();
         }
 
-        partial void OnIsTestingLatencyChanged(bool value)
+        private void OnIsTestingLatencyChanged(bool value)
         {
             OnPropertyChanged(nameof(CanTestLatency));
             TestLatencyCommand.NotifyCanExecuteChanged();
@@ -222,9 +255,10 @@ namespace XrayUI.ViewModels
 
         private void ResetAiUnlockDisplay()
         {
-            OpenAiStatusBrush = GrayBrush;
-            ClaudeStatusBrush = GrayBrush;
-            GeminiStatusBrush = GrayBrush;
+            var neutral = GetBrush("StateNeutralBrush");
+            OpenAiStatusBrush = neutral;
+            ClaudeStatusBrush = neutral;
+            GeminiStatusBrush = neutral;
         }
 
         private void ClearAiUnlockResults()
@@ -249,17 +283,39 @@ namespace XrayUI.ViewModels
 
         private static SolidColorBrush ResolveAiUnlockBrush(AiUnlockStatus? status) => status switch
         {
-            AiUnlockStatus.Unlocked => GreenBrush,
-            AiUnlockStatus.Blocked => RedBrush,
-            _ => GrayBrush
+            AiUnlockStatus.Unlocked => GetBrush("StateSuccessBrush"),
+            AiUnlockStatus.Blocked  => GetBrush("StateErrorBrush"),
+            _                       => GetBrush("StateNeutralBrush")
         };
 
         private void CancelPendingLatencyTest()
         {
             _latencyTestVersion++;
-            _latencyTestCts?.Cancel();
+            var cts = _latencyTestCts;
             _latencyTestCts = null;
             IsTestingLatency = false;
+
+            if (cts is not null)
+            {
+                _ = CancelLatencyTestAsync(cts);
+            }
+        }
+
+        private static Task CancelLatencyTestAsync(CancellationTokenSource cts)
+        {
+            return Task.Run(() =>
+            {
+                try
+                {
+                    cts.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+                catch (Exception)
+                {
+                }
+            });
         }
 
         private void CancelPendingAiCheck()
@@ -336,16 +392,15 @@ namespace XrayUI.ViewModels
 
             IsTestingLatency = true;
             LatencyText = "测试中...";
-            
 
             try
             {
-                var result = await _latencyProbe.ProbeAsync(
-                    server,
-                    TimeSpan.FromSeconds(3),
-                    cts.Token);
+                var token = cts.Token;
+                var result = await Task.Run(
+                    () => _latencyProbe.ProbeAsync(server, TimeSpan.FromSeconds(3), token),
+                    token);
 
-                if (version != _latencyTestVersion || cts.IsCancellationRequested)
+                if (!IsCurrentLatencyTest(version, cts, server))
                 {
                     return;
                 }
@@ -356,13 +411,14 @@ namespace XrayUI.ViewModels
                     LatencyProbeStatus.Timeout => "超时",
                     _ => "失败"
                 };
-                
             }
             catch (OperationCanceledException) when (cts.IsCancellationRequested)
             {
             }
             finally
             {
+                var isCurrentTest = IsCurrentLatencyTest(version, cts, server);
+
                 cts.Dispose();
 
                 if (ReferenceEquals(_latencyTestCts, cts))
@@ -370,11 +426,21 @@ namespace XrayUI.ViewModels
                     _latencyTestCts = null;
                 }
 
-                if (version == _latencyTestVersion)
+                if (isCurrentTest)
                 {
                     IsTestingLatency = false;
                 }
             }
+        }
+
+        private bool IsCurrentLatencyTest(
+            int version,
+            CancellationTokenSource cts,
+            ServerEntry server)
+        {
+            return version == _latencyTestVersion
+                   && !cts.IsCancellationRequested
+                   && ReferenceEquals(SelectedServer, server);
         }
     }
 }

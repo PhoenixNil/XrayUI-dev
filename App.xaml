@@ -17,7 +17,13 @@
             <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
             <converters:ColorToBrushConverter x:Key="ColorToBrushConverter" />
+            <converters:ColorToHexStringConverter x:Key="ColorToHexStringConverter" />
             <converters:ProtocolToBrushConverter x:Key="ProtocolToBrushConverter" />
+
+            <!-- State indicator brush palette (AI unlock status) -->
+            <SolidColorBrush x:Key="StateNeutralBrush" Color="#787A82" />
+            <SolidColorBrush x:Key="StateSuccessBrush" Color="#48C78E" />
+            <SolidColorBrush x:Key="StateErrorBrush"   Color="#EF4444" />
 
             <!-- Danger button brush palette -->
             <SolidColorBrush x:Key="DangerAccentButtonForeground" Color="White" />

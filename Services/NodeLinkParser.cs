@@ -7,7 +7,7 @@ using XrayUI.Models;
 namespace XrayUI.Services
 {
     /// <summary>
-    /// Parses proxy share links (ss://, vmess://, vless://, hysteria2://) into ServerEntry instances.
+    /// Parses proxy share links (ss://, vmess://, vless://, hysteria2://, trojan://) into ServerEntry instances.
     /// AnyTLS is not supported by the current Xray-based client.
     /// Returns null on any parse failure.
     /// </summary>
@@ -24,6 +24,7 @@ namespace XrayUI.Services
             if (rawLink.StartsWith("vmess://",     StringComparison.OrdinalIgnoreCase)) return ParseVmess(rawLink);
             if (rawLink.StartsWith("vless://",     StringComparison.OrdinalIgnoreCase)) return ParseVless(rawLink);
             if (rawLink.StartsWith("hysteria2://", StringComparison.OrdinalIgnoreCase)) return ParseHysteria2(rawLink);
+            if (rawLink.StartsWith("trojan://",    StringComparison.OrdinalIgnoreCase)) return ParseTrojan(rawLink);
 
             return null;
         }
@@ -70,18 +71,18 @@ namespace XrayUI.Services
                     }
                     else
                     {
-                        // Might be a raw (un-encoded) SIP002 like method:password@host:port
-                        // Check if it looks like that
-                        if (userinfoPart.Contains(':'))
+                        // Raw SIP002: method:password@host:port — userinfo may be percent-encoded.
+                        // SS2022 keys contain '+' '/' '=' which many generators escape as %2B %2F %3D.
+                        var unescaped = Uri.UnescapeDataString(userinfoPart);
+                        if (unescaped.Contains(':'))
                         {
-                            var colonIdx = userinfoPart.IndexOf(':');
-                            method   = userinfoPart.Substring(0, colonIdx);
-                            password = userinfoPart.Substring(colonIdx + 1);
+                            var colonIdx = unescaped.IndexOf(':');
+                            method   = unescaped.Substring(0, colonIdx);
+                            password = unescaped.Substring(colonIdx + 1);
                             (host, port) = SplitHostPort(hostPart);
                         }
                         else
                         {
-                            // Fall through to legacy
                             return ParseSsLegacy(rest, name);
                         }
                     }
@@ -285,6 +286,61 @@ namespace XrayUI.Services
             }
         }
 
+        // 鈹€鈹€ Trojan 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+
+        private static ServerEntry? ParseTrojan(string link)
+        {
+            try
+            {
+                var uri      = new Uri(link);
+                var password = Uri.UnescapeDataString(uri.UserInfo);
+                if (string.IsNullOrEmpty(password)) return null;
+
+                var host = uri.Host;
+                var port = uri.Port > 0 ? uri.Port : 443;
+                var name = string.IsNullOrEmpty(uri.Fragment)
+                    ? string.Empty
+                    : Uri.UnescapeDataString(uri.Fragment.TrimStart('#'));
+
+                var query = ParseQuery(uri.Query);
+                var network = NormalizeTrojanNetwork(
+                    Q(query, "type") ?? Q(query, "network") ?? "tcp");
+                var security = Q(query, "security", "tls") ?? "tls";
+                if (string.IsNullOrWhiteSpace(security))
+                    security = "tls";
+                security = security.ToLowerInvariant();
+
+                var sni    = Q(query, "sni") ?? Q(query, "servername") ?? Q(query, "peer") ?? string.Empty;
+                var fp     = Q(query, "fp", string.Empty) ?? string.Empty;
+                var path   = Q(query, "path") ?? Q(query, "serviceName") ?? string.Empty;
+                var wsHost = Q(query, "host", string.Empty) ?? string.Empty;
+                var allowInsecure = IsTruthy(Q(query, "allowInsecure")) || IsTruthy(Q(query, "insecure"));
+
+                return new ServerEntry
+                {
+                    Name          = name,
+                    Protocol      = "trojan",
+                    Host          = host,
+                    Port          = port,
+                    Password      = password,
+                    Network       = network,
+                    Security      = security,
+                    Sni           = sni,
+                    Fingerprint   = fp,
+                    AllowInsecure = allowInsecure,
+                    Path          = path,
+                    WsHost        = wsHost,
+                    Encryption    = security == "reality" ? "Reality"
+                                  : security == "tls"     ? "TLS"
+                                                          : "None"
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────
 
         private static string? TryBase64Decode(string input)
@@ -339,6 +395,15 @@ namespace XrayUI.Services
                && (value == "1"
                    || value.Equals("true", StringComparison.OrdinalIgnoreCase)
                    || value.Equals("yes", StringComparison.OrdinalIgnoreCase));
+
+        private static string NormalizeTrojanNetwork(string network)
+        {
+            if (string.IsNullOrWhiteSpace(network))
+                return "tcp";
+
+            network = network.ToLowerInvariant();
+            return network == "original" ? "tcp" : network;
+        }
 
         private static (string host, int port) SplitHostPort(string hostPort)
         {

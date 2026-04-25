@@ -132,7 +132,7 @@
                         <!-- AI 服务监测区 -->
                         <StackPanel Spacing="12" Margin="0,2,0,0" >
                             <Grid x:Name="AIShadowCastGrid" />
-                            <TextBlock Text="AI 解锁"
+                            <TextBlock Text="AI 访问解锁"
                                            FontSize="13"                                          
                                            CharacterSpacing="80"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
