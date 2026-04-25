@@ -150,6 +150,7 @@ namespace XrayUI.Services
                 "vmess" => BuildVmessOutbound(server),
                 "vless" => BuildVlessOutbound(server),
                 "hysteria2" => BuildHysteria2Outbound(server),
+                "trojan" => BuildTrojanOutbound(server),
                 _ => BuildSsOutbound(server)
             };
         }
@@ -278,6 +279,22 @@ namespace XrayUI.Services
             };
         }
 
+        private static JsonObject BuildTrojanOutbound(ServerEntry server)
+        {
+            return new JsonObject
+            {
+                ["tag"] = "proxy",
+                ["protocol"] = "trojan",
+                ["settings"] = new JsonObject
+                {
+                    ["address"] = server.Host,
+                    ["port"] = server.Port,
+                    ["password"] = server.Password
+                },
+                ["streamSettings"] = BuildStreamSettings(server)
+            };
+        }
+
         private static JsonObject BuildStreamSettings(ServerEntry server)
         {
             var network = string.IsNullOrWhiteSpace(server.Network)
@@ -347,6 +364,20 @@ namespace XrayUI.Services
                 {
                     ["serviceName"] = server.Path
                 };
+            }
+            else if (network == "xhttp")
+            {
+                var settings = new JsonObject
+                {
+                    ["path"] = server.Path
+                };
+
+                if (!string.IsNullOrWhiteSpace(server.WsHost))
+                {
+                    settings["host"] = server.WsHost;
+                }
+
+                stream["xhttpSettings"] = settings;
             }
 
             return stream;

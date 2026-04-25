@@ -119,6 +119,7 @@ namespace XrayUI.ViewModels
                 {
                     "ws" => "WebSocket",
                     "grpc" => "gRPC",
+                    "xhttp" => "XHTTP",
                     _ => "TCP"
                 };
             }

@@ -22,6 +22,7 @@ namespace XrayUI.Services
                 "vmess"     => ToVmessLink(server),
                 "vless"     => ToVlessLink(server),
                 "hysteria2" => ToHysteria2Link(server),
+                "trojan"    => ToTrojanLink(server),
                 _           => null
             };
         }
@@ -119,10 +120,10 @@ namespace XrayUI.Services
             }
 
             // Transport params
-            if (network == "ws" || network == "grpc")
+            if (network == "ws" || network == "grpc" || network == "xhttp")
                 AppendIfNotEmpty(sb, "path", s.Path);
 
-            if (network == "ws")
+            if (network == "ws" || network == "xhttp")
                 AppendIfNotEmpty(sb, "host", s.WsHost);
 
             // VLESS flow (xtls-rprx-vision etc.)
@@ -167,6 +168,76 @@ namespace XrayUI.Services
                 }
                 if (s.AllowInsecure)
                     AppendParam(sb, "allowInsecure", "1", first: first);
+            }
+
+            if (!string.IsNullOrEmpty(s.Name))
+            {
+                sb.Append('#');
+                sb.Append(Uri.EscapeDataString(s.Name));
+            }
+
+            return sb.ToString();
+        }
+
+        // ── Trojan ───────────────────────────────────────────────────────────
+
+        private static string? ToTrojanLink(ServerEntry s)
+        {
+            if (string.IsNullOrEmpty(s.Password)) return null;
+
+            var host = FormatHost(s.Host);
+            var password = Uri.EscapeDataString(s.Password);
+            var network = string.IsNullOrEmpty(s.Network) ? "tcp" : s.Network.ToLowerInvariant();
+            var security = string.IsNullOrEmpty(s.Security) ? "tls" : s.Security.ToLowerInvariant();
+
+            var sb = new StringBuilder();
+            sb.Append("trojan://");
+            sb.Append(password);
+            sb.Append('@');
+            sb.Append(host);
+            sb.Append(':');
+            sb.Append(s.Port > 0 ? s.Port : 443);
+
+            bool hasQuery = network != "tcp"
+                            || security != "tls"
+                            || !string.IsNullOrEmpty(s.Sni)
+                            || !string.IsNullOrEmpty(s.Fingerprint)
+                            || s.AllowInsecure
+                            || !string.IsNullOrEmpty(s.Path)
+                            || !string.IsNullOrEmpty(s.WsHost);
+            if (hasQuery)
+            {
+                sb.Append('?');
+                bool first = true;
+
+                void AddParam(string key, string value)
+                {
+                    AppendParam(sb, key, value, first);
+                    first = false;
+                }
+
+                void AddIfNotEmpty(string key, string? value)
+                {
+                    if (!string.IsNullOrEmpty(value))
+                        AddParam(key, value);
+                }
+
+                if (network != "tcp")
+                    AddParam("type", network);
+                if (security != "tls")
+                    AddParam("security", security);
+                AddIfNotEmpty("sni", s.Sni);
+                AddIfNotEmpty("fp", s.Fingerprint);
+                if (s.AllowInsecure)
+                    AddParam("allowInsecure", "1");
+
+                if (network == "grpc")
+                    AddIfNotEmpty("serviceName", s.Path);
+                else
+                    AddIfNotEmpty("path", s.Path);
+
+                if (network == "ws")
+                    AddIfNotEmpty("host", s.WsHost);
             }
 
             if (!string.IsNullOrEmpty(s.Name))
