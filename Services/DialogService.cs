@@ -115,21 +115,26 @@ namespace XrayUI.Services
             var txtHost     = new TextBox { Header = "地址 / 域名", Text = existing?.Host ?? string.Empty };
             var numPort     = new NumberBox { Header = "端口", Value = existing?.Port ?? 443, Minimum = 1, Maximum = 65535, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline };
             var cmbProtocol = new ComboBox  { Header = "协议", MinWidth = 200 };
-            foreach (var p in new[] { "ss", "vmess", "vless", "hysteria2" })
+            foreach (var p in new[] { "ss", "vmess", "vless", "hysteria2", "trojan" })
                 cmbProtocol.Items.Add(p);
             cmbProtocol.SelectedItem = existing?.Protocol?.ToLower() ?? "ss";
 
-            var txtEncryption = new TextBox { Header = "加密方式 (SS)", Text = existing?.Encryption ?? string.Empty };
+            var cmbEncryption = new ComboBox { Header = "加密方式 (SS)", MinWidth = 200 };
+            foreach (var m in new[] { "aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305", "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm", "2022-blake3-chacha20-poly1305" })
+                cmbEncryption.Items.Add(m);
+            if (existing?.Encryption is { Length: > 0 } existingEnc && !cmbEncryption.Items.Contains(existingEnc))
+                cmbEncryption.Items.Add(existingEnc);
+            cmbEncryption.SelectedItem = existing?.Encryption ?? "aes-128-gcm";
             var txtPassword   = new PasswordBox { Header = "密码", Password = existing?.Password ?? string.Empty };
             var txtUuid       = new TextBox { Header = "UUID (VMess / VLESS)", Text = existing?.Uuid ?? string.Empty };
             var numAlterId    = new NumberBox { Header = "AlterId (VMess)", Value = existing?.AlterId ?? 0, Minimum = 0, Maximum = 65535 };
             var cmbNetwork    = new ComboBox { Header = "传输协议", MinWidth = 200 };
-            foreach (var n in new[] { "tcp", "ws", "grpc" })
+            foreach (var n in new[] { "tcp", "ws", "grpc", "xhttp" })
                 cmbNetwork.Items.Add(n);
             cmbNetwork.SelectedItem = existing?.Network ?? "tcp";
 
-            var txtPath     = new TextBox { Header = "路径 (WS/gRPC)", Text = existing?.Path ?? string.Empty };
-            var txtWsHost   = new TextBox { Header = "WS Host 头", Text = existing?.WsHost ?? string.Empty };
+            var txtPath     = new TextBox { Header = "路径 (WS/gRPC/XHTTP)", Text = existing?.Path ?? string.Empty };
+            var txtWsHost   = new TextBox { Header = "Host 头 (WS/XHTTP)", Text = existing?.WsHost ?? string.Empty };
             var cmbSecurity = new ComboBox { Header = "安全", MinWidth = 200 };
             foreach (var s in new[] { "none", "tls", "reality" })
                 cmbSecurity.Items.Add(s);
@@ -144,7 +149,7 @@ namespace XrayUI.Services
             var txtFlow = new TextBox { Header = "Flow (VLESS)", PlaceholderText = "xtls-rprx-vision 或留空", Text = existing?.Flow ?? string.Empty };
 
             // Row containers for conditional visibility
-            var rowEncryption = Wrap(txtEncryption);
+            var rowEncryption = Wrap(cmbEncryption);
             var rowPassword   = Wrap(txtPassword);
             var rowUuid       = Wrap(txtUuid);
             var rowAlterId    = Wrap(numAlterId);
@@ -168,26 +173,43 @@ namespace XrayUI.Services
                 bool isVmess     = proto == "vmess";
                 bool isVless     = proto == "vless";
                 bool isHysteria2 = proto == "hysteria2";
-                bool hasWs       = net == "ws";
-                bool hasTls      = sec == "tls" || sec == "reality";
-                bool hasReality  = sec == "reality";
+                bool isTrojan    = proto == "trojan";
+                bool hasWs       = !isHysteria2 && net == "ws";
+                bool hasXhttp    = !isHysteria2 && net == "xhttp";
+                bool hasGrpc     = !isHysteria2 && net == "grpc";
+                bool hasTls      = !isHysteria2 && (sec == "tls" || sec == "reality");
+                bool hasReality  = !isHysteria2 && sec == "reality";
 
-                rowEncryption.Visibility = isSs                     ? Visibility.Visible : Visibility.Collapsed;
-                rowPassword  .Visibility = (isSs || isHysteria2)    ? Visibility.Visible : Visibility.Collapsed;
-                rowUuid      .Visibility = (isVmess || isVless)      ? Visibility.Visible : Visibility.Collapsed;
-                rowAlterId   .Visibility = isVmess                   ? Visibility.Visible : Visibility.Collapsed;
-                rowPath      .Visibility = (hasWs || net == "grpc")  ? Visibility.Visible : Visibility.Collapsed;
-                rowWsHost    .Visibility = hasWs                     ? Visibility.Visible : Visibility.Collapsed;
-                rowSni       .Visibility = hasTls                    ? Visibility.Visible : Visibility.Collapsed;
-                rowFp        .Visibility = hasTls                    ? Visibility.Visible : Visibility.Collapsed;
-                rowAllowInsecure.Visibility = hasTls                ? Visibility.Visible : Visibility.Collapsed;
-                rowPk        .Visibility = hasReality                ? Visibility.Visible : Visibility.Collapsed;
-                rowSid       .Visibility = hasReality                ? Visibility.Visible : Visibility.Collapsed;
-                rowSpx       .Visibility = hasReality                ? Visibility.Visible : Visibility.Collapsed;
-                rowFlow      .Visibility = isVless                   ? Visibility.Visible : Visibility.Collapsed;
+                cmbNetwork .Visibility = isHysteria2                 ? Visibility.Collapsed : Visibility.Visible;
+                cmbSecurity.Visibility = isHysteria2                 ? Visibility.Collapsed : Visibility.Visible;
+
+                rowEncryption.Visibility = isSs                       ? Visibility.Visible : Visibility.Collapsed;
+                rowPassword  .Visibility = (isSs || isHysteria2 || isTrojan)
+                                                                          ? Visibility.Visible : Visibility.Collapsed;
+                rowUuid      .Visibility = (isVmess || isVless)       ? Visibility.Visible : Visibility.Collapsed;
+                rowAlterId   .Visibility = isVmess                    ? Visibility.Visible : Visibility.Collapsed;
+                rowPath      .Visibility = (hasWs || hasXhttp || hasGrpc) ? Visibility.Visible : Visibility.Collapsed;
+                rowWsHost    .Visibility = (hasWs || hasXhttp)        ? Visibility.Visible : Visibility.Collapsed;
+                rowSni       .Visibility = (hasTls || isHysteria2)    ? Visibility.Visible : Visibility.Collapsed;
+                rowFp        .Visibility = hasTls                     ? Visibility.Visible : Visibility.Collapsed;
+                rowAllowInsecure.Visibility = (hasTls || isHysteria2) ? Visibility.Visible : Visibility.Collapsed;
+                rowPk        .Visibility = hasReality                 ? Visibility.Visible : Visibility.Collapsed;
+                rowSid       .Visibility = hasReality                 ? Visibility.Visible : Visibility.Collapsed;
+                rowSpx       .Visibility = hasReality                 ? Visibility.Visible : Visibility.Collapsed;
+                rowFlow      .Visibility = isVless                    ? Visibility.Visible : Visibility.Collapsed;
             }
 
-            cmbProtocol.SelectionChanged += (_, _) => UpdateVisibility();
+            cmbProtocol.SelectionChanged += (_, _) =>
+            {
+                var proto = cmbProtocol.SelectedItem?.ToString();
+                if ((proto == "trojan" || proto == "hysteria2")
+                    && cmbSecurity.SelectedItem?.ToString() == "none")
+                {
+                    cmbSecurity.SelectedItem = "tls";
+                }
+
+                UpdateVisibility();
+            };
             cmbNetwork .SelectionChanged += (_, _) => UpdateVisibility();
             cmbSecurity.SelectionChanged += (_, _) => UpdateVisibility();
             UpdateVisibility();
@@ -226,7 +248,7 @@ namespace XrayUI.Services
             entry.Host        = txtHost.Text.Trim();
             entry.Port        = (int)numPort.Value;
             entry.Protocol    = cmbProtocol.SelectedItem?.ToString() ?? "ss";
-            entry.Encryption  = txtEncryption.Text.Trim();
+            entry.Encryption  = cmbEncryption.SelectedItem?.ToString() ?? string.Empty;
             entry.Password    = txtPassword.Password.Trim();
             entry.Uuid        = txtUuid.Text.Trim();
             entry.AlterId     = (int)numAlterId.Value;
@@ -241,6 +263,18 @@ namespace XrayUI.Services
             entry.ShortId     = txtSid.Text.Trim();
             entry.SpiderX     = txtSpx.Text.Trim();
             entry.Flow        = txtFlow.Text.Trim();
+
+            if (entry.Protocol == "hysteria2")
+            {
+                entry.Security = "tls";
+            }
+
+            if (entry.Protocol != "ss")
+            {
+                entry.Encryption = entry.Security == "reality" ? "Reality"
+                                 : entry.Security == "tls"     ? "TLS"
+                                                               : "None";
+            }
 
             return entry;
         }

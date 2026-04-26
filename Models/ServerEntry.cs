@@ -42,7 +42,7 @@ namespace XrayUI.Models
         [ObservableProperty]
         public partial int Port { get; set; }
 
-        /// <summary>ss | vmess | vless | hysteria2</summary>
+        /// <summary>ss | vmess | vless | hysteria2 | trojan</summary>
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(DisplayProtocol))]
         public partial string Protocol { get; set; }
@@ -114,6 +114,7 @@ namespace XrayUI.Models
             "vmess" => "VMess",
             "vless" => "VLESS",
             "hysteria2" => "Hysteria 2",
+            "trojan" => "Trojan",
             _ => Protocol ?? string.Empty
         };
 
