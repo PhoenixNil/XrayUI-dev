@@ -215,11 +215,10 @@ namespace XrayUI.ViewModels
             if (IsAutoConnect)
                 appSettings.LastAutoConnectServerId = server.Id;
 
-            string? outboundInterface = null;
-
+            string? tunOutboundInterfaceName = null;
             if (IsTunMode)
             {
-                // Pre-check 1: wintun.dll
+                // Pre-check: wintun.dll must be present so xray can create the TUN adapter.
                 if (!_tunService.IsWintunAvailable())
                 {
                     await _dialogs.ShowErrorAsync("TUN mode error",
@@ -227,11 +226,11 @@ namespace XrayUI.ViewModels
                     return false;
                 }
 
-                // Pre-check 2: detect outbound NIC
-                outboundInterface = _tunService.DetectOutboundInterface(forceRefresh: true);
-                if (string.IsNullOrEmpty(outboundInterface))
+                tunOutboundInterfaceName = _tunService.DetectDefaultOutboundInterfaceName();
+                if (string.IsNullOrWhiteSpace(tunOutboundInterfaceName))
                 {
-                    await _dialogs.ShowErrorAsync("TUN mode error", "Unable to detect a valid outbound network interface. Please check your network connection.");
+                    await _dialogs.ShowErrorAsync("TUN mode error",
+                        "Could not determine the default outbound network interface. Please check that Wi-Fi/Ethernet is connected, then try TUN mode again as administrator.");
                     return false;
                 }
 
@@ -239,7 +238,7 @@ namespace XrayUI.ViewModels
                 await CleanupPersistedTunRoutesAsync(appSettings);
             }
 
-            var configJson = XrayConfigBuilder.Build(server, appSettings, outboundInterface);
+            var configJson = XrayConfigBuilder.Build(server, appSettings, tunOutboundInterfaceName);
             var ok = await _xray.StartAsync(configJson);
 
             if (!ok)
@@ -253,24 +252,10 @@ namespace XrayUI.ViewModels
 
             if (IsTunMode)
             {
-                // Wait for xray to create the TUN adapter, then add system routes
+                // xray inherits admin from the parent process (HandleTunToggleAsync restarted
+                // the app as admin) and configures the TUN adapter + system routes itself via
+                // autoSystemRoutingTable. C# only remembers the active session for cleanup.
                 _currentTunServerHost = server.Host;
-                try
-                {
-                    await WaitForTunInterfaceAsync();
-                    if (!_tunService.SetupTunRoutes(server.Host))
-                    {
-                        throw new InvalidOperationException("Failed to set up TUN routes. Please confirm the app is running as administrator.");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    await CleanupTunStateAsync();
-                    await _xray.StopAsync();
-                    await _dialogs.ShowErrorAsync("TUN 启动失败", ex.Message);
-                    return false;
-                }
-                // TUN 模式是透明代理，不设置系统 HTTP 代理
                 appSettings.LastTunServerHost = server.Host;
                 await TrySaveSettingsAsync(appSettings, "persist TUN runtime state");
             }
@@ -331,7 +316,7 @@ namespace XrayUI.ViewModels
                 try
                 {
                     var settings = await _settings.LoadSettingsAsync();
-                    var cfg = XrayConfigBuilder.Build(_activeServer, settings, outboundInterface: null);
+                    var cfg = XrayConfigBuilder.Build(_activeServer, settings);
                     var ok = await _xray.StartAsync(cfg);
                     if (!ok)
                     {
@@ -385,28 +370,6 @@ namespace XrayUI.ViewModels
             IsRunning = false;
 
             await _dialogs.ShowErrorAsync("应用新配置失败", detail);
-        }
-
-        /// <summary>轮询等待 xray 创建 TUN 网络适配器（最多 15 秒）</summary>
-        private async Task WaitForTunInterfaceAsync()
-        {
-            const int pollMs = 500;
-            const int maxMs  = 15000;
-            int elapsed = 0;
-
-            while (elapsed < maxMs)
-            {
-                await Task.Delay(pollMs);
-                elapsed += pollMs;
-
-                if (!_xray.IsRunning)
-                    throw new InvalidOperationException("xray exited unexpectedly before the TUN interface was created. Please check the logs.");
-
-                if (_tunService.GetTunInterfaceIndex() != null)
-                    return;
-            }
-
-            throw new InvalidOperationException("Timed out waiting for the TUN interface. Please try again.");
         }
 
         /// <summary>
