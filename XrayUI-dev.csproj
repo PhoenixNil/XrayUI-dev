@@ -14,7 +14,6 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WindowsPackageType>None</WindowsPackageType>
-    <LangVersion>preview</LangVersion>
   </PropertyGroup>
 
 
