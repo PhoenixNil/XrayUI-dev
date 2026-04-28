@@ -18,6 +18,15 @@ Requires .NET 8 SDK and Windows 10 1809 or later.
     dotnet build -c Release
     dotnet publish -c Release -r win-x64
 
+##  Thanks
+
+
+<p>
+  <a href="https://linux.do">
+    <img src="https://img.shields.io/badge/LinuxDo-community-1f6feb" alt="LinuxDo">
+  </a>
+</p>
+
 ## License
 
 Apache License 2.0.
