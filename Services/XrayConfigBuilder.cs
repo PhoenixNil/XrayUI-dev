@@ -11,6 +11,8 @@ namespace XrayUI.Services
     /// </summary>
     public static class XrayConfigBuilder
     {
+        private const string DefaultLogLevel = "info";
+
         private static readonly JsonSerializerOptions JsonOpts = new()
         {
             WriteIndented = true
@@ -22,7 +24,7 @@ namespace XrayUI.Services
             {
                 ["log"] = new JsonObject
                 {
-                    ["loglevel"] = "debug"
+                    ["loglevel"] = DefaultLogLevel
                 },
                 ["dns"] = BuildDns(settings),
                 ["inbounds"] = BuildInbounds(settings),

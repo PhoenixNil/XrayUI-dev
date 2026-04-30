@@ -25,6 +25,8 @@ namespace XrayUI.Views
                 return;
 
             var query = sender.Text.Trim();
+            ViewModel.SearchQuery = query;
+
             if (string.IsNullOrEmpty(query))
             {
                 sender.ItemsSource = null;

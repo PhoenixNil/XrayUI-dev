@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using System.Net.Http;
@@ -13,12 +14,27 @@ using XrayUI.Services;
 
 namespace XrayUI.ViewModels
 {
+    public enum ServerSortMode
+    {
+        Default,
+        Active,
+        Protocol,
+        Latency,
+    }
+
     public partial class ServerListViewModel : ObservableObject, IDisposable
     {
         private static readonly HttpClient Http = new()
         {
             Timeout = TimeSpan.FromSeconds(15)
         };
+
+        private const string AllChipKey            = "__all__";
+        private const string UngroupedChipKey      = "__ungrouped__";
+        private const string AllChipName           = "所有服务器";
+        private const string UngroupedName         = "未分组";
+        private const string UnnamedSubLabel       = "(未命名订阅)";
+        private const string OrphanSubLabel        = "(已删除订阅)";
 
         private readonly IDialogService  _dialogs;
         private readonly SettingsService _settings;
@@ -28,12 +44,24 @@ namespace XrayUI.ViewModels
         private bool _isProxyRunning;
         private bool _disposed;
 
+        // ── Grouping state ────────────────────────────────────────────────────
+        private ServerGroupChip? _selectedChip;
+        private string _searchQuery = string.Empty;
+        private bool _isFilterPanelOpen;
+        private bool _suppressRebuild;
+        private ServerSortMode _sortMode = ServerSortMode.Default;
+        private List<SubscriptionEntry> _knownSubscriptions = new();
+
+        public ObservableCollection<ServerGroupChip> GroupChips { get; } = new();
+        public ObservableCollection<ServerEntry>     VisibleServers { get; } = new();
+
         public ServerListViewModel(IDialogService dialogs, SettingsService settings)
         {
             _dialogs  = dialogs;
             _settings = settings;
 
             ProtocolColorStore.ColorsChanged += OnProtocolColorsChanged;
+            _servers.CollectionChanged += OnServersCollectionChanged;
         }
 
         private void OnProtocolColorsChanged(object? sender, EventArgs e)
@@ -47,13 +75,126 @@ namespace XrayUI.ViewModels
             if (_disposed) return;
             _disposed = true;
             ProtocolColorStore.ColorsChanged -= OnProtocolColorsChanged;
+            _servers.CollectionChanged -= OnServersCollectionChanged;
         }
 
         public ObservableCollection<ServerEntry> Servers
         {
             get => _servers;
-            set => SetProperty(ref _servers, value);
+            set
+            {
+                if (_servers != null)
+                    _servers.CollectionChanged -= OnServersCollectionChanged;
+                if (SetProperty(ref _servers, value) && _servers != null)
+                    _servers.CollectionChanged += OnServersCollectionChanged;
+            }
         }
+
+        public ServerGroupChip? SelectedChip
+        {
+            get => _selectedChip;
+            set
+            {
+                if (SetProperty(ref _selectedChip, value))
+                {
+                    OnPropertyChanged(nameof(CanSortByActive));
+
+                    // 离开 "所有" chip 时若当前正按活跃节点排序，回退到默认 — 避免菜单项被禁用却仍处于选中态的不一致。
+                    if (_sortMode == ServerSortMode.Active && !CanSortByActive)
+                    {
+                        SortMode = ServerSortMode.Default;
+                        return;
+                    }
+
+                    RebuildGroupedView();
+                    OnPropertyChanged(nameof(CanReorderInCurrentChip));
+                }
+            }
+        }
+
+        public bool CanReorderInCurrentChip =>
+            string.IsNullOrWhiteSpace(_searchQuery)
+            && _sortMode == ServerSortMode.Default
+            && VisibleServers.Count > 1;
+
+        public ServerSortMode SortMode
+        {
+            get => _sortMode;
+            set
+            {
+                if (SetProperty(ref _sortMode, value))
+                {
+                    OnPropertyChanged(nameof(IsSortDefault));
+                    OnPropertyChanged(nameof(IsSortActive));
+                    OnPropertyChanged(nameof(IsSortProtocol));
+                    OnPropertyChanged(nameof(CanReorderInCurrentChip));
+                    RebuildGroupedView();
+                }
+            }
+        }
+
+        // "当前连接" 排序仅在 chip = All 时可用 — 其他 chip 下没必要把单一活跃节点顶到子集顶部。
+        public bool CanSortByActive => _selectedChip?.Kind == ServerGroupChip.ChipKind.All;
+
+        // Shadow props for RadioMenuFlyoutItem.IsChecked TwoWay binding.
+        public bool IsSortDefault
+        {
+            get => _sortMode == ServerSortMode.Default;
+            set { if (value) SortMode = ServerSortMode.Default; }
+        }
+
+        public bool IsSortActive
+        {
+            get => _sortMode == ServerSortMode.Active;
+            set { if (value) SortMode = ServerSortMode.Active; }
+        }
+
+        public bool IsSortProtocol
+        {
+            get => _sortMode == ServerSortMode.Protocol;
+            set { if (value) SortMode = ServerSortMode.Protocol; }
+        }
+
+        public bool SelectAllGroup()
+        {
+            var allChip = GroupChips.FirstOrDefault(c => c.Kind == ServerGroupChip.ChipKind.All);
+            if (allChip == null || _selectedChip?.Kind == ServerGroupChip.ChipKind.All)
+                return false;
+
+            SelectedChip = allChip;
+            return true;
+        }
+
+        public string SearchQuery
+        {
+            get => _searchQuery;
+            set
+            {
+                if (SetProperty(ref _searchQuery, value ?? string.Empty))
+                {
+                    if (!string.IsNullOrWhiteSpace(_searchQuery) && SelectAllGroup())
+                        return;
+
+                    RebuildGroupedView();
+                }
+            }
+        }
+
+        public bool IsChipBarVisible =>
+            GroupChips.Count > 0;
+
+        public bool IsFilterPanelOpen
+        {
+            get => _isFilterPanelOpen;
+            set
+            {
+                if (SetProperty(ref _isFilterPanelOpen, value))
+                    OnPropertyChanged(nameof(IsFilterBarVisible));
+            }
+        }
+
+        public bool IsFilterBarVisible =>
+            IsChipBarVisible && _isFilterPanelOpen;
 
         public ServerEntry? SelectedServer
         {
@@ -76,6 +217,8 @@ namespace XrayUI.ViewModels
                 if (SetProperty(ref _isProxyRunning, value))
                 {
                     NotifyServerActionStateChanged();
+                    if (_sortMode == ServerSortMode.Active)
+                        RebuildGroupedView();
                 }
             }
         }
@@ -107,9 +250,19 @@ namespace XrayUI.ViewModels
 
         public async Task LoadServersAsync()
         {
-            var list = await _settings.LoadServersAsync();
-            foreach (var s in list)
-                Servers.Add(s);
+            var listTask     = _settings.LoadServersAsync();
+            var settingsTask = _settings.LoadSettingsAsync();
+            await Task.WhenAll(listTask, settingsTask);
+
+            _knownSubscriptions = settingsTask.Result.Subscriptions != null
+                ? new List<SubscriptionEntry>(settingsTask.Result.Subscriptions)
+                : new List<SubscriptionEntry>();
+
+            MutateServersInBatch(() =>
+            {
+                foreach (var s in listTask.Result)
+                    Servers.Add(s);
+            });
 
             if (Servers.Count > 0 && SelectedServer == null)
                 SelectedServer = Servers[0];
@@ -117,7 +270,205 @@ namespace XrayUI.ViewModels
 
         private Task SaveAsync() => _settings.SaveServersAsync(Servers);
 
-        public Task SaveOrderAsync() => SaveAsync();
+        public async Task SaveOrderAsync()
+        {
+            // Search results are not reorderable, so VisibleServers maps cleanly to either
+            // all servers or the currently selected group.
+            if (CanReorderInCurrentChip)
+            {
+                var newOrder = VisibleServers.ToList();
+                if (newOrder.Count > 0)
+                {
+                    var positions = new Dictionary<ServerEntry, int>(Servers.Count);
+                    for (int i = 0; i < Servers.Count; i++)
+                        positions[Servers[i]] = i;
+
+                    var slots = newOrder
+                        .Where(positions.ContainsKey)
+                        .Select(s => positions[s])
+                        .OrderBy(i => i)
+                        .ToList();
+
+                    if (slots.Count == newOrder.Count)
+                    {
+                        MutateServersInBatch(() =>
+                        {
+                            for (int i = 0; i < newOrder.Count; i++)
+                            {
+                                var entry      = newOrder[i];
+                                var currentIdx = Servers.IndexOf(entry);
+                                var targetIdx  = slots[i];
+                                if (currentIdx >= 0 && currentIdx != targetIdx)
+                                    Servers.Move(currentIdx, targetIdx);
+                            }
+                        }, rebuild: false);
+                    }
+                }
+            }
+
+            await SaveAsync();
+        }
+
+        private void MutateServersInBatch(Action mutate, bool rebuild = true)
+        {
+            _suppressRebuild = true;
+            try
+            {
+                mutate();
+            }
+            finally
+            {
+                _suppressRebuild = false;
+                if (rebuild) RebuildAll();
+            }
+        }
+
+        private void RebuildAll()
+        {
+            RebuildGroupChips();
+            RebuildGroupedView();
+        }
+
+        // ── Grouping logic ────────────────────────────────────────────────────
+
+        private void OnServersCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (_suppressRebuild) return;
+            // Move events come from intra-group drag-reorder; membership is unchanged.
+            if (e.Action == NotifyCollectionChangedAction.Move) return;
+
+            RebuildAll();
+        }
+
+        private void RebuildGroupChips()
+        {
+            // Single pass: count servers grouped by SubscriptionId (empty/null → ungrouped bucket).
+            var countsBySub = new Dictionary<string, int>(StringComparer.Ordinal);
+            int ungroupedCount = 0;
+            foreach (var s in Servers)
+            {
+                if (string.IsNullOrEmpty(s.SubscriptionId))
+                    ungroupedCount++;
+                else
+                    countsBySub[s.SubscriptionId] = countsBySub.GetValueOrDefault(s.SubscriptionId) + 1;
+            }
+
+            var knownIds = new HashSet<string>(
+                _knownSubscriptions.Where(k => !string.IsNullOrEmpty(k.Id)).Select(k => k.Id!),
+                StringComparer.Ordinal);
+
+            var previouslySelectedKey = ChipKey(_selectedChip);
+            GroupChips.Clear();
+
+            GroupChips.Add(new ServerGroupChip
+            {
+                Kind        = ServerGroupChip.ChipKind.All,
+                DisplayName = AllChipName,
+            });
+
+            foreach (var sub in _knownSubscriptions)
+            {
+                if (string.IsNullOrEmpty(sub.Id)) continue;
+                if (!countsBySub.TryGetValue(sub.Id, out var count)) continue;
+                GroupChips.Add(new ServerGroupChip
+                {
+                    Kind           = ServerGroupChip.ChipKind.Subscription,
+                    DisplayName    = string.IsNullOrWhiteSpace(sub.Name) ? UnnamedSubLabel : sub.Name,
+                    SubscriptionId = sub.Id,
+                    Subscription   = sub,
+                });
+            }
+
+            // Surface orphan subscription IDs (present on nodes but not in _knownSubscriptions)
+            // so users can find and clean up nodes left behind by a deleted subscription.
+            foreach (var (id, count) in countsBySub)
+            {
+                if (knownIds.Contains(id)) continue;
+                GroupChips.Add(new ServerGroupChip
+                {
+                    Kind           = ServerGroupChip.ChipKind.Subscription,
+                    DisplayName    = OrphanSubLabel,
+                    SubscriptionId = id,
+                    Subscription   = null,
+                });
+            }
+
+            if (ungroupedCount > 0)
+            {
+                GroupChips.Add(new ServerGroupChip
+                {
+                    Kind        = ServerGroupChip.ChipKind.Ungrouped,
+                    DisplayName = UngroupedName,
+                });
+            }
+
+            ServerGroupChip? toSelect = null;
+            if (previouslySelectedKey != null)
+                toSelect = GroupChips.FirstOrDefault(c => ChipKey(c) == previouslySelectedKey);
+            toSelect ??= GroupChips.FirstOrDefault();
+
+            // Set backing field directly to avoid SelectedChip's setter triggering a second rebuild.
+            if (!ReferenceEquals(_selectedChip, toSelect))
+            {
+                _selectedChip = toSelect;
+                OnPropertyChanged(nameof(SelectedChip));
+                OnPropertyChanged(nameof(CanReorderInCurrentChip));
+            }
+
+            OnPropertyChanged(nameof(IsChipBarVisible));
+            OnPropertyChanged(nameof(IsFilterBarVisible));
+        }
+
+        private static string? ChipKey(ServerGroupChip? chip) => chip?.Kind switch
+        {
+            ServerGroupChip.ChipKind.All          => AllChipKey,
+            ServerGroupChip.ChipKind.Ungrouped    => UngroupedChipKey,
+            ServerGroupChip.ChipKind.Subscription => chip!.SubscriptionId,
+            _                                     => null,
+        };
+
+        private void RebuildGroupedView()
+        {
+            VisibleServers.Clear();
+
+            var query = _searchQuery.Trim();
+            bool MatchesSearch(ServerEntry s) =>
+                string.IsNullOrEmpty(query) ||
+                (!string.IsNullOrEmpty(s.Name) &&
+                 s.Name.Contains(query, StringComparison.OrdinalIgnoreCase));
+
+            IEnumerable<ServerEntry> candidates = _selectedChip?.Kind switch
+            {
+                ServerGroupChip.ChipKind.Subscription =>
+                    Servers.Where(s => s.SubscriptionId == (_selectedChip.SubscriptionId ?? string.Empty)),
+                ServerGroupChip.ChipKind.Ungrouped =>
+                    Servers.Where(s => string.IsNullOrEmpty(s.SubscriptionId)),
+                _ => Servers,
+            };
+
+            var filtered = candidates.Where(MatchesSearch);
+            IEnumerable<ServerEntry> ordered = _sortMode switch
+            {
+                ServerSortMode.Active =>
+                    filtered.OrderBy(s => s.IsActive ? 0 : 1),
+                ServerSortMode.Protocol =>
+                    filtered.OrderBy(s => s.Protocol ?? string.Empty, StringComparer.OrdinalIgnoreCase),
+                _ => filtered,
+            };
+
+            foreach (var server in ordered)
+                VisibleServers.Add(server);
+
+            OnPropertyChanged(nameof(CanReorderInCurrentChip));
+        }
+
+        private async Task ReloadKnownSubscriptionsAsync()
+        {
+            var settings = await _settings.LoadSettingsAsync();
+            _knownSubscriptions = settings.Subscriptions != null
+                ? new List<SubscriptionEntry>(settings.Subscriptions)
+                : new List<SubscriptionEntry>();
+        }
 
         private void OnSelectedServerChanged(ServerEntry? previous, ServerEntry? current)
         {
@@ -139,6 +490,8 @@ namespace XrayUI.ViewModels
             if (e.PropertyName == nameof(ServerEntry.IsActive))
             {
                 NotifyServerActionStateChanged();
+                if (_sortMode == ServerSortMode.Active)
+                    RebuildGroupedView();
             }
         }
 
@@ -163,15 +516,18 @@ namespace XrayUI.ViewModels
             int added = 0;
             ServerEntry? lastAdded = null;
 
-            foreach (var line in lines)
+            MutateServersInBatch(() =>
             {
-                var entry = NodeLinkParser.Parse(line.Trim());
-                if (entry == null) continue;
+                foreach (var line in lines)
+                {
+                    var entry = NodeLinkParser.Parse(line.Trim());
+                    if (entry == null) continue;
 
-                Servers.Add(entry);
-                lastAdded = entry;
-                added++;
-            }
+                    Servers.Add(entry);
+                    lastAdded = entry;
+                    added++;
+                }
+            });
 
             if (added == 0)
             {
@@ -203,11 +559,12 @@ namespace XrayUI.ViewModels
 
             if (entries != null)
             {
-                foreach (var e in entries) Servers.Add(e);
+                MutateServersInBatch(() =>
+                {
+                    foreach (var e in entries) Servers.Add(e);
+                }, rebuild: false);
                 sub.LastUpdated = DateTimeOffset.Now;
                 sub.LastError   = null;
-                if (SelectedServer == null && Servers.Count > 0)
-                    SelectedServer = Servers[^1];
             }
             else
             {
@@ -215,6 +572,12 @@ namespace XrayUI.ViewModels
             }
 
             await UpsertSubscriptionAsync(sub);
+            await ReloadKnownSubscriptionsAsync();
+            RebuildAll();
+
+            if (entries != null && SelectedServer == null && Servers.Count > 0)
+                SelectedServer = Servers[^1];
+
             await SaveAsync();
 
             if (entries == null)
@@ -291,8 +654,11 @@ namespace XrayUI.ViewModels
                         e.Id = match.Id;
                 }
 
-                foreach (var s in removed) Servers.Remove(s);
-                foreach (var e in newEntries) Servers.Add(e);
+                MutateServersInBatch(() =>
+                {
+                    foreach (var s in removed) Servers.Remove(s);
+                    foreach (var e in newEntries) Servers.Add(e);
+                });
 
                 if (wasSelectedId != null && Servers.All(s => s.Id != wasSelectedId))
                     SelectedServer = newEntries.FirstOrDefault() ?? Servers.FirstOrDefault();
@@ -318,12 +684,18 @@ namespace XrayUI.ViewModels
             }
 
             var removed = Servers.Where(s => s.SubscriptionId == sub.Id).ToList();
-            foreach (var s in removed) Servers.Remove(s);
+            MutateServersInBatch(() =>
+            {
+                foreach (var s in removed) Servers.Remove(s);
+            }, rebuild: false);
+
+            await RemoveSubscriptionAsync(sub.Id);
+            await ReloadKnownSubscriptionsAsync();
+            RebuildAll();
 
             if (SelectedServer != null && !Servers.Contains(SelectedServer))
                 SelectedServer = Servers.FirstOrDefault();
 
-            await RemoveSubscriptionAsync(sub.Id);
             await SaveAsync();
             return true;
         }
