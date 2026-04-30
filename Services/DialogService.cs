@@ -66,7 +66,7 @@ namespace XrayUI.Services
             var text = textBox.Text?.Trim();
             return string.IsNullOrEmpty(text) ? null : text;
         }
-
+  
         // ── Subscriptions ─────────────────────────────────────────────────────
 
         public async Task<SubscriptionEntry?> ShowSubscriptionsDialogAsync(ManageSubscriptionsViewModel vm)

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -127,22 +127,14 @@ namespace XrayUI.Services
 
                 _process.OutputDataReceived += (_, e) =>
                 {
-                    if (e.Data is null)
-                    {
-                        return;
-                    }
-
+                    if (e.Data is null) return;
                     _startupLog.AppendLine(e.Data);
                     AppendLog(e.Data);
                 };
 
                 _process.ErrorDataReceived += (_, e) =>
                 {
-                    if (e.Data is null)
-                    {
-                        return;
-                    }
-
+                    if (e.Data is null) return;
                     _startupLog.AppendLine(e.Data);
                     AppendLog(e.Data);
                 };
@@ -210,6 +202,7 @@ namespace XrayUI.Services
             AppendLog("[已停止]");
             RunningChanged?.Invoke(this, false);
         }
+
         public void StopForShutdown()
         {
             var process = _process;

@@ -11,22 +11,24 @@ namespace XrayUI.Services
     /// </summary>
     public static class XrayConfigBuilder
     {
+        private const string DefaultLogLevel = "info";
+
         private static readonly JsonSerializerOptions JsonOpts = new()
         {
             WriteIndented = true
         };
 
-        public static string Build(ServerEntry server, AppSettings settings, string? outboundInterface = null)
+        public static string Build(ServerEntry server, AppSettings settings, string? tunOutboundInterfaceName = null)
         {
             var config = new JsonObject
             {
                 ["log"] = new JsonObject
                 {
-                    ["loglevel"] = "debug"
+                    ["loglevel"] = DefaultLogLevel
                 },
                 ["dns"] = BuildDns(settings),
                 ["inbounds"] = BuildInbounds(settings),
-                ["outbounds"] = BuildOutbounds(server, settings, outboundInterface),
+                ["outbounds"] = BuildOutbounds(server, settings, tunOutboundInterfaceName),
                 ["routing"] = BuildRouting(settings)
             };
 
@@ -67,8 +69,10 @@ namespace XrayUI.Services
                 ["settings"] = new JsonObject
                 {
                     ["name"] = "xray-tun",
-                    ["address"] = "10.255.0.1/24",
-                    ["mtu"] = 1500
+                    ["MTU"] = 9000,
+                    ["gateway"] = CreateStringArray("172.18.0.1/30"),
+                    ["autoSystemRoutingTable"] = CreateStringArray("0.0.0.0/0"),
+                    ["autoOutboundsInterface"] = "auto"
                 },
                 ["sniffing"] = new JsonObject
                 {
@@ -78,10 +82,9 @@ namespace XrayUI.Services
             };
         }
 
-        private static JsonArray BuildOutbounds(ServerEntry server, AppSettings settings, string? outboundInterface)
+        private static JsonArray BuildOutbounds(ServerEntry server, AppSettings settings, string? tunOutboundInterfaceName)
         {
             var proxy = BuildProxyOutbound(server);
-            InjectSockopt(proxy, outboundInterface);
 
             var direct = new JsonObject
             {
@@ -89,7 +92,6 @@ namespace XrayUI.Services
                 ["protocol"] = "freedom",
                 ["settings"] = new JsonObject()
             };
-            InjectSockopt(direct, outboundInterface);
 
             var list = new JsonArray();
             AddNode(list, proxy);
@@ -115,32 +117,32 @@ namespace XrayUI.Services
                 });
             }
 
+            if (settings.IsTunMode && !string.IsNullOrWhiteSpace(tunOutboundInterfaceName))
+            {
+                foreach (var outbound in list.OfType<JsonObject>())
+                    ApplyOutboundInterface(outbound, tunOutboundInterfaceName);
+            }
+
             return list;
         }
 
-        private static void InjectSockopt(JsonObject outbound, string? iface)
+        private static void ApplyOutboundInterface(JsonObject outbound, string interfaceName)
         {
-            if (string.IsNullOrWhiteSpace(iface))
+            var streamSettings = outbound["streamSettings"] as JsonObject;
+            if (streamSettings is null)
             {
-                return;
+                streamSettings = new JsonObject();
+                outbound["streamSettings"] = streamSettings;
             }
 
-            var sockopt = new JsonObject
+            var sockopt = streamSettings["sockopt"] as JsonObject;
+            if (sockopt is null)
             {
-                ["interface"] = iface
-            };
-
-            if (outbound["streamSettings"] is JsonObject streamSettings)
-            {
+                sockopt = new JsonObject();
                 streamSettings["sockopt"] = sockopt;
             }
-            else
-            {
-                outbound["streamSettings"] = new JsonObject
-                {
-                    ["sockopt"] = sockopt
-                };
-            }
+
+            sockopt["interface"] = interfaceName;
         }
 
         private static JsonObject BuildProxyOutbound(ServerEntry server)
@@ -389,6 +391,13 @@ namespace XrayUI.Services
 
             if (settings.IsTunMode)
             {
+                AddNode(rules, new JsonObject
+                {
+                    ["type"] = "field",
+                    ["outboundTag"] = "direct",
+                    ["process"] = CreateStringArray("self/", "xray/")
+                });
+
                 AddNode(rules, new JsonObject
                 {
                     ["type"] = "field",

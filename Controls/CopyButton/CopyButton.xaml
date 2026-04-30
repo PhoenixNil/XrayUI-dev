@@ -51,93 +51,6 @@
                         BorderBrush="{TemplateBinding BorderBrush}"
                         BorderThickness="{TemplateBinding BorderThickness}"
                         CornerRadius="{TemplateBinding CornerRadius}">
-                        <Grid.Resources>
-                            <Storyboard x:Name="CopyToClipboardSuccessAnimation">
-                                <DoubleAnimationUsingKeyFrames
-                                    Storyboard.TargetName="ContentPresenter"
-                                    Storyboard.TargetProperty="(UIElement.Opacity)"
-                                    Duration="0:0:1.433">
-                                    <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1.0" />
-                                    <SplineDoubleKeyFrame
-                                        KeySpline="0.33,0.0 0.67,1.0"
-                                        KeyTime="0:0:0.133"
-                                        Value="0.0" />
-                                    <DiscreteDoubleKeyFrame KeyTime="0:0:1.3" Value="0.0" />
-                                    <SplineDoubleKeyFrame
-                                        KeySpline="1.0,0.0 1.0,1.0"
-                                        KeyTime="0:0:1.433"
-                                        Value="1.0" />
-                                </DoubleAnimationUsingKeyFrames>
-                                <DoubleAnimationUsingKeyFrames
-                                    Storyboard.TargetName="CopyToClipboardTextScaleTransform"
-                                    Storyboard.TargetProperty="(ScaleX)"
-                                    Duration="0:0:1.2">
-                                    <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1.0" />
-                                    <SplineDoubleKeyFrame
-                                        KeySpline="0.13,0.0 0.0,1.0"
-                                        KeyTime="0:0:0.133"
-                                        Value="0.273" />
-                                    <DiscreteDoubleKeyFrame KeyTime="0:0:1.167" Value="0.273" />
-                                    <LinearDoubleKeyFrame KeyTime="0:0:1.2" Value="1.0" />
-                                </DoubleAnimationUsingKeyFrames>
-                                <DoubleAnimationUsingKeyFrames
-                                    Storyboard.TargetName="CopyToClipboardTextScaleTransform"
-                                    Storyboard.TargetProperty="(ScaleY)"
-                                    Duration="0:0:1.2">
-                                    <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1.0" />
-                                    <SplineDoubleKeyFrame
-                                        KeySpline="0.13,0.0 0.0,1.0"
-                                        KeyTime="0:0:0.133"
-                                        Value="0.273" />
-                                    <DiscreteDoubleKeyFrame KeyTime="0:0:1.167" Value="0.273" />
-                                    <LinearDoubleKeyFrame KeyTime="0:0:1.2" Value="1.0" />
-                                </DoubleAnimationUsingKeyFrames>
-                                <DoubleAnimationUsingKeyFrames
-                                    Storyboard.TargetName="CopySuccessGlyph"
-                                    Storyboard.TargetProperty="(UIElement.Opacity)"
-                                    Duration="0:0:1.3">
-                                    <DiscreteDoubleKeyFrame KeyTime="0:0:0.133" Value="0.0" />
-                                    <SplineDoubleKeyFrame
-                                        KeySpline="0.33,0.0 0.67,1.0"
-                                        KeyTime="0:0:0.267"
-                                        Value="1.0" />
-                                    <DiscreteDoubleKeyFrame KeyTime="0:0:1.167" Value="1.0" />
-                                    <SplineDoubleKeyFrame
-                                        KeySpline="1.0,0.0 0.98,1.0"
-                                        KeyTime="0:0:1.3"
-                                        Value="0.0" />
-                                </DoubleAnimationUsingKeyFrames>
-                                <DoubleAnimationUsingKeyFrames
-                                    Storyboard.TargetName="CopyToClipboardSuccessTextScaleTransform"
-                                    Storyboard.TargetProperty="(ScaleX)"
-                                    Duration="0:0:0.333">
-                                    <DiscreteDoubleKeyFrame KeyTime="0:0:0.133" Value="0.385" />
-                                    <SplineDoubleKeyFrame
-                                        KeySpline="0.39,0.0 0.63,1.0"
-                                        KeyTime="0:0:0.267"
-                                        Value="1.146" />
-                                    <SplineDoubleKeyFrame
-                                        KeySpline="0.55,0.0 0.02,1.0"
-                                        KeyTime="0:0:0.333"
-                                        Value="1.0" />
-                                </DoubleAnimationUsingKeyFrames>
-                                <DoubleAnimationUsingKeyFrames
-                                    Storyboard.TargetName="CopyToClipboardSuccessTextScaleTransform"
-                                    Storyboard.TargetProperty="(ScaleY)"
-                                    Duration="0:0:0.333">
-                                    <DiscreteDoubleKeyFrame KeyTime="0:0:0.133" Value="0.385" />
-                                    <SplineDoubleKeyFrame
-                                        KeySpline="0.39,0.0 0.63,1.0"
-                                        KeyTime="0:0:0.267"
-                                        Value="1.146" />
-                                    <SplineDoubleKeyFrame
-                                        KeySpline="0.55,0.0 0.02,1.0"
-                                        KeyTime="0:0:0.333"
-                                        Value="1.0" />
-                                </DoubleAnimationUsingKeyFrames>
-                            </Storyboard>
-                        </Grid.Resources>
-
                         <Grid.BackgroundTransition>
                             <BrushTransition Duration="0:0:0.083" />
                         </Grid.BackgroundTransition>
@@ -151,21 +64,11 @@
                             ContentTransitions="{TemplateBinding ContentTransitions}"
                             FontFamily="{TemplateBinding FontFamily}"
                             FontSize="{TemplateBinding FontSize}"
-                            Foreground="{TemplateBinding Foreground}"
-                            RenderTransformOrigin=".5,.5">
-                            <ContentPresenter.RenderTransform>
-                                <ScaleTransform x:Name="CopyToClipboardTextScaleTransform" />
-                            </ContentPresenter.RenderTransform>
-                        </ContentPresenter>
+                            Foreground="{TemplateBinding Foreground}" />
                         <ContentPresenter
                             x:Name="CopySuccessGlyph"
                             AutomationProperties.AccessibilityView="Raw"
-                            Foreground="{TemplateBinding Foreground}"
-                            Opacity="0"
-                            RenderTransformOrigin=".5,.5">
-                            <ContentPresenter.RenderTransform>
-                                <ScaleTransform x:Name="CopyToClipboardSuccessTextScaleTransform" />
-                            </ContentPresenter.RenderTransform>
+                            Foreground="{TemplateBinding Foreground}">
                             <FontIcon
                                 AutomationProperties.AccessibilityView="Raw"
                                 FontSize="{TemplateBinding FontSize}"
@@ -176,61 +79,31 @@
                             <VisualStateGroup x:Name="CommonStates">
                                 <VisualState x:Name="Normal" />
                                 <VisualState x:Name="PointerOver">
-                                    <Storyboard>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ButtonBackgroundPointerOver}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="BorderBrush">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ButtonBorderBrushPointerOver}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Foreground">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource CopyButtonPointerOverForegroundBrush}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CopySuccessGlyph" Storyboard.TargetProperty="Foreground">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource CopyButtonPointerOverForegroundBrush}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                    </Storyboard>
                                     <VisualState.Setters>
+                                        <Setter Target="RootGrid.Background" Value="{ThemeResource ButtonBackgroundPointerOver}" />
+                                        <Setter Target="RootGrid.BorderBrush" Value="{ThemeResource ButtonBorderBrushPointerOver}" />
+                                        <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource CopyButtonPointerOverForegroundBrush}" />
+                                        <Setter Target="CopySuccessGlyph.Foreground" Value="{ThemeResource CopyButtonPointerOverForegroundBrush}" />
                                         <Setter Target="ContentPresenter.(AnimatedIcon.State)" Value="PointerOver" />
                                     </VisualState.Setters>
                                 </VisualState>
 
                                 <VisualState x:Name="Pressed">
-                                    <Storyboard>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ButtonBackgroundPressed}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="BorderBrush">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ButtonBorderBrushPressed}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Foreground">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource CopyButtonPressedForegroundBrush}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CopySuccessGlyph" Storyboard.TargetProperty="Foreground">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource CopyButtonPressedForegroundBrush}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                    </Storyboard>
                                     <VisualState.Setters>
+                                        <Setter Target="RootGrid.Background" Value="{ThemeResource ButtonBackgroundPressed}" />
+                                        <Setter Target="RootGrid.BorderBrush" Value="{ThemeResource ButtonBorderBrushPressed}" />
+                                        <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource CopyButtonPressedForegroundBrush}" />
+                                        <Setter Target="CopySuccessGlyph.Foreground" Value="{ThemeResource CopyButtonPressedForegroundBrush}" />
                                         <Setter Target="ContentPresenter.(AnimatedIcon.State)" Value="Pressed" />
                                     </VisualState.Setters>
                                 </VisualState>
 
                                 <VisualState x:Name="Disabled">
-                                    <Storyboard>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ButtonBackgroundDisabled}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="BorderBrush">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ButtonBorderBrushDisabled}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Foreground">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ButtonForegroundDisabled}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CopySuccessGlyph" Storyboard.TargetProperty="Foreground">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ButtonForegroundDisabled}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                    </Storyboard>
                                     <VisualState.Setters>
+                                        <Setter Target="RootGrid.Background" Value="{ThemeResource ButtonBackgroundDisabled}" />
+                                        <Setter Target="RootGrid.BorderBrush" Value="{ThemeResource ButtonBorderBrushDisabled}" />
+                                        <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource ButtonForegroundDisabled}" />
+                                        <Setter Target="CopySuccessGlyph.Foreground" Value="{ThemeResource ButtonForegroundDisabled}" />
                                         <Setter Target="ContentPresenter.(AnimatedIcon.State)" Value="Normal" />
                                     </VisualState.Setters>
                                 </VisualState>

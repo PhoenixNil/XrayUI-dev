@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -18,6 +18,8 @@ namespace XrayUI.Services
         private static readonly string SettingsFile = Path.Combine(DataDir, "settings.json");
         private static readonly string ServersFile  = Path.Combine(DataDir, "servers.json");
 
+        private AppSettings? _cachedSettings;
+
         public SettingsService()
         {
             Directory.CreateDirectory(DataDir);
@@ -27,13 +29,20 @@ namespace XrayUI.Services
 
         public async Task<AppSettings> LoadSettingsAsync()
         {
+            if (_cachedSettings is not null)
+                return _cachedSettings;
+
             try
             {
                 if (!File.Exists(SettingsFile))
-                    return new AppSettings();
+                {
+                    _cachedSettings = new AppSettings();
+                    return _cachedSettings;
+                }
 
                 var json = await File.ReadAllTextAsync(SettingsFile).ConfigureAwait(false);
-                return JsonSerializer.Deserialize(json, AppJsonSerializerContext.Default.AppSettings) ?? new AppSettings();
+                _cachedSettings = JsonSerializer.Deserialize(json, AppJsonSerializerContext.Default.AppSettings) ?? new AppSettings();
+                return _cachedSettings;
             }
             catch (Exception ex)
             {
@@ -44,6 +53,7 @@ namespace XrayUI.Services
 
         public async Task SaveSettingsAsync(AppSettings settings)
         {
+            _cachedSettings = settings;
             var json = JsonSerializer.Serialize(settings, AppJsonSerializerContext.Readable<AppSettings>());
             await File.WriteAllTextAsync(SettingsFile, json).ConfigureAwait(false);
         }
