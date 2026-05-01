@@ -1,0 +1,98 @@
+name: release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: publish ${{ matrix.rid }} (AOT)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            platform: x64
+            profile: win-x64.pubxml
+          - rid: win-x86
+            platform: x86
+            profile: win-x86.pubxml
+          # arm64 is intentionally not in the matrix yet:
+          # - Properties/PublishProfiles/win-arm64.pubxml does not exist.
+          # To enable arm64, create that pubxml (mirror win-x64.pubxml, change RuntimeIdentifier
+          # to win-arm64 and Platform to ARM64) and add a matrix entry:
+          #   - rid: win-arm64
+          #     platform: ARM64
+          #     profile: win-arm64.pubxml
+          # Note: AOT cross-compile to arm64 may require a windows-11-arm runner.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore XrayUI-dev.slnx
+
+      - name: Publish (${{ matrix.rid }}, AOT)
+        run: dotnet publish XrayUI-dev.csproj -c Release -p:Platform=${{ matrix.platform }} -p:PublishProfile=Properties/PublishProfiles/${{ matrix.profile }} --no-restore
+
+      - name: Pack zip
+        shell: pwsh
+        run: |
+          $publishDir = "bin/Release/net10.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
+          $zipName = "XrayUI-${{ github.ref_name }}-${{ matrix.rid }}.zip"
+          if (-not (Test-Path $publishDir)) {
+            Write-Error "Publish directory not found: $publishDir"
+            exit 1
+          }
+          Compress-Archive -Path "$publishDir/*" -DestinationPath $zipName -CompressionLevel Optimal
+          Write-Host "Created $zipName ($((Get-Item $zipName).Length) bytes)"
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XrayUI-${{ github.ref_name }}-${{ matrix.rid }}
+          path: XrayUI-${{ github.ref_name }}-${{ matrix.rid }}.zip
+          retention-days: 14
+          if-no-files-found: error
+
+  release:
+    name: create GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    # Only create a Release on real tag pushes. workflow_dispatch is for testing
+    # the publish flow only; download the zip artifacts from the run page to verify.
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten zips
+        run: |
+          mkdir -p release-files
+          find artifacts -name '*.zip' -exec mv {} release-files/ \;
+          ls -la release-files
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-files/*.zip
+          generate_release_notes: true
+          fail_on_unmatched_files: true

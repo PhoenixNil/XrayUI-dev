@@ -1,0 +1,46 @@
+name: build
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-x64:
+    name: publish win-x64 (AOT)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore XrayUI-dev.slnx
+
+      - name: Publish (win-x64, AOT)
+        run: dotnet publish XrayUI-dev.csproj -c Release -p:Platform=x64 -p:PublishProfile=Properties/PublishProfiles/win-x64.pubxml --no-restore
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XrayUI-win-x64-${{ github.sha }}
+          path: bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/
+          retention-days: 7
+          if-no-files-found: error
