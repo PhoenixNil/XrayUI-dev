@@ -20,17 +20,10 @@ jobs:
         include:
           - rid: win-x64
             platform: x64
-            profile: win-x64
           - rid: win-x86
             platform: x86
-            profile: win-x86
-          # arm64 is intentionally not in the matrix yet:
-          # - Properties/PublishProfiles/win-arm64.pubxml does not exist.
-          # To enable arm64, create that pubxml (mirror win-x64.pubxml, change RuntimeIdentifier
-          # to win-arm64 and Platform to ARM64) and add a matrix entry:
-          #   - rid: win-arm64
-          #     platform: ARM64
-          #     profile: win-arm64
+          # arm64 is intentionally not in the matrix yet.
+          # To enable: append { rid: win-arm64, platform: ARM64 }.
           # Note: AOT cross-compile to arm64 may require a windows-11-arm runner.
 
     steps:
@@ -46,23 +39,38 @@ jobs:
         run: dotnet restore XrayUI-dev.slnx
 
       - name: Publish (${{ matrix.rid }}, AOT)
-        run: dotnet publish XrayUI-dev.csproj -c Release -p:Platform=${{ matrix.platform }} -p:PublishProfile=${{ matrix.profile }} --no-restore
+        # Mirror Properties/PublishProfiles/win-*.pubxml inline because
+        # -p:PublishProfile=... is unreliable with WinUI 3 / .NET 10 SDK.
+        run: >
+          dotnet publish XrayUI-dev.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          -p:Platform=${{ matrix.platform }}
+          -p:SelfContained=true
+          -p:PublishAot=true
+          -p:PublishTrimmed=true
+          -p:PublishSingleFile=false
+          -p:PublishReadyToRun=false
+          -p:WindowsAppSDKSelfContained=false
+          -p:CopyOutputSymbolsToPublishDirectory=false
+          --no-restore
 
       - name: Verify AOT exe produced
         shell: pwsh
         run: |
           $publishDir = "bin/Release/net10.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
           $exe = "$publishDir/XrayUI-dev.exe"
+          Write-Host "Listing $publishDir :"
+          if (Test-Path $publishDir) {
+            Get-ChildItem -Recurse $publishDir | ForEach-Object { $_.FullName }
+          } else {
+            Write-Host "(publish dir does not exist)"
+          }
           if (-not (Test-Path $exe)) {
-            Write-Error "Publish did not produce $exe. The pubxml likely was not loaded; AOT/SelfContained settings did not take effect."
-            if (Test-Path $publishDir) {
-              Write-Host "Publish dir contents:"
-              Get-ChildItem -Recurse $publishDir | Select-Object -ExpandProperty FullName
-            }
+            Write-Host "::error::Publish did not produce $exe"
             exit 1
           }
-          $size = (Get-Item $exe).Length
-          Write-Host "OK: AOT exe found at $exe ($size bytes)"
+          Write-Host "OK: AOT exe found at $exe ($((Get-Item $exe).Length) bytes)"
 
       - name: Pack zip
         shell: pwsh

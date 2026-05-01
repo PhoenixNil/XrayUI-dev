@@ -35,20 +35,36 @@ jobs:
         run: dotnet restore XrayUI-dev.slnx
 
       - name: Publish (win-x64, AOT)
-        run: dotnet publish XrayUI-dev.csproj -c Release -p:Platform=x64 -p:PublishProfile=win-x64 --no-restore
+        # Mirror Properties/PublishProfiles/win-x64.pubxml settings inline because
+        # -p:PublishProfile=... is unreliable with WinUI 3 / .NET 10 SDK (the import
+        # silently no-ops, producing a framework-dependent build instead of AOT).
+        run: >
+          dotnet publish XrayUI-dev.csproj
+          -c Release
+          -r win-x64
+          -p:Platform=x64
+          -p:SelfContained=true
+          -p:PublishAot=true
+          -p:PublishTrimmed=true
+          -p:PublishSingleFile=false
+          -p:PublishReadyToRun=false
+          -p:WindowsAppSDKSelfContained=false
+          -p:CopyOutputSymbolsToPublishDirectory=false
+          --no-restore
 
       - name: Verify AOT exe produced
         shell: pwsh
         run: |
-          $exe = "bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/XrayUI-dev.exe"
+          $publishDir = "bin/Release/net10.0-windows10.0.19041.0/win-x64/publish"
+          $exe = "$publishDir/XrayUI-dev.exe"
+          Write-Host "Listing $publishDir :"
+          if (Test-Path $publishDir) {
+            Get-ChildItem -Recurse $publishDir | ForEach-Object { $_.FullName }
+          } else {
+            Write-Host "(publish dir does not exist)"
+          }
           if (-not (Test-Path $exe)) {
-            Write-Error "Publish did not produce $exe. The pubxml likely was not loaded; AOT/SelfContained settings did not take effect."
-            Write-Host "Listing publish output for diagnosis:"
-            if (Test-Path "bin/Release/net10.0-windows10.0.19041.0/win-x64/publish") {
-              Get-ChildItem -Recurse "bin/Release/net10.0-windows10.0.19041.0/win-x64/publish" | Select-Object -ExpandProperty FullName
-            } else {
-              Write-Host "publish dir does not exist either"
-            }
+            Write-Host "::error::Publish did not produce $exe -- AOT/SelfContained did not take effect."
             exit 1
           }
           $size = (Get-Item $exe).Length
