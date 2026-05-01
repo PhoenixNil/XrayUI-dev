@@ -137,6 +137,9 @@ namespace XrayUI.ViewModels
             FallbackColor  = Color.FromArgb(255, 148, 163, 184);
         }
 
+        public Task<string> ExportPresetAsync() =>
+            new PresetExportService(_settings).ExportAsync();
+
         [RelayCommand]
         private async Task Done()
         {
