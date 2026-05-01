@@ -18,6 +18,7 @@ namespace XrayUI.Services;
 [JsonSerializable(typeof(CustomRoutingRule))]
 [JsonSerializable(typeof(List<SubscriptionEntry>))]
 [JsonSerializable(typeof(SubscriptionEntry))]
+[JsonSerializable(typeof(PresetSettings))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext
 {
     // Write-side options that emit CJK / emoji as literal UTF-8 instead of \uXXXX escapes.

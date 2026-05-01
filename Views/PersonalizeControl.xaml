@@ -381,6 +381,68 @@
                 </Border>
             </StackPanel>
 
+            <!-- ── 数据管理 ────────────────────────────────────────────────── -->
+            <StackPanel Spacing="10">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="数据管理"
+                               FontSize="15"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="备份与导出应用配置"
+                               FontSize="13"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+
+                <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="{ThemeResource OverlayCornerRadius}">
+                    <Grid Padding="16,13"
+                          ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <FontIcon Grid.Column="0"
+                                  Glyph="&#xEDE1;"
+                                  FontSize="16"
+                                  VerticalAlignment="Center"
+                                  Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                        <StackPanel Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    Spacing="2">
+                            <TextBlock Text="导出配置"
+                                       FontSize="14" />
+                            <TextBlock Text="将当前的节点和路由规则导出为预置文件"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+
+                        <Button Grid.Column="2"
+                                VerticalAlignment="Center"
+                                Padding="12,6"
+                                Click="ExportPresetButton_Click">
+                            <StackPanel Orientation="Horizontal"
+                                        Spacing="6">
+                                <FontIcon Glyph="&#xE898;"
+                                          FontSize="14" />
+                                <TextBlock Text="导出" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Border>
+                
+                <InfoBar x:Name="ExportSuccessInfoBar"
+                         IsOpen="False"
+                         Severity="Success"
+                         Title="导出成功"
+                         Message="已导出至Import文件夹。"
+                         IsClosable="True" />
+            </StackPanel>
+
             <!-- ── Footer ──────────────────────────────────────────────────── -->
             <Button HorizontalAlignment="Right"
                     Style="{StaticResource AccentButtonStyle}"

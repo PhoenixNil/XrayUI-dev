@@ -85,6 +85,8 @@ namespace XrayUI.ViewModels
 
         public async Task InitializeAsync(bool isBootLaunch = false)
         {
+            await new InitialImportService(_settings).ImportAsync();
+
             // Load saved server list
             await ServerList.LoadServersAsync();
 
