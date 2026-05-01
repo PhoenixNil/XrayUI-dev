@@ -35,12 +35,9 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Restore
-        run: dotnet restore XrayUI-dev.slnx
-
+      # No separate `dotnet restore` step: PublishAot must be set at restore time
+      # for ILCompiler to be pulled in. See build.yml for details.
       - name: Publish (${{ matrix.rid }}, AOT)
-        # Mirror Properties/PublishProfiles/win-*.pubxml inline because
-        # -p:PublishProfile=... is unreliable with WinUI 3 / .NET 10 SDK.
         run: >
           dotnet publish XrayUI-dev.csproj
           -c Release
@@ -53,7 +50,6 @@ jobs:
           -p:PublishReadyToRun=false
           -p:WindowsAppSDKSelfContained=false
           -p:CopyOutputSymbolsToPublishDirectory=false
-          --no-restore
 
       - name: Verify AOT exe produced
         shell: pwsh
