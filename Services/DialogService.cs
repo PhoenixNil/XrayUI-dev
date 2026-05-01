@@ -600,7 +600,7 @@ namespace XrayUI.Services
             RequestedTheme = ThemeHelper.ActualTheme,
         };
 
-        private static FrameworkElement Wrap(FrameworkElement child) =>
+        private static Border Wrap(FrameworkElement child) =>
             new Border { Child = child };
     }
 }

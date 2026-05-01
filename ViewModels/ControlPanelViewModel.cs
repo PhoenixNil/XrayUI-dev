@@ -272,9 +272,6 @@ namespace XrayUI.ViewModels
             _activeServerName = server.Name;
             IsRunning = true;
 
-            // Warm up connectivity in the background after TUN startup.
-            if (IsTunMode)
-                _ = WarmUpTunInBackgroundAsync();
 
             return true;
         }
@@ -372,38 +369,7 @@ namespace XrayUI.ViewModels
             await _dialogs.ShowErrorAsync("应用新配置失败", detail);
         }
 
-        /// <summary>
-        /// 后台轻量预热：发几个 HTTP 探测让 Windows 路由表和 DNS 缓存生效。
-        /// 最多 3 轮 × 1.5s 超时 + 500ms 间隔 ≈ 最坏 ~7 秒，且完全不阻塞 UI。
-        /// </summary>
-        private async Task WarmUpTunInBackgroundAsync()
-        {
-            try
-            {
-                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(1.5) };
 
-                for (var attempt = 1; attempt <= 3; attempt++)
-                {
-                    try
-                    {
-                        using var response = await client.GetAsync("https://www.gstatic.com/generate_204",
-                            HttpCompletionOption.ResponseHeadersRead);
-                        if ((int)response.StatusCode < 500)
-                            return;
-                    }
-                    catch
-                    {
-                        // Ignore and retry.
-                    }
-
-                    await Task.Delay(500);
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[TUN] 后台预热异常: {ex.Message}");
-            }
-        }
 
         private void CleanupTunRoutesSafely()
         {
