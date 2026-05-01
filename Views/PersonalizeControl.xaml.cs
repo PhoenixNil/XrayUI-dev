@@ -11,7 +11,7 @@ namespace XrayUI.Views
             this.InitializeComponent();
         }
 
-        private async void ExportPresetButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        private async void ExportPresetButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {

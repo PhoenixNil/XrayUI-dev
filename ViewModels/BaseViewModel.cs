@@ -1,6 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
-
-namespace XrayUI.ViewModels
+﻿namespace XrayUI.ViewModels
 {
     public partial class BaseViewModel : ObservableObject
     {

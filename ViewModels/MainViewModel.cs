@@ -1,8 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.Input;
-using Microsoft.UI.Xaml;
 using XrayUI.Models;
 using XrayUI.Services;
 

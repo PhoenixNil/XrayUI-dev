@@ -819,7 +819,7 @@ namespace XrayUI.ViewModels
             Servers.Remove(toRemove);
 
             SelectedServer = Servers.Count > 0
-                ? Servers[System.Math.Max(0, idx - 1)]
+                ? Servers[Math.Max(0, idx - 1)]
                 : null;
 
             await SaveAsync();

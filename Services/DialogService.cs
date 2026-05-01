@@ -5,7 +5,6 @@ using System.ComponentModel;
 using Windows.ApplicationModel.DataTransfer;
 using XrayUI.Helpers;
 using XrayUI.Models;
-using XrayUI.ViewModels;
 using XrayUI.Views;
 
 namespace XrayUI.Services

@@ -2,12 +2,9 @@
 using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
 using Windows.Graphics;
 using XrayUI.Helpers;
 using XrayUI.Models;
-using XrayUI.ViewModels;
 
 namespace XrayUI.Views
 {

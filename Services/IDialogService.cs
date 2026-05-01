@@ -1,9 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.UI.Xaml;
 using XrayUI.Models;
-using XrayUI.ViewModels;
 
 namespace XrayUI.Services
 {

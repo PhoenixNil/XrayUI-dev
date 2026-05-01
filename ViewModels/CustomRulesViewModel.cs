@@ -3,7 +3,6 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.UI.Xaml;
 using XrayUI.Models;
 using XrayUI.Services;
 
