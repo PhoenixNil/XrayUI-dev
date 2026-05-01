@@ -20,10 +20,11 @@ jobs:
         include:
           - rid: win-x64
             platform: x64
-          - rid: win-x86
-            platform: x86
-          # arm64 is intentionally not in the matrix yet.
-          # To enable: append { rid: win-arm64, platform: ARM64 }.
+          # Only win-x64 ships. To add a platform, append a matrix entry, e.g.
+          #   - rid: win-x86
+          #     platform: x86
+          #   - rid: win-arm64
+          #     platform: ARM64
           # Note: AOT cross-compile to arm64 may require a windows-11-arm runner.
 
     steps:
