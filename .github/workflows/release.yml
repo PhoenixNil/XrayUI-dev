@@ -1,0 +1,115 @@
+name: release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: publish ${{ matrix.rid }} (AOT)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            platform: x64
+          # Only win-x64 ships. To add a platform, append a matrix entry, e.g.
+          #   - rid: win-x86
+          #     platform: x86
+          #   - rid: win-arm64
+          #     platform: ARM64
+          # Note: AOT cross-compile to arm64 may require a windows-11-arm runner.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # No separate `dotnet restore` step: PublishAot must be set at restore time
+      # for ILCompiler to be pulled in. See build.yml for details.
+      - name: Publish (${{ matrix.rid }}, AOT)
+        run: >
+          dotnet publish XrayUI-dev.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          -p:Platform=${{ matrix.platform }}
+          -p:SelfContained=true
+          -p:PublishAot=true
+          -p:PublishTrimmed=true
+          -p:PublishSingleFile=false
+          -p:PublishReadyToRun=false
+          -p:WindowsAppSDKSelfContained=false
+          -p:CopyOutputSymbolsToPublishDirectory=false
+
+      - name: Verify AOT exe produced
+        shell: pwsh
+        run: |
+          $publishDir = "bin/Release/net10.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
+          $exe = "$publishDir/XrayUI-dev.exe"
+          Write-Host "Listing $publishDir :"
+          if (Test-Path $publishDir) {
+            Get-ChildItem -Recurse $publishDir | ForEach-Object { $_.FullName }
+          } else {
+            Write-Host "(publish dir does not exist)"
+          }
+          if (-not (Test-Path $exe)) {
+            Write-Host "::error::Publish did not produce $exe"
+            exit 1
+          }
+          Write-Host "OK: AOT exe found at $exe ($((Get-Item $exe).Length) bytes)"
+
+      - name: Pack zip
+        shell: pwsh
+        run: |
+          $publishDir = "bin/Release/net10.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
+          $zipName = "XrayUI-${{ github.ref_name }}-${{ matrix.rid }}.zip"
+          Compress-Archive -Path "$publishDir/*" -DestinationPath $zipName -CompressionLevel Optimal
+          Write-Host "Created $zipName ($((Get-Item $zipName).Length) bytes)"
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XrayUI-${{ github.ref_name }}-${{ matrix.rid }}
+          path: XrayUI-${{ github.ref_name }}-${{ matrix.rid }}.zip
+          retention-days: 14
+          if-no-files-found: error
+
+  release:
+    name: create GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    # Only create a Release on real tag pushes. workflow_dispatch is for testing
+    # the publish flow only; download the zip artifacts from the run page to verify.
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten zips
+        run: |
+          mkdir -p release-files
+          find artifacts -name '*.zip' -exec mv {} release-files/ \;
+          ls -la release-files
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-files/*.zip
+          generate_release_notes: true
+          fail_on_unmatched_files: true

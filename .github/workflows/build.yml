@@ -1,0 +1,76 @@
+name: build
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-x64:
+    name: publish win-x64 (AOT)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # No separate `dotnet restore` step: PublishAot must be set at restore time
+      # (otherwise the Microsoft.DotNet.ILCompiler package is not pulled in and
+      # AOT silently no-ops). Letting `dotnet publish` do its own restore ensures
+      # all properties below apply to both restore and publish phases.
+      - name: Publish (win-x64, AOT)
+        run: >
+          dotnet publish XrayUI-dev.csproj
+          -c Release
+          -r win-x64
+          -p:Platform=x64
+          -p:SelfContained=true
+          -p:PublishAot=true
+          -p:PublishTrimmed=true
+          -p:PublishSingleFile=false
+          -p:PublishReadyToRun=false
+          -p:WindowsAppSDKSelfContained=false
+          -p:CopyOutputSymbolsToPublishDirectory=false
+
+      - name: Verify AOT exe produced
+        shell: pwsh
+        run: |
+          $publishDir = "bin/Release/net10.0-windows10.0.19041.0/win-x64/publish"
+          $exe = "$publishDir/XrayUI-dev.exe"
+          Write-Host "Listing $publishDir :"
+          if (Test-Path $publishDir) {
+            Get-ChildItem -Recurse $publishDir | ForEach-Object { $_.FullName }
+          } else {
+            Write-Host "(publish dir does not exist)"
+          }
+          if (-not (Test-Path $exe)) {
+            Write-Host "::error::Publish did not produce $exe -- AOT/SelfContained did not take effect."
+            exit 1
+          }
+          $size = (Get-Item $exe).Length
+          Write-Host "OK: AOT exe found at $exe ($size bytes)"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XrayUI-win-x64-${{ github.sha }}
+          path: bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/
+          retention-days: 7
+          if-no-files-found: error
