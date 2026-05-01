@@ -13,7 +13,7 @@ A native Windows GUI client for the Xray core, built with WinUI 3.
 
 ## Build
 
-Requires .NET 8 SDK and Windows 10 1809 or later.
+Requires .NET 10 SDK and Windows 10 1809 or later.
 
     dotnet build -c Release
     dotnet publish -c Release -r win-x64
