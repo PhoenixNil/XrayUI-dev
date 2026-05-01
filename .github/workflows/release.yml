@@ -20,17 +20,17 @@ jobs:
         include:
           - rid: win-x64
             platform: x64
-            profile: win-x64.pubxml
+            profile: win-x64
           - rid: win-x86
             platform: x86
-            profile: win-x86.pubxml
+            profile: win-x86
           # arm64 is intentionally not in the matrix yet:
           # - Properties/PublishProfiles/win-arm64.pubxml does not exist.
           # To enable arm64, create that pubxml (mirror win-x64.pubxml, change RuntimeIdentifier
           # to win-arm64 and Platform to ARM64) and add a matrix entry:
           #   - rid: win-arm64
           #     platform: ARM64
-          #     profile: win-arm64.pubxml
+          #     profile: win-arm64
           # Note: AOT cross-compile to arm64 may require a windows-11-arm runner.
 
     steps:
@@ -46,17 +46,29 @@ jobs:
         run: dotnet restore XrayUI-dev.slnx
 
       - name: Publish (${{ matrix.rid }}, AOT)
-        run: dotnet publish XrayUI-dev.csproj -c Release -p:Platform=${{ matrix.platform }} -p:PublishProfile=Properties/PublishProfiles/${{ matrix.profile }} --no-restore
+        run: dotnet publish XrayUI-dev.csproj -c Release -p:Platform=${{ matrix.platform }} -p:PublishProfile=${{ matrix.profile }} --no-restore
+
+      - name: Verify AOT exe produced
+        shell: pwsh
+        run: |
+          $publishDir = "bin/Release/net10.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
+          $exe = "$publishDir/XrayUI-dev.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Error "Publish did not produce $exe. The pubxml likely was not loaded; AOT/SelfContained settings did not take effect."
+            if (Test-Path $publishDir) {
+              Write-Host "Publish dir contents:"
+              Get-ChildItem -Recurse $publishDir | Select-Object -ExpandProperty FullName
+            }
+            exit 1
+          }
+          $size = (Get-Item $exe).Length
+          Write-Host "OK: AOT exe found at $exe ($size bytes)"
 
       - name: Pack zip
         shell: pwsh
         run: |
           $publishDir = "bin/Release/net10.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
           $zipName = "XrayUI-${{ github.ref_name }}-${{ matrix.rid }}.zip"
-          if (-not (Test-Path $publishDir)) {
-            Write-Error "Publish directory not found: $publishDir"
-            exit 1
-          }
           Compress-Archive -Path "$publishDir/*" -DestinationPath $zipName -CompressionLevel Optimal
           Write-Host "Created $zipName ($((Get-Item $zipName).Length) bytes)"
 

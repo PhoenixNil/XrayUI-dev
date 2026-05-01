@@ -35,7 +35,24 @@ jobs:
         run: dotnet restore XrayUI-dev.slnx
 
       - name: Publish (win-x64, AOT)
-        run: dotnet publish XrayUI-dev.csproj -c Release -p:Platform=x64 -p:PublishProfile=Properties/PublishProfiles/win-x64.pubxml --no-restore
+        run: dotnet publish XrayUI-dev.csproj -c Release -p:Platform=x64 -p:PublishProfile=win-x64 --no-restore
+
+      - name: Verify AOT exe produced
+        shell: pwsh
+        run: |
+          $exe = "bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/XrayUI-dev.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Error "Publish did not produce $exe. The pubxml likely was not loaded; AOT/SelfContained settings did not take effect."
+            Write-Host "Listing publish output for diagnosis:"
+            if (Test-Path "bin/Release/net10.0-windows10.0.19041.0/win-x64/publish") {
+              Get-ChildItem -Recurse "bin/Release/net10.0-windows10.0.19041.0/win-x64/publish" | Select-Object -ExpandProperty FullName
+            } else {
+              Write-Host "publish dir does not exist either"
+            }
+            exit 1
+          }
+          $size = (Get-Item $exe).Length
+          Write-Host "OK: AOT exe found at $exe ($size bytes)"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
