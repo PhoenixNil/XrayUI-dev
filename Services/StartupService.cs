@@ -209,12 +209,11 @@ namespace XrayUI.Services
             }
         }
 
-        private static uint Release(IntPtr pUnk)
+        private static void Release(IntPtr pUnk)
         {
-            if (pUnk == IntPtr.Zero) return 0;
+            if (pUnk == IntPtr.Zero) return;
             void** vtbl = *(void***)pUnk;
             var fn = (delegate* unmanaged[Stdcall]<IntPtr, uint>)vtbl[2];
-            return fn(pUnk);
         }
 
         [DllImport("ole32.dll", ExactSpelling = true)]

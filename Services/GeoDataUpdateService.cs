@@ -47,7 +47,8 @@ namespace XrayUI.Services
                 handler.UseProxy = false;
             }
 
-            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(5) };
+            using var client = new HttpClient(handler);
+            client.Timeout = TimeSpan.FromMinutes(5);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("XrayUI");
 
             Directory.CreateDirectory(XrayService.RulesDir);
