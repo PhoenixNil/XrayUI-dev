@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -14,16 +14,16 @@ using XrayUI.Models;
 
 namespace XrayUI.Services
 {
-    /// <summary>
-    /// Checks GitHub Releases for a newer XrayUI build, downloads + verifies the
-    /// matching zip asset, extracts and validates it, then hands off to the
-    /// standalone XrayUI.Updater.exe to overwrite the install directory.
-    ///
-    /// HTTP / SHA256 / progress patterns are intentionally cloned from
-    /// <see cref="GeoDataUpdateService"/> rather than refactored into a shared
-    /// helper — they are ~50 LOC each and the two services have different
-    /// failure-policy requirements.
-    /// </summary>
+     /*<summary>
+     Checks GitHub Releases for a newer XrayUI build, downloads +verifies the
+     matching zip asset, extracts and validates it, then hands off to the
+     standalone XrayUI.Updater.exe to overwrite the install directory.
+    
+     HTTP / SHA256 / progress patterns are intentionally cloned from
+     <see cref = "GeoDataUpdateService" /> rather than refactored into a shared
+     helper — they are ~50 LOC each and the two services have different
+     failure-policy requirements.
+     </summary> */
     public sealed class UpdateService : IUpdateService
     {
         private const string ReleaseApiUrl =
