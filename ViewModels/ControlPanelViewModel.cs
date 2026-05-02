@@ -16,6 +16,9 @@ namespace XrayUI.ViewModels
         private readonly TunService _tunService;
         private readonly StartupService _startupService;
         private readonly GeoDataUpdateService _geoUpdate = new();
+        private readonly IUpdateService _update;
+        private UpdateInfo? _availableUpdate;
+        private bool _isUpdateAvailable;
         private string _startStopButtonContent = "启动";
         private bool _startStopButtonChecked;
         private bool _isRunning;
@@ -75,13 +78,15 @@ namespace XrayUI.ViewModels
             SettingsService settings,
             XrayService xray,
             TunService tunService,
-            StartupService startupService)
+            StartupService startupService,
+            IUpdateService update)
         {
             _dialogs        = dialogs;
             _settings       = settings;
             _xray           = xray;
             _tunService     = tunService;
             _startupService = startupService;
+            _update         = update;
         }
 
         // ── Running state ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -808,6 +813,79 @@ namespace XrayUI.ViewModels
             {
                 Debug.WriteLine($"[Settings] Failed to {scenario}: {ex.Message}");
             }
+        }
+
+        // ── App update notification ───────────────────────────────────────────────
+
+        /// <summary>True iff a newer release was found at startup. Drives the gear
+        /// button's yellow dot and the "更新至新版" menu item.</summary>
+        public bool IsUpdateAvailable
+        {
+            get => _isUpdateAvailable;
+            private set
+            {
+                if (SetProperty(ref _isUpdateAvailable, value))
+                {
+                    OnPropertyChanged(nameof(UpdateBadgeVisibility));
+                    OnPropertyChanged(nameof(UpdateMenuText));
+                }
+            }
+        }
+
+        public Visibility UpdateBadgeVisibility => _isUpdateAvailable ? Visibility.Visible : Visibility.Collapsed;
+        public string     UpdateMenuText        => $"发现新版本 {_availableUpdate?.NewVersion}";
+
+        /// <summary>Called from MainViewModel after the background check completes.
+        /// Pass null to clear (e.g. after a failed update attempt).</summary>
+        public void SetAvailableUpdate(UpdateInfo? info)
+        {
+            _availableUpdate = info;
+            IsUpdateAvailable = info is not null;
+        }
+
+        [RelayCommand]
+        private async Task UpdateAppAsync()
+        {
+            var info = _availableUpdate;
+            if (info is null) return;
+
+            // Route the download through xray when it's running so users behind GFW
+            // can still reach github.com / objects.githubusercontent.com.
+            var proxy = IsRunning ? $"socks5://127.0.0.1:{LocalPort}" : null;
+
+            UpdateStaging? staging = null;
+            try
+            {
+                await _dialogs.ShowProgressDialogAsync("正在更新 XrayUI",
+                    async (progress, ct) =>
+                    {
+                        staging = await _update.DownloadVerifyAndExtractAsync(info, proxy, progress, ct);
+                    });
+            }
+            catch (OperationCanceledException ex) when (ex.CancellationToken.IsCancellationRequested)
+            {
+                // User cancel — silent.
+                return;
+            }
+            catch (Exception ex)
+            {
+                await _dialogs.ShowErrorAsync("更新失败", ex.Message);
+                return;
+            }
+
+            if (staging is null) return;
+
+            // Stop xray + clear proxy + cleanup TUN state before handing control to
+            // the standalone updater. App.RequestShutdown will additionally run
+            // CleanupOnExit but doing it here keeps shutdown fast and predictable.
+            await StopCurrentSessionAsync();
+
+            _update.LaunchUpdater(staging);
+
+            if (Microsoft.UI.Xaml.Application.Current is App app)
+                app.RequestShutdown();
+            else
+                Environment.Exit(0);
         }
     }
 }

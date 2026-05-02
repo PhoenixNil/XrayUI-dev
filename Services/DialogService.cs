@@ -425,7 +425,7 @@ namespace XrayUI.Services
             await workTask;
 
             if (error != null) throw error;
-            if (cts.IsCancellationRequested) throw new OperationCanceledException();
+            if (cts.IsCancellationRequested) throw new OperationCanceledException(cts.Token);
         }
 
         // ── Share link ────────────────────────────────────────────────────────

@@ -177,7 +177,7 @@ namespace XrayUI.ViewModels
             }
             catch (OperationCanceledException ex) when (ex.GetType() == typeof(OperationCanceledException))
             {
-                // DialogService throws exactly `new OperationCanceledException()` for user cancel.
+                // DialogService throws exactly `OperationCanceledException` for user cancel.
                 // Any subclass (e.g. TaskCanceledException from HttpClient.Timeout) falls through
                 // to the generic Exception catch below so the failure is surfaced, not swallowed.
                 return;
