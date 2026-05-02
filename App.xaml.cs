@@ -83,9 +83,9 @@ namespace XrayUI
             }
         }
 
-        public void RequestShutdown()
+        public void RequestShutdown(bool fastShutdown = false)
         {
-            CleanupOnExit();
+            CleanupOnExit(fastShutdown);
             Environment.Exit(0);
         }
 

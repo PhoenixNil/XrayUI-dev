@@ -388,7 +388,15 @@ namespace XrayUI.Services
             var progress = new Progress<string>(s => statusText.Text = s);
 
             Exception? error   = null;
-            bool workFinished = false;
+            int workFinished = 0;
+
+            dialog.Opened += (_, _) =>
+            {
+                if (Volatile.Read(ref workFinished) == 1)
+                {
+                    try { dialog.Hide(); } catch { }
+                }
+            };
 
             var workTask = Task.Run(async () =>
             {
@@ -409,7 +417,7 @@ namespace XrayUI.Services
                 }
                 finally
                 {
-                    workFinished = true;
+                    Volatile.Write(ref workFinished, 1);
                     dialog.DispatcherQueue.TryEnqueue(() =>
                     {
                         try { dialog.Hide(); } catch { }
@@ -420,7 +428,7 @@ namespace XrayUI.Services
             await dialog.ShowAsync();
 
             // If the dialog closed because the user clicked Cancel (work still running), signal it.
-            if (!workFinished) cts.Cancel();
+            if (Volatile.Read(ref workFinished) == 0) cts.Cancel();
 
             await workTask;
 

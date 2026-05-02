@@ -875,17 +875,28 @@ namespace XrayUI.ViewModels
 
             if (staging is null) return;
 
-            // Stop xray + clear proxy + cleanup TUN state before handing control to
-            // the standalone updater. App.RequestShutdown will additionally run
-            // CleanupOnExit but doing it here keeps shutdown fast and predictable.
-            await StopCurrentSessionAsync();
-
-            _update.LaunchUpdater(staging);
+            // Start the updater first; it waits for our PID to exit. The normal
+            // interactive stop path can block on route/process cleanup, so update
+            // handoff uses the bounded shutdown cleanup instead.
+            try
+            {
+                _update.LaunchUpdater(staging);
+            }
+            catch (Exception ex)
+            {
+                await _dialogs.ShowErrorAsync("更新失败", "无法启动升级器：" + ex.Message);
+                return;
+            }
 
             if (Microsoft.UI.Xaml.Application.Current is App app)
-                app.RequestShutdown();
+                app.RequestShutdown(fastShutdown: true);
             else
+            {
+                SystemProxyService.ClearProxy();
+                _xray.StopForShutdown();
+                CleanupTunOnExit(fastShutdown: true);
                 Environment.Exit(0);
+            }
         }
     }
 }

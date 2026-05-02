@@ -140,6 +140,8 @@ namespace XrayUI.Services
             }
 
             // ── 5. Sanity check extracted contents ──────────────────────────────────
+            progress.Report("正在验证更新包…");
+
             var newAppExe     = Path.Combine(extractDir, AppExeName);
             var newUpdaterExe = Path.Combine(extractDir, UpdaterExeName);
 
@@ -172,6 +174,8 @@ namespace XrayUI.Services
             var stagedRunner = Path.Combine(runnerDir, UpdaterExeName);
             File.Copy(currentUpdater, stagedRunner, overwrite: true);
 
+            progress.Report("正在准备重启…");
+
             return new UpdateStaging(extractDir, stagedRunner, installDir, info.NewVersion);
         }
 
@@ -197,15 +201,13 @@ namespace XrayUI.Services
             {
                 if (!Directory.Exists(AppPaths.UpdatesDir)) return;
 
-                var cutoff = DateTime.Now.AddHours(-24);
                 foreach (var sub in Directory.EnumerateDirectories(AppPaths.UpdatesDir))
                 {
                     try
                     {
-                        if (Directory.GetCreationTime(sub) < cutoff)
-                            Directory.Delete(sub, recursive: true);
+                        Directory.Delete(sub, recursive: true);
                     }
-                    catch { /* one bad dir shouldn't break the sweep */ }
+                    catch { /* locked runner or one bad dir shouldn't break the sweep */ }
                 }
             }
             catch { /* best-effort */ }

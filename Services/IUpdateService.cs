@@ -37,8 +37,9 @@ namespace XrayUI.Services
         void LaunchUpdater(UpdateStaging staging);
 
         /// <summary>
-        /// Removes staging directories older than 24h under
-        /// <c>%LocalAppData%\XrayUI\Updates</c>. Best-effort, non-throwing.
+        /// Removes leftover staging directories under
+        /// <c>%LocalAppData%\XrayUI\Updates</c>. Best-effort, non-throwing; a
+        /// still-locked runner may remain until the next startup.
         /// </summary>
         void CleanupOldStagingDirs();
     }

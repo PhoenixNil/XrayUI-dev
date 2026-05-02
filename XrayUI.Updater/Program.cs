@@ -79,6 +79,8 @@ internal static class Program
                 return 4;
             }
 
+            CleanupLargeStagingDirs(extractedDir);
+
             // Launch the new app unelevated. Even if we elevated to do the file
             // overwrite, the app itself should run under the user's normal token.
             try
@@ -202,6 +204,32 @@ internal static class Program
         }
         // Final attempt without catching — let it throw to abort the update.
         File.Copy(src, dst, overwrite: true);
+    }
+
+    private static void CleanupLargeStagingDirs(string extractedDir)
+    {
+        var stageRoot = Directory.GetParent(extractedDir)?.FullName;
+        if (string.IsNullOrEmpty(stageRoot))
+            return;
+
+        DeleteDirectoryBestEffort(Path.Combine(stageRoot, "download"));
+        DeleteDirectoryBestEffort(extractedDir);
+    }
+
+    private static void DeleteDirectoryBestEffort(string path)
+    {
+        try
+        {
+            if (!Directory.Exists(path))
+                return;
+
+            Directory.Delete(path, recursive: true);
+            Log($"Deleted staging directory: {path}");
+        }
+        catch (Exception ex)
+        {
+            Log($"Could not delete staging directory '{path}': {ex.Message}");
+        }
     }
 
     private static void LaunchApp(string exePath, string workingDirectory)
