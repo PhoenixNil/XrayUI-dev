@@ -214,6 +214,7 @@ namespace XrayUI.Services
             if (pUnk == IntPtr.Zero) return;
             void** vtbl = *(void***)pUnk;
             var fn = (delegate* unmanaged[Stdcall]<IntPtr, uint>)vtbl[2];
+            fn(pUnk);
         }
 
         [DllImport("ole32.dll", ExactSpelling = true)]
