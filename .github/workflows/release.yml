@@ -109,14 +109,14 @@ jobs:
         shell: pwsh
         run: |
           $publishDir = "bin/Release/net10.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
-          $zipName = "XrayUI-${{ github.ref_name }}-${{ matrix.rid }}.zip"
+          $zipName = "XrayUI-${{ matrix.rid }}.zip"
           Compress-Archive -Path "$publishDir/*" -DestinationPath $zipName -CompressionLevel Optimal
           Write-Host "Created $zipName ($((Get-Item $zipName).Length) bytes)"
 
       - name: Generate SHA256
         shell: pwsh
         run: |
-          $zip = "XrayUI-${{ github.ref_name }}-${{ matrix.rid }}.zip"
+          $zip = "XrayUI-${{ matrix.rid }}.zip"
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
           # Standard sha256sum format: "<hash>  <filename>" (two spaces, no newline).
           [System.IO.File]::WriteAllText("$zip.sha256", "$hash  $zip", [System.Text.Encoding]::ASCII)
@@ -125,8 +125,8 @@ jobs:
       - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: XrayUI-${{ github.ref_name }}-${{ matrix.rid }}
-          path: XrayUI-${{ github.ref_name }}-${{ matrix.rid }}.zip*
+          name: XrayUI-${{ matrix.rid }}
+          path: XrayUI-${{ matrix.rid }}.zip*
           retention-days: 14
           if-no-files-found: error
 

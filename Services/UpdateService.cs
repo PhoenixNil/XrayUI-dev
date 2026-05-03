@@ -62,7 +62,7 @@ namespace XrayUI.Services
             var rid = CurrentRid();
             if (rid is null) return null;
 
-            var zipName    = $"XrayUI-{release.TagName}-{rid}.zip";
+            var zipName    = $"XrayUI-{rid}.zip";
             var sha256Name = $"{zipName}.sha256";
 
             string? zipUrl = null, shaUrl = null;
