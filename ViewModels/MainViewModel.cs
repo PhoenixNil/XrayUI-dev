@@ -1,8 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.Input;
-using Microsoft.UI.Xaml;
 using XrayUI.Models;
 using XrayUI.Services;
 
@@ -12,6 +11,9 @@ namespace XrayUI.ViewModels
     {
         private readonly SettingsService _settings;
         private readonly StartupService _startupService;
+        private readonly IUpdateService _updateService;
+        private readonly Microsoft.UI.Dispatching.DispatcherQueue? _uiDispatcher;
+        private bool _updateCheckQueued;
         private ServerEntry? _activeServer;
         private string _activeLatencyText = string.Empty;
         private bool _showPersonalize;
@@ -52,10 +54,16 @@ namespace XrayUI.ViewModels
             SettingsService settings,
             XrayService     xray,
             TunService      tunService,
-            StartupService  startupService)
+            StartupService  startupService,
+            IUpdateService  updateService)
         {
             _settings       = settings;
             _startupService = startupService;
+            _updateService  = updateService;
+            // MainViewModel is constructed on the UI thread (in MainWindow ctor before
+            // InitializeComponent), so capturing the dispatcher here is safe and avoids
+            // depending on Application.Current later from a background thread.
+            _uiDispatcher   = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
             var latencyProbe = new LatencyProbeService(
                 new TcpConnectProbeService(),
                 new PingProbeService());
@@ -65,7 +73,7 @@ namespace XrayUI.ViewModels
 
             ServerList   = new ServerListViewModel(dialogs, settings);
             ServerDetail = new ServerDetailViewModel(latencyProbe, aiUnlockCheck);
-            ControlPanel = new ControlPanelViewModel(dialogs, settings, xray, tunService, startupService);
+            ControlPanel = new ControlPanelViewModel(dialogs, settings, xray, tunService, startupService, updateService);
             Personalize  = new PersonalizeViewModel(settings);
 
             // Wire ControlPanel so it knows the current selected server
@@ -128,6 +136,41 @@ namespace XrayUI.ViewModels
             // (which passes --startup-minimized). Manual launches must not auto-connect.
             if (isBootLaunch && s.IsStartupEnabled && s.IsAutoConnect)
                 await TryAutoConnectAsync(s);
+
+            // Fire-and-forget background tasks. Failures here must never block
+            // startup or surface as dialogs (per the auto-update failure policy).
+            _ = Task.Run(() => _updateService.CleanupOldStagingDirs());
+            QueueUpdateCheck(CurrentProxyUrl());
+        }
+
+        private string? CurrentProxyUrl() =>
+            ControlPanel.IsRunning ? $"socks5://127.0.0.1:{ControlPanel.LocalPort}" : null;
+
+        private void QueueUpdateCheck(string? proxyUrl)
+        {
+            if (_updateCheckQueued) return;
+            _updateCheckQueued = true;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var info = await _updateService.CheckAsync(proxyUrl, CancellationToken.None);
+                    if (info is null)
+                    {
+                        // Allow one retry path: e.g. direct check failed because the
+                        // user is behind GFW; once xray comes up the recheck in
+                        // OnControlPanelPropertyChanged can try again via SOCKS.
+                        _updateCheckQueued = false;
+                        return;
+                    }
+                    _uiDispatcher?.TryEnqueue(() => ControlPanel.SetAvailableUpdate(info));
+                }
+                catch
+                {
+                    _updateCheckQueued = false;
+                }
+            });
         }
 
         private async Task TryAutoConnectAsync(AppSettings s)
@@ -230,6 +273,9 @@ namespace XrayUI.ViewModels
             SwitchToSelectedServerCommand.NotifyCanExecuteChanged();
 
             ServerDetail.OnProxyRunningChanged(isRunning, ControlPanel.LocalPort);
+
+            if (isRunning && !ControlPanel.IsUpdateAvailable)
+                QueueUpdateCheck(CurrentProxyUrl());
         }
 
         private void UpdateActiveServer(ServerEntry? server)

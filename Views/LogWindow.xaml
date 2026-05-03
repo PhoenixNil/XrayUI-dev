@@ -60,6 +60,38 @@
                 <StackPanel Grid.Column="1"
                             Orientation="Horizontal"
                             Spacing="8">
+                    <Button x:Name="LogPrivacyButton"
+                            Padding="8,5"
+                            ToolTipService.ToolTip="日志隐私设置">
+                        <FontIcon Glyph="&#xE72E;"
+                                  FontSize="13" />
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <MenuFlyoutSubItem Text="IP地址遮罩">
+                                    <RadioMenuFlyoutItem x:Name="MaskOffMenuItem"
+                                                         Text="关闭"
+                                                         GroupName="LogMaskAddressGroup"
+                                                         Tag=""
+                                                         Click="MaskAddressMenuItem_Click" />
+                                    <RadioMenuFlyoutItem x:Name="MaskQuarterMenuItem"
+                                                         Text="quarter"
+                                                         GroupName="LogMaskAddressGroup"
+                                                         Tag="quarter"
+                                                         Click="MaskAddressMenuItem_Click" />
+                                    <RadioMenuFlyoutItem x:Name="MaskHalfMenuItem"
+                                                         Text="half"
+                                                         GroupName="LogMaskAddressGroup"
+                                                         Tag="half"
+                                                         Click="MaskAddressMenuItem_Click" />
+                                    <RadioMenuFlyoutItem x:Name="MaskFullMenuItem"
+                                                         Text="full"
+                                                         GroupName="LogMaskAddressGroup"
+                                                         Tag="full"
+                                                         Click="MaskAddressMenuItem_Click" />
+                                </MenuFlyoutSubItem>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
                     <ToggleButton x:Name="AutoScrollToggle"
                                   IsChecked="True"
                                   Content="自动滚动"

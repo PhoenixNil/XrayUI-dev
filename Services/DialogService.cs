@@ -5,7 +5,6 @@ using System.ComponentModel;
 using Windows.ApplicationModel.DataTransfer;
 using XrayUI.Helpers;
 using XrayUI.Models;
-using XrayUI.ViewModels;
 using XrayUI.Views;
 
 namespace XrayUI.Services
@@ -147,6 +146,14 @@ namespace XrayUI.Services
             var txtSid  = new TextBox { Header = "ShortId (Reality)", Text = existing?.ShortId ?? string.Empty };
             var txtSpx  = new TextBox { Header = "SpiderX (Reality)", Text = existing?.SpiderX ?? string.Empty };
             var txtFlow = new TextBox { Header = "Flow (VLESS)", PlaceholderText = "xtls-rprx-vision 或留空", Text = existing?.Flow ?? string.Empty };
+            var txtFinalmask = new TextBox
+            {
+                Header = "Finalmask (JSON)",
+                Text = existing?.Finalmask ?? string.Empty,
+                AcceptsReturn = true,
+                Height = 104,
+                TextWrapping = TextWrapping.NoWrap
+            };
 
             // Row containers for conditional visibility
             var rowEncryption = Wrap(cmbEncryption);
@@ -162,6 +169,7 @@ namespace XrayUI.Services
             var rowSid        = Wrap(txtSid);
             var rowSpx        = Wrap(txtSpx);
             var rowFlow       = Wrap(txtFlow);
+            var rowFinalmask  = Wrap(txtFinalmask);
 
             void UpdateVisibility()
             {
@@ -222,7 +230,8 @@ namespace XrayUI.Services
                     txtName, txtHost, numPort, cmbProtocol,
                     rowEncryption, rowPassword, rowUuid, rowAlterId,
                     cmbNetwork, rowPath, rowWsHost,
-                    cmbSecurity, rowSni, rowFp, rowAllowInsecure, rowPk, rowSid, rowSpx, rowFlow
+                    cmbSecurity, rowSni, rowFp, rowAllowInsecure, rowPk, rowSid, rowSpx, rowFlow,
+                    rowFinalmask
                 }
             };
 
@@ -263,6 +272,7 @@ namespace XrayUI.Services
             entry.ShortId     = txtSid.Text.Trim();
             entry.SpiderX     = txtSpx.Text.Trim();
             entry.Flow        = txtFlow.Text.Trim();
+            entry.Finalmask   = FinalmaskJson.NormalizeForStorage(txtFinalmask.Text);
 
             if (entry.Protocol == "hysteria2")
             {
@@ -389,7 +399,15 @@ namespace XrayUI.Services
             var progress = new Progress<string>(s => statusText.Text = s);
 
             Exception? error   = null;
-            bool workFinished = false;
+            int workFinished = 0;
+
+            dialog.Opened += (_, _) =>
+            {
+                if (Volatile.Read(ref workFinished) == 1)
+                {
+                    try { dialog.Hide(); } catch { }
+                }
+            };
 
             var workTask = Task.Run(async () =>
             {
@@ -410,7 +428,7 @@ namespace XrayUI.Services
                 }
                 finally
                 {
-                    workFinished = true;
+                    Volatile.Write(ref workFinished, 1);
                     dialog.DispatcherQueue.TryEnqueue(() =>
                     {
                         try { dialog.Hide(); } catch { }
@@ -421,12 +439,12 @@ namespace XrayUI.Services
             await dialog.ShowAsync();
 
             // If the dialog closed because the user clicked Cancel (work still running), signal it.
-            if (!workFinished) cts.Cancel();
+            if (Volatile.Read(ref workFinished) == 0) cts.Cancel();
 
             await workTask;
 
             if (error != null) throw error;
-            if (cts.IsCancellationRequested) throw new OperationCanceledException();
+            if (cts.IsCancellationRequested) throw new OperationCanceledException(cts.Token);
         }
 
         // ── Share link ────────────────────────────────────────────────────────
@@ -601,7 +619,7 @@ namespace XrayUI.Services
             RequestedTheme = ThemeHelper.ActualTheme,
         };
 
-        private static FrameworkElement Wrap(FrameworkElement child) =>
+        private static Border Wrap(FrameworkElement child) =>
             new Border { Child = child };
     }
 }

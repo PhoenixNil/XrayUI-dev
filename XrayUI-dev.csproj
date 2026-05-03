@@ -14,6 +14,7 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WindowsPackageType>None</WindowsPackageType>
+    <RemoveUnusedWindowsMlNativeAssetsFromPublish>true</RemoveUnusedWindowsMlNativeAssetsFromPublish>
   </PropertyGroup>
 
 
@@ -23,6 +24,16 @@
     <Content Remove="Assets\engine\xray.exe" />
     <Content Remove="Assets\rules\geoip.dat" />
     <Content Remove="Assets\rules\geosite.dat" />
+  </ItemGroup>
+
+  <!-- The standalone Updater lives in a sibling project; exclude it from the main app's
+       default file globs so we don't double-include its sources / Program.cs entry point. -->
+  <ItemGroup>
+    <Compile Remove="XrayUI.Updater\**" />
+    <Content Remove="XrayUI.Updater\**" />
+    <None Remove="XrayUI.Updater\**" />
+    <Page Remove="XrayUI.Updater\**" />
+    <ApplicationDefinition Remove="XrayUI.Updater\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -56,8 +67,8 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.Segmented" Version="8.2.251219" />
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1721" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260416003" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.0.1" />
     <PackageReference Include="WinUIEx" Version="2.9.0" />
   </ItemGroup>
 
@@ -78,10 +89,44 @@
     <ApplicationIcon>Assets\Icons\output.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!-- Version: defaults for local builds; CI overrides via -p:Version=<tag> -->
+  <PropertyGroup>
+    <Version Condition="'$(Version)' == ''">0.0.0-dev</Version>
+  </PropertyGroup>
+
   <ItemGroup>
     <Content Update="Assets\Icons\output.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
-  
+
+  <!-- Windows App SDK 2.x brings Windows ML as a transitive component. XrayUI does
+       not use local ML inference, so keep those native runtime DLLs out of publish
+       folders even when publishing to a custom output path. -->
+  <Target Name="CleanUnusedWindowsMlNativeAssetsFromPublish" AfterTargets="Publish;PublishUpdaterAlongside" Condition="'$(RemoveUnusedWindowsMlNativeAssetsFromPublish)' == 'true'">
+    <ItemGroup>
+      <_UnusedWindowsMlNativeAsset Include="$(PublishDir)DirectML.dll;$(PublishDir)onnxruntime.dll;$(PublishDir)Microsoft.Windows.AI.MachineLearning.dll" />
+      <_ExistingUnusedWindowsMlNativeAsset Include="@(_UnusedWindowsMlNativeAsset)" Condition="Exists('%(_UnusedWindowsMlNativeAsset.Identity)')" />
+    </ItemGroup>
+    <Delete Files="@(_ExistingUnusedWindowsMlNativeAsset)" />
+  </Target>
+
+  <!-- Auto-publish the standalone Updater alongside the main app on local
+       `dotnet publish`, so testing the in-app upgrade flow doesn't require
+       running two commands. CI bypasses this with -p:BuildingForCI=true
+       (it publishes the updater explicitly to keep step logs separated).
+       Skipped when no RID is set (e.g. plain `dotnet build`) since the
+       Exec would otherwise emit a malformed `-r` flag. -->
+  <Target Name="PublishUpdaterAlongside" AfterTargets="Publish"
+          Condition="'$(BuildingForCI)' != 'true' and '$(RuntimeIdentifier)' != ''">
+    <PropertyGroup>
+      <UpdaterStagingDir>$(IntermediateOutputPath)updater-publish\</UpdaterStagingDir>
+    </PropertyGroup>
+    <Exec Command="dotnet publish &quot;$(MSBuildThisFileDirectory)XrayUI.Updater\XrayUI.Updater.csproj&quot; -c $(Configuration) -r $(RuntimeIdentifier) -p:SelfContained=true -p:PublishAot=true -p:PublishTrimmed=true -p:PublishSingleFile=false -p:Version=$(Version) -o &quot;$(UpdaterStagingDir)&quot;" 
+          EnvironmentVariables="DOTNET_CLI_UI_LANGUAGE=en" />
+    <Copy SourceFiles="$(UpdaterStagingDir)XrayUI.Updater.exe"
+          DestinationFolder="$(PublishDir)" />
+    <Message Text="Bundled XrayUI.Updater.exe into $(PublishDir)" Importance="high" />
+  </Target>
+
 </Project>

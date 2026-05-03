@@ -53,8 +53,9 @@ namespace XrayUI
             var tunService      = new TunService();
             var startupService  = new StartupService();
             var dialogService   = new DialogService(() => _initialized ? Content?.XamlRoot : null);
+            var updateService   = new UpdateService();
 
-            ViewModel = new MainViewModel(dialogService, settingsService, xrayService, tunService, startupService);
+            ViewModel = new MainViewModel(dialogService, settingsService, xrayService, tunService, startupService, updateService);
 
             InitializeComponent();
 

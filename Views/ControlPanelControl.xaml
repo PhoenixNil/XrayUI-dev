@@ -36,10 +36,22 @@
                         BorderBrush="Transparent"
                         VerticalAlignment="Center"
                         Padding="8">
-                    <FontIcon Glyph="&#xE713;" FontSize="16" />
+                    <Grid Width="20" Height="20">
+                        <FontIcon Glyph="&#xE713;" FontSize="16"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
+                        <InfoBadge Style="{StaticResource AttentionDotInfoBadgeStyle}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Top"
+                                   Height="6" Width="6"
+                                   Visibility="{x:Bind ViewModel.UpdateBadgeVisibility, Mode=OneWay}" />
+                    </Grid>
                     <Button.Flyout>
                         <MenuFlyout>
-                            <MenuFlyoutItem Text="编辑本地端口" 
+                            <MenuFlyoutItem Text="{x:Bind ViewModel.UpdateMenuText, Mode=OneWay}"
+                                            Command="{x:Bind ViewModel.UpdateAppCommand}"
+                                            Visibility="{x:Bind ViewModel.UpdateBadgeVisibility, Mode=OneWay}" />
+                            <MenuFlyoutSeparator Visibility="{x:Bind ViewModel.UpdateBadgeVisibility, Mode=OneWay}" />
+                            <MenuFlyoutItem Text="编辑本地端口"
                                             Command="{x:Bind ViewModel.EditLocalPortCommand}" />
                             <MenuFlyoutItem Text="查看日志" 
                                             Command="{x:Bind ViewModel.ShowLogsCommand}" />

@@ -5,15 +5,14 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using XrayUI.Helpers;
 using XrayUI.Models;
 
 namespace XrayUI.Services
 {
     public class SettingsService
     {
-        private static readonly string DataDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XrayUI");
+        private static readonly string DataDir = AppPaths.LocalAppDataDir;
 
         private static readonly string SettingsFile = Path.Combine(DataDir, "settings.json");
         private static readonly string ServersFile  = Path.Combine(DataDir, "servers.json");

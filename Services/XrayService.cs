@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace XrayUI.Services
@@ -28,7 +29,7 @@ namespace XrayUI.Services
         private readonly string[] _logBuffer = new string[LogBufferMax];
         private int _logHead;    // index of the next write slot
         private int _logCount;   // number of valid entries (<= LogBufferMax)
-        private readonly object _bufferLock = new();
+        private readonly Lock _bufferLock = new();
 
         public bool IsRunning => _process is { HasExited: false };
 

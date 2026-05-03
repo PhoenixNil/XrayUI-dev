@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
@@ -20,17 +21,24 @@ namespace XrayUI.Views
             new(Windows.UI.Color.FromArgb(255, 156, 163, 175)); // grey
 
         private readonly XrayService     _xray;
+        private readonly SettingsService _settings;
+        private readonly Func<Task> _reapplyConfigAsync;
         private readonly DispatcherQueue _queue;
         private readonly DispatcherQueueTimer _flushTimer;
 
         // Set from background thread when new lines arrive; consumed on UI thread.
         private volatile bool _dirty;
 
-        public LogWindow(XrayService xray)
+        public LogWindow(
+            XrayService xray,
+            SettingsService settings,
+            Func<Task> reapplyConfigAsync)
         {
             this.InitializeComponent();
-            _xray  = xray;
-            _queue = DispatcherQueue.GetForCurrentThread();
+            _xray               = xray;
+            _settings           = settings;
+            _reapplyConfigAsync = reapplyConfigAsync;
+            _queue              = DispatcherQueue.GetForCurrentThread();
 
             var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             var scale = DpiHelper.GetWindowScale(hWnd);
@@ -42,6 +50,7 @@ namespace XrayUI.Views
 
             RenderLog();
             UpdateStatus();
+            _ = InitializeMaskAddressMenuAsync();
 
             _flushTimer = _queue.CreateTimer();
             _flushTimer.Interval = FlushInterval;
@@ -94,6 +103,27 @@ namespace XrayUI.Views
             LineCountText.Text = $"({lines.Count} 行)";
         }
 
+        private async Task InitializeMaskAddressMenuAsync()
+        {
+            try
+            {
+                var settings = await _settings.LoadSettingsAsync();
+                SetMaskAddressSelection(LogMaskAddress.Normalize(settings.LogMaskAddress));
+            }
+            catch
+            {
+                SetMaskAddressSelection(LogMaskAddress.Off);
+            }
+        }
+
+        private void SetMaskAddressSelection(string value)
+        {
+            MaskOffMenuItem.IsChecked     = value == LogMaskAddress.Off;
+            MaskQuarterMenuItem.IsChecked = value == LogMaskAddress.Quarter;
+            MaskHalfMenuItem.IsChecked    = value == LogMaskAddress.Half;
+            MaskFullMenuItem.IsChecked    = value == LogMaskAddress.Full;
+        }
+
         private void UpdateStatus()
         {
             var running = _xray.IsRunning;
@@ -114,6 +144,60 @@ namespace XrayUI.Views
         {
             _xray.ClearLogBuffer();
             RenderLog();
+        }
+
+        private async void MaskAddressMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not RadioMenuFlyoutItem item)
+            {
+                return;
+            }
+
+            var value = LogMaskAddress.Normalize(item.Tag as string);
+            SetMaskAddressSelection(value);
+
+            try
+            {
+                var settings = await _settings.LoadSettingsAsync();
+                if (LogMaskAddress.Normalize(settings.LogMaskAddress) == value)
+                {
+                    return;
+                }
+
+                settings.LogMaskAddress = value;
+                await _settings.SaveSettingsAsync(settings);
+
+                if (!_xray.IsRunning)
+                {
+                    return;
+                }
+
+                if (settings.IsTunMode)
+                {
+                    await ShowInfoAsync("日志隐私设置", "已保存，当前 TUN 会话下次启动时生效。");
+                    return;
+                }
+
+                await _reapplyConfigAsync();
+            }
+            catch (Exception ex)
+            {
+                await ShowInfoAsync("日志隐私设置", $"保存失败：{ex.Message}");
+            }
+        }
+
+        private async Task ShowInfoAsync(string title, string message)
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                RequestedTheme = ThemeHelper.ActualTheme,
+                Title = title,
+                Content = message,
+                CloseButtonText = "确定"
+            };
+
+            await dialog.ShowAsync();
         }
     }
 }

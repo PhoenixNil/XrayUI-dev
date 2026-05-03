@@ -36,6 +36,16 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Compute version from tag
+        id: ver
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $ver = $tag -replace '^v',''
+          if ($ver -notmatch '^\d+(\.\d+){0,3}$') { $ver = '0.0.0' }
+          "version=$ver" | Out-File $env:GITHUB_OUTPUT -Append
+          Write-Host "Resolved version: $ver (from tag $tag)"
+
       # No separate `dotnet restore` step: PublishAot must be set at restore time
       # for ILCompiler to be pulled in. See build.yml for details.
       - name: Publish (${{ matrix.rid }}, AOT)
@@ -51,6 +61,32 @@ jobs:
           -p:PublishReadyToRun=false
           -p:WindowsAppSDKSelfContained=false
           -p:CopyOutputSymbolsToPublishDirectory=false
+          -p:Version=${{ steps.ver.outputs.version }}
+          -p:BuildingForCI=true
+
+      - name: Publish Updater (${{ matrix.rid }}, AOT)
+        run: >
+          dotnet publish XrayUI.Updater/XrayUI.Updater.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          -p:SelfContained=true
+          -p:PublishAot=true
+          -p:PublishTrimmed=true
+          -p:PublishSingleFile=false
+          -p:Version=${{ steps.ver.outputs.version }}
+          -o updater-out
+
+      - name: Bundle updater into staging
+        shell: pwsh
+        run: |
+          $publishDir = "bin/Release/net10.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
+          $updaterExe = "updater-out/XrayUI.Updater.exe"
+          if (-not (Test-Path $updaterExe)) {
+            Write-Host "::error::Updater publish did not produce $updaterExe"
+            exit 1
+          }
+          Copy-Item $updaterExe -Destination "$publishDir/" -Force
+          Write-Host "Bundled XrayUI.Updater.exe into $publishDir"
 
       - name: Verify AOT exe produced
         shell: pwsh
@@ -73,15 +109,24 @@ jobs:
         shell: pwsh
         run: |
           $publishDir = "bin/Release/net10.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
-          $zipName = "XrayUI-${{ github.ref_name }}-${{ matrix.rid }}.zip"
+          $zipName = "XrayUI-${{ matrix.rid }}.zip"
           Compress-Archive -Path "$publishDir/*" -DestinationPath $zipName -CompressionLevel Optimal
           Write-Host "Created $zipName ($((Get-Item $zipName).Length) bytes)"
+
+      - name: Generate SHA256
+        shell: pwsh
+        run: |
+          $zip = "XrayUI-${{ matrix.rid }}.zip"
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          # Standard sha256sum format: "<hash>  <filename>" (two spaces, no newline).
+          [System.IO.File]::WriteAllText("$zip.sha256", "$hash  $zip", [System.Text.Encoding]::ASCII)
+          Write-Host "Wrote $zip.sha256 = $hash"
 
       - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: XrayUI-${{ github.ref_name }}-${{ matrix.rid }}
-          path: XrayUI-${{ github.ref_name }}-${{ matrix.rid }}.zip
+          name: XrayUI-${{ matrix.rid }}
+          path: XrayUI-${{ matrix.rid }}.zip*
           retention-days: 14
           if-no-files-found: error
 
@@ -101,15 +146,17 @@ jobs:
         with:
           path: artifacts
 
-      - name: Flatten zips
+      - name: Flatten release files
         run: |
           mkdir -p release-files
-          find artifacts -name '*.zip' -exec mv {} release-files/ \;
+          find artifacts \( -name '*.zip' -o -name '*.sha256' \) -exec mv {} release-files/ \;
           ls -la release-files
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-files/*.zip
+          files: |
+            release-files/*.zip
+            release-files/*.sha256
           generate_release_notes: true
           fail_on_unmatched_files: true

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Threading.Tasks;
-using Microsoft.UI.Xaml;
 using XrayUI.Models;
 
 namespace XrayUI.ViewModels

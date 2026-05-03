@@ -22,10 +22,7 @@ namespace XrayUI.Services
         {
             var config = new JsonObject
             {
-                ["log"] = new JsonObject
-                {
-                    ["loglevel"] = DefaultLogLevel
-                },
+                ["log"] = BuildLog(settings),
                 ["dns"] = BuildDns(settings),
                 ["inbounds"] = BuildInbounds(settings),
                 ["outbounds"] = BuildOutbounds(server, settings, tunOutboundInterfaceName),
@@ -33,6 +30,21 @@ namespace XrayUI.Services
             };
 
             return config.ToJsonString(JsonOpts);
+        }
+
+        private static JsonObject BuildLog(AppSettings settings)
+        {
+            var log = new JsonObject
+            {
+                ["loglevel"] = DefaultLogLevel
+            };
+
+            if (LogMaskAddress.IsEnabled(settings.LogMaskAddress))
+            {
+                log["maskAddress"] = settings.LogMaskAddress;
+            }
+
+            return log;
         }
 
         private static JsonArray BuildInbounds(AppSettings settings)
@@ -168,7 +180,7 @@ namespace XrayUI.Services
                 ["password"] = server.Password
             });
 
-            return new JsonObject
+            var outbound = new JsonObject
             {
                 ["tag"] = "proxy",
                 ["protocol"] = "shadowsocks",
@@ -181,6 +193,9 @@ namespace XrayUI.Services
                     ["network"] = "tcp"
                 }
             };
+
+            ApplyFinalmask((JsonObject)outbound["streamSettings"]!, server);
+            return outbound;
         }
 
         private static JsonObject BuildVmessOutbound(ServerEntry server)
@@ -253,6 +268,23 @@ namespace XrayUI.Services
         {
             var sni = string.IsNullOrWhiteSpace(server.Sni) ? server.Host : server.Sni;
 
+            var streamSettings = new JsonObject
+            {
+                ["network"] = "hysteria",
+                ["security"] = "tls",
+                ["tlsSettings"] = new JsonObject
+                {
+                    ["serverName"] = sni,
+                    ["allowInsecure"] = server.AllowInsecure
+                },
+                ["hysteriaSettings"] = new JsonObject
+                {
+                    ["version"] = 2,
+                    ["auth"] = server.Password
+                }
+            };
+            ApplyFinalmask(streamSettings, server);
+
             return new JsonObject
             {
                 ["tag"] = "proxy",
@@ -263,21 +295,7 @@ namespace XrayUI.Services
                     ["address"] = server.Host,
                     ["port"] = server.Port
                 },
-                ["streamSettings"] = new JsonObject
-                {
-                    ["network"] = "hysteria",
-                    ["security"] = "tls",
-                    ["tlsSettings"] = new JsonObject
-                    {
-                        ["serverName"] = sni,
-                        ["allowInsecure"] = server.AllowInsecure
-                    },
-                    ["hysteriaSettings"] = new JsonObject
-                    {
-                        ["version"] = 2,
-                        ["auth"] = server.Password
-                    }
-                }
+                ["streamSettings"] = streamSettings
             };
         }
 
@@ -382,7 +400,17 @@ namespace XrayUI.Services
                 stream["xhttpSettings"] = settings;
             }
 
+            ApplyFinalmask(stream, server);
             return stream;
+        }
+
+        private static void ApplyFinalmask(JsonObject streamSettings, ServerEntry server)
+        {
+            var finalmask = FinalmaskJson.Parse(server.Finalmask);
+            if (finalmask is JsonObject)
+            {
+                streamSettings["finalmask"] = finalmask;
+            }
         }
 
         private static JsonObject BuildRouting(AppSettings settings)

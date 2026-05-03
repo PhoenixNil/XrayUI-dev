@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Microsoft.Windows.AppLifecycle;
@@ -84,9 +83,9 @@ namespace XrayUI
             }
         }
 
-        public void RequestShutdown()
+        public void RequestShutdown(bool fastShutdown = false)
         {
-            CleanupOnExit();
+            CleanupOnExit(fastShutdown);
             Environment.Exit(0);
         }
 
