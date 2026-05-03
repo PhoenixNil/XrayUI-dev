@@ -62,7 +62,10 @@ namespace XrayUI.Views
         {
             if (_logWindow is null)
             {
-                _logWindow = new LogWindow(ViewModel.XrayService);
+                _logWindow = new LogWindow(
+                    ViewModel.XrayService,
+                    ViewModel.SettingsService,
+                    ViewModel.ReapplyRoutingAsync);
                 _logWindow.Closed += (_, _) => _logWindow = null;
             }
             _logWindow.Activate();

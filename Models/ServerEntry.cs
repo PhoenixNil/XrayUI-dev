@@ -27,6 +27,7 @@ namespace XrayUI.Models
             ShortId = string.Empty;
             SpiderX = string.Empty;
             Flow = string.Empty;
+            Finalmask = string.Empty;
         }
 
         /// <summary>ID of the subscription this node was imported from; empty = manually added.</summary>
@@ -100,6 +101,10 @@ namespace XrayUI.Models
         /// <summary>VLESS flow: "xtls-rprx-vision" or empty string.</summary>
         [ObservableProperty]
         public partial string Flow { get; set; }
+
+        /// <summary>Raw Xray streamSettings.finalmask JSON, shared as the "fm" URI parameter.</summary>
+        [ObservableProperty]
+        public partial string Finalmask { get; set; }
 
         public string Id
         {

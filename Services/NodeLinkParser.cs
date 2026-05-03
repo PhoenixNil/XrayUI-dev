@@ -165,6 +165,7 @@ namespace XrayUI.Services
                 var tls      = GetStr("tls", "");
                 var security = tls == "tls" ? "tls" : "none";
                 var allowInsecure = IsTruthy(GetStr("allowInsecure")) || IsTruthy(GetStr("insecure"));
+                var finalmask = FinalmaskJson.NormalizeForStorage(GetStr("fm", GetStr("finalmask")));
 
                 return new ServerEntry
                 {
@@ -181,6 +182,7 @@ namespace XrayUI.Services
                     Sni         = GetStr("sni"),
                     Fingerprint = GetStr("fp"),
                     AllowInsecure = allowInsecure,
+                    Finalmask   = finalmask,
                     Encryption  = security == "tls" ? "TLS" : "None"
                 };
             }
@@ -217,6 +219,7 @@ namespace XrayUI.Services
                 var path     = Q(query, "path") ?? Q(query, "serviceName") ?? string.Empty;
                 var wsHost   = Q(query, "host", string.Empty) ?? string.Empty;
                 var flow     = Q(query, "flow", string.Empty) ?? string.Empty;
+                var finalmask = FinalmaskJson.NormalizeForStorage(Q(query, "fm"));
                 var allowInsecure = IsTruthy(Q(query, "allowInsecure")) || IsTruthy(Q(query, "insecure"));
 
                 return new ServerEntry
@@ -237,6 +240,7 @@ namespace XrayUI.Services
                     Path        = path,
                     WsHost      = wsHost,
                     Flow        = flow,
+                    Finalmask   = finalmask,
                     Encryption  = security == "reality" ? "Reality"
                                 : security == "tls"     ? "TLS"
                                                         : "None"
@@ -264,6 +268,7 @@ namespace XrayUI.Services
 
                 var query = ParseQuery(uri.Query);
                 var sni   = Q(query, "sni", string.Empty) ?? string.Empty;
+                var finalmask = FinalmaskJson.NormalizeForStorage(Q(query, "fm"));
                 var allowInsecure = IsTruthy(Q(query, "allowInsecure")) || IsTruthy(Q(query, "insecure"));
 
                 return new ServerEntry
@@ -277,6 +282,7 @@ namespace XrayUI.Services
                     Security   = "tls",
                     Sni        = sni,
                     AllowInsecure = allowInsecure,
+                    Finalmask  = finalmask,
                     Encryption = "TLS"
                 };
             }
@@ -314,6 +320,7 @@ namespace XrayUI.Services
                 var fp     = Q(query, "fp", string.Empty) ?? string.Empty;
                 var path   = Q(query, "path") ?? Q(query, "serviceName") ?? string.Empty;
                 var wsHost = Q(query, "host", string.Empty) ?? string.Empty;
+                var finalmask = FinalmaskJson.NormalizeForStorage(Q(query, "fm"));
                 var allowInsecure = IsTruthy(Q(query, "allowInsecure")) || IsTruthy(Q(query, "insecure"));
 
                 return new ServerEntry
@@ -330,6 +337,7 @@ namespace XrayUI.Services
                     AllowInsecure = allowInsecure,
                     Path          = path,
                     WsHost        = wsHost,
+                    Finalmask     = finalmask,
                     Encryption    = security == "reality" ? "Reality"
                                   : security == "tls"     ? "TLS"
                                                           : "None"

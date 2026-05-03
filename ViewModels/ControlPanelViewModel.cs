@@ -35,6 +35,7 @@ namespace XrayUI.ViewModels
         private string? _currentTunServerHost;
 
         public XrayService XrayService => _xray;
+        public SettingsService SettingsService => _settings;
 
         public Func<ServerEntry?> GetSelectedServer { get; set; } = () => null;
 

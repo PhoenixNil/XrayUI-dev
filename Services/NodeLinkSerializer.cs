@@ -70,6 +70,7 @@ namespace XrayUI.Services
                 ["tls"] = tls,
                 ["sni"] = s.Sni ?? string.Empty,
                 ["fp"] = s.Fingerprint ?? string.Empty,
+                ["fm"] = FinalmaskJson.NormalizeForShare(s.Finalmask),
                 // IsTruthy("1") = true, IsTruthy("") = false — clean round-trip
                 ["allowInsecure"] = s.AllowInsecure ? "1" : ""
             };
@@ -128,6 +129,7 @@ namespace XrayUI.Services
 
             // VLESS flow (xtls-rprx-vision etc.)
             AppendIfNotEmpty(sb, "flow", s.Flow);
+            AppendIfNotEmpty(sb, "fm", FinalmaskJson.NormalizeForShare(s.Finalmask));
 
             // Fragment
             if (!string.IsNullOrEmpty(s.Name))
@@ -156,7 +158,8 @@ namespace XrayUI.Services
             sb.Append(':');
             sb.Append(s.Port);
 
-            bool hasQuery = !string.IsNullOrEmpty(s.Sni) || s.AllowInsecure;
+            var finalmask = FinalmaskJson.NormalizeForShare(s.Finalmask);
+            bool hasQuery = !string.IsNullOrEmpty(s.Sni) || s.AllowInsecure || !string.IsNullOrEmpty(finalmask);
             if (hasQuery)
             {
                 sb.Append('?');
@@ -167,7 +170,14 @@ namespace XrayUI.Services
                     first = false;
                 }
                 if (s.AllowInsecure)
+                {
                     AppendParam(sb, "insecure", "1", first: first);
+                    first = false;
+                }
+                if (!string.IsNullOrEmpty(finalmask))
+                {
+                    AppendParam(sb, "fm", finalmask, first: first);
+                }
             }
 
             if (!string.IsNullOrEmpty(s.Name))
@@ -198,13 +208,15 @@ namespace XrayUI.Services
             sb.Append(':');
             sb.Append(s.Port > 0 ? s.Port : 443);
 
+            var finalmask = FinalmaskJson.NormalizeForShare(s.Finalmask);
             bool hasQuery = network != "tcp"
                             || security != "tls"
                             || !string.IsNullOrEmpty(s.Sni)
                             || !string.IsNullOrEmpty(s.Fingerprint)
                             || s.AllowInsecure
                             || !string.IsNullOrEmpty(s.Path)
-                            || !string.IsNullOrEmpty(s.WsHost);
+                            || !string.IsNullOrEmpty(s.WsHost)
+                            || !string.IsNullOrEmpty(finalmask);
             if (hasQuery)
             {
                 sb.Append('?');
@@ -238,6 +250,7 @@ namespace XrayUI.Services
 
                 if (network == "ws")
                     AddIfNotEmpty("host", s.WsHost);
+                AddIfNotEmpty("fm", finalmask);
             }
 
             if (!string.IsNullOrEmpty(s.Name))
