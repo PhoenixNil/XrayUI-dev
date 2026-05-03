@@ -61,11 +61,3 @@ jobs:
           }
           $size = (Get-Item $exe).Length
           Write-Host "OK: AOT exe found at $exe ($size bytes)"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: XrayUI-win-x64-${{ github.sha }}
-          path: bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/
-          retention-days: 7
-          if-no-files-found: error
