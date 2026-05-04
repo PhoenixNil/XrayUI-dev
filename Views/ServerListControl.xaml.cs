@@ -131,7 +131,9 @@ namespace XrayUI.Views
             editItem.IsEnabled = ViewModel.CanEditSelectedServer;
             editItem.Click += (_, _) => ViewModel.EditServerCommand.Execute(null);
 
-            var deleteItem = CreateMenuItem("删除", "\uE74D");
+			var favoriteItem = CreateMenuItem("加入收藏", "\uE718");
+
+			var deleteItem = CreateMenuItem("删除", "\uE74D");
             deleteItem.IsEnabled = ViewModel.CanRemoveSelectedServer;
             deleteItem.Click += (_, _) => ViewModel.RemoveServerCommand.Execute(null);
 
@@ -139,6 +141,7 @@ namespace XrayUI.Views
             shareItem.Click += (_, _) => ViewModel.ShareServerCommand.Execute(null);
 
             flyout.Items.Add(editItem);
+            flyout.Items.Add(favoriteItem);
             flyout.Items.Add(deleteItem);
             flyout.Items.Add(shareItem);
 

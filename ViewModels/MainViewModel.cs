@@ -82,6 +82,7 @@ namespace XrayUI.ViewModels
             ServerList.PropertyChanged   += OnServerListPropertyChanged;
             ControlPanel.PropertyChanged += OnControlPanelPropertyChanged;
             ServerDetail.PropertyChanged += OnServerDetailPropertyChanged;
+            Personalize.PropertyChanged  += OnPersonalizePropertyChanged;
 
             ControlPanel.ShowPersonalizeRequested += (_, _) => OpenPersonalize();
             Personalize.CloseRequested            += (_, _) => ClosePersonalize();
@@ -109,6 +110,8 @@ namespace XrayUI.ViewModels
             ControlPanel.RoutingMode           = s.RoutingMode == "global" ? "全局路由" : "智能分流";
             ControlPanel.IsSystemProxyEnabled  = s.IsSystemProxyEnabled;
             ControlPanel.InitializePersonalize(s);
+            Personalize.LoadDisplayOptions(s);
+            ApplyDetailDisplayOptions(s.ShowLatencyInDetails, s.ShowAiUnlockInDetails);
 
             // Reconcile external state vs persisted setting (external is ground truth)
             var externalEnabled = _startupService.IsStartupEnabled();
@@ -221,6 +224,12 @@ namespace XrayUI.ViewModels
             OnPropertyChanged(nameof(BackButtonVisibility));
         }
 
+        private void ApplyDetailDisplayOptions(bool showLatency, bool showAiUnlock)
+        {
+            ServerDetail.ShowLatencyInDetails = showLatency;
+            ServerDetail.ShowAiUnlockInDetails = showAiUnlock;
+        }
+
         // ── Back navigation (TitleBar back button) ────────────────────────────
         // Discards any in-flight edits and returns to the main view without saving.
 
@@ -240,6 +249,18 @@ namespace XrayUI.ViewModels
                 ServerDetail.SelectedServer = ServerList.SelectedServer;
                 OnPropertyChanged(nameof(ActiveServerName));
                 SwitchToSelectedServerCommand.NotifyCanExecuteChanged();
+            }
+        }
+
+        private void OnPersonalizePropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(PersonalizeViewModel.ShowLatencyInDetails))
+            {
+                ServerDetail.ShowLatencyInDetails = Personalize.ShowLatencyInDetails;
+            }
+            else if (e.PropertyName == nameof(PersonalizeViewModel.ShowAiUnlockInDetails))
+            {
+                ServerDetail.ShowAiUnlockInDetails = Personalize.ShowAiUnlockInDetails;
             }
         }
 

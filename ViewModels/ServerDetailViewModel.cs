@@ -29,6 +29,8 @@ namespace XrayUI.ViewModels
         private SolidColorBrush _openAiStatusBrush = null!;
         private SolidColorBrush _claudeStatusBrush = null!;
         private SolidColorBrush _geminiStatusBrush = null!;
+        private bool _showLatencyInDetails = true;
+        private bool _showAiUnlockInDetails = true;
 
         public ServerDetailViewModel(LatencyProbeService latencyProbe, AiUnlockCheckService aiUnlockCheck)
         {
@@ -141,6 +143,34 @@ namespace XrayUI.ViewModels
         }
 
         public bool CanTestLatency => !IsTestingLatency && SelectedServer is not null;
+
+        public bool ShowLatencyInDetails
+        {
+            get => _showLatencyInDetails;
+            set
+            {
+                if (SetProperty(ref _showLatencyInDetails, value))
+                {
+                    OnPropertyChanged(nameof(LatencyVisibility));
+                }
+            }
+        }
+
+        public bool ShowAiUnlockInDetails
+        {
+            get => _showAiUnlockInDetails;
+            set
+            {
+                if (SetProperty(ref _showAiUnlockInDetails, value))
+                {
+                    OnPropertyChanged(nameof(AiUnlockVisibility));
+                }
+            }
+        }
+
+        public Visibility LatencyVisibility => ShowLatencyInDetails ? Visibility.Visible : Visibility.Collapsed;
+
+        public Visibility AiUnlockVisibility => ShowAiUnlockInDetails ? Visibility.Visible : Visibility.Collapsed;
 
         // ── AI Unlock indicators ──────────────────────────────────────────────
 
