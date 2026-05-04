@@ -25,6 +25,8 @@
             <SolidColorBrush x:Key="StateSuccessBrush" Color="#48C78E" />
             <SolidColorBrush x:Key="StateErrorBrush"   Color="#EF4444" />
 
+            <SolidColorBrush x:Key="FavoriteBrush" Color="#FF69B4" />
+
             <!-- Danger button brush palette -->
             <SolidColorBrush x:Key="DangerAccentButtonForeground" Color="White" />
             <SolidColorBrush x:Key="DangerAccentButtonForegroundPointerOver" Color="White" />

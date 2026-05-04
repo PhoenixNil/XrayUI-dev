@@ -55,6 +55,9 @@ namespace XrayUI.Models
         [ObservableProperty]
         public partial bool IsActive { get; set; }
 
+        [ObservableProperty]
+        public partial bool IsFavorite { get; set; }
+
         // Auth
         [ObservableProperty]
         public partial string Password { get; set; }

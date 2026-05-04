@@ -2,6 +2,7 @@
 using System.Linq;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 using XrayUI.Models;
 
@@ -131,9 +132,18 @@ namespace XrayUI.Views
             editItem.IsEnabled = ViewModel.CanEditSelectedServer;
             editItem.Click += (_, _) => ViewModel.EditServerCommand.Execute(null);
 
-			var favoriteItem = CreateMenuItem("加入收藏", "\uE718");
+            var isFavorite = ViewModel.SelectedServer?.IsFavorite == true;
+            var favoriteIcon = new FontIcon { Glyph = "\uE718" };
+            if (isFavorite && Application.Current.Resources["FavoriteBrush"] is Brush favoriteBrush)
+                favoriteIcon.Foreground = favoriteBrush;
+            var favoriteItem = new MenuFlyoutItem
+            {
+                Text = isFavorite ? "取消收藏" : "加入收藏",
+                Icon = favoriteIcon,
+            };
+            favoriteItem.Click += (_, _) => ViewModel.ToggleFavoriteCommand.Execute(null);
 
-			var deleteItem = CreateMenuItem("删除", "\uE74D");
+            var deleteItem = CreateMenuItem("删除", "\uE74D");
             deleteItem.IsEnabled = ViewModel.CanRemoveSelectedServer;
             deleteItem.Click += (_, _) => ViewModel.RemoveServerCommand.Execute(null);
 
