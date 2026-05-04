@@ -133,9 +133,7 @@ namespace XrayUI.Views
             editItem.Click += (_, _) => ViewModel.EditServerCommand.Execute(null);
 
             var isFavorite = ViewModel.SelectedServer?.IsFavorite == true;
-            var favoriteIcon = new FontIcon { Glyph = "\uE718" };
-            if (isFavorite && Application.Current.Resources["FavoriteBrush"] is Brush favoriteBrush)
-                favoriteIcon.Foreground = favoriteBrush;
+            var favoriteIcon = isFavorite ? new FontIcon { Glyph = "\uE8D9" } : new FontIcon { Glyph = "\uE734" };
             var favoriteItem = new MenuFlyoutItem
             {
                 Text = isFavorite ? "取消收藏" : "加入收藏",

@@ -21,11 +21,10 @@
             <converters:ProtocolToBrushConverter x:Key="ProtocolToBrushConverter" />
 
             <!-- State indicator brush palette (AI unlock status) -->
-            <SolidColorBrush x:Key="StateNeutralBrush" Color="#787A82" />
+            <SolidColorBrush x:Key="StateNeutralBrush" Color="{ThemeResource SystemFillColorNeutral}" />
             <SolidColorBrush x:Key="StateSuccessBrush" Color="#48C78E" />
             <SolidColorBrush x:Key="StateErrorBrush"   Color="#EF4444" />
 
-            <SolidColorBrush x:Key="FavoriteBrush" Color="#FF69B4" />
 
             <!-- Danger button brush palette -->
             <SolidColorBrush x:Key="DangerAccentButtonForeground" Color="White" />
