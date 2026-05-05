@@ -381,6 +381,82 @@
                 </Border>
             </StackPanel>
 
+            <!-- ── 详情设置 ────────────────────────────────────────────────── -->
+            <StackPanel Spacing="10">
+                <TextBlock Text="详情设置"
+                           FontSize="15"
+                           FontWeight="SemiBold" />
+
+                <Expander HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Stretch"
+                          CornerRadius="{ThemeResource OverlayCornerRadius}"
+                          Background="{ThemeResource LayerFillColorDefaultBrush}"
+                          BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}">
+                    <Expander.Header>
+                        <Grid Padding="0,12" ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE946;"
+                                      FontSize="16"
+                                      VerticalAlignment="Center"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="2">
+                                <TextBlock Text="服务器信息显示"
+                                           FontSize="14" />
+                                <TextBlock Text="选择详情卡片上的信息展示"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </Grid>
+                    </Expander.Header>
+
+                <StackPanel Margin="-16,-12,-16,-12">
+                    <!-- Delay Display -->
+                    <CheckBox IsChecked="{x:Bind ViewModel.ShowLatencyInDetails, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch"
+                              Margin="42,10,16,10">
+                        <StackPanel VerticalAlignment="Center"
+                                    Spacing="2">
+                            <TextBlock Text="延迟"
+                                       FontSize="14" />
+                            <TextBlock Text="节点卡片上展示延迟"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </CheckBox>
+
+                    <Rectangle Height="1"
+                               Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                    <!-- AI Unlock Display -->
+                    <CheckBox IsChecked="{x:Bind ViewModel.ShowAiUnlockInDetails, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch"
+                              Margin="42,10,16,10">
+                        <StackPanel VerticalAlignment="Center"
+                                    Spacing="2">
+                            <TextBlock Text="AI 解锁"
+                                       FontSize="14" />
+                            <TextBlock Text="节点卡片上展示AI的解锁状态"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </CheckBox>
+                </StackPanel>
+            </Expander>
+            </StackPanel>
+
             <!-- ── 数据管理 ────────────────────────────────────────────────── -->
             <StackPanel Spacing="10">
                 <StackPanel Spacing="2">

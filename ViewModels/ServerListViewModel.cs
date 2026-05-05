@@ -31,8 +31,10 @@ namespace XrayUI.ViewModels
 
         private const string AllChipKey            = "__all__";
         private const string UngroupedChipKey      = "__ungrouped__";
+        private const string FavoritesChipKey      = "__favorites__";
         private const string AllChipName           = "所有服务器";
         private const string UngroupedName         = "未分组";
+        private const string FavoritesName         = "收藏列表";
         private const string UnnamedSubLabel       = "(未命名订阅)";
         private const string OrphanSubLabel        = "(已删除订阅)";
 
@@ -345,8 +347,10 @@ namespace XrayUI.ViewModels
             // Single pass: count servers grouped by SubscriptionId (empty/null → ungrouped bucket).
             var countsBySub = new Dictionary<string, int>(StringComparer.Ordinal);
             int ungroupedCount = 0;
+            bool hasFavorites = false;
             foreach (var s in Servers)
             {
+                hasFavorites |= s.IsFavorite;
                 if (string.IsNullOrEmpty(s.SubscriptionId))
                     ungroupedCount++;
                 else
@@ -365,6 +369,15 @@ namespace XrayUI.ViewModels
                 Kind        = ServerGroupChip.ChipKind.All,
                 DisplayName = AllChipName,
             });
+
+            if (hasFavorites)
+            {
+                GroupChips.Add(new ServerGroupChip
+                {
+                    Kind        = ServerGroupChip.ChipKind.Favorites,
+                    DisplayName = FavoritesName,
+                });
+            }
 
             foreach (var sub in _knownSubscriptions)
             {
@@ -423,6 +436,7 @@ namespace XrayUI.ViewModels
         {
             ServerGroupChip.ChipKind.All          => AllChipKey,
             ServerGroupChip.ChipKind.Ungrouped    => UngroupedChipKey,
+            ServerGroupChip.ChipKind.Favorites    => FavoritesChipKey,
             ServerGroupChip.ChipKind.Subscription => chip!.SubscriptionId,
             _                                     => null,
         };
@@ -443,6 +457,8 @@ namespace XrayUI.ViewModels
                     Servers.Where(s => s.SubscriptionId == (_selectedChip.SubscriptionId ?? string.Empty)),
                 ServerGroupChip.ChipKind.Ungrouped =>
                     Servers.Where(s => string.IsNullOrEmpty(s.SubscriptionId)),
+                ServerGroupChip.ChipKind.Favorites =>
+                    Servers.Where(s => s.IsFavorite),
                 _ => Servers,
             };
 
@@ -651,7 +667,10 @@ namespace XrayUI.ViewModels
                 foreach (var e in newEntries)
                 {
                     if (oldByEndpoint.TryGetValue($"{e.Protocol}://{e.Host}:{e.Port}", out var match))
+                    {
                         e.Id = match.Id;
+                        e.IsFavorite = match.IsFavorite;
+                    }
                 }
 
                 MutateServersInBatch(() =>
@@ -797,6 +816,51 @@ namespace XrayUI.ViewModels
             }
 
             await _dialogs.ShowShareLinkDialogAsync(SelectedServer.Name, link);
+        }
+
+        // ── Favorite ─────────────────────────────────────────────────────────
+
+        [RelayCommand]
+        private async Task ToggleFavorite()
+        {
+            if (SelectedServer is null) return;
+            var server = SelectedServer;
+            var isFavoritesChip = _selectedChip?.Kind == ServerGroupChip.ChipKind.Favorites;
+            server.IsFavorite = !server.IsFavorite;
+            var justFavorited = server.IsFavorite;
+
+            if (isFavoritesChip && !server.IsFavorite)
+            {
+                RebuildAll();
+                // 当前节点已不属于收藏列表，重建后选中列表里的第一个节点。
+                SelectedServer = VisibleServers.FirstOrDefault();
+            }
+            else
+            {
+                SyncFavoritesChipPresence(justFavorited);
+            }
+
+            await SaveAsync();
+        }
+
+        private void SyncFavoritesChipPresence(bool justFavorited)
+        {
+            var favoritesChip = GroupChips.FirstOrDefault(c => c.Kind == ServerGroupChip.ChipKind.Favorites);
+            var hasFavorites = justFavorited || Servers.Any(s => s.IsFavorite);
+
+            if (hasFavorites && favoritesChip == null)
+            {
+                // RebuildGroupChips 总是把 All chip 放在 index 0，收藏紧跟其后。
+                GroupChips.Insert(1, new ServerGroupChip
+                {
+                    Kind        = ServerGroupChip.ChipKind.Favorites,
+                    DisplayName = FavoritesName,
+                });
+            }
+            else if (!hasFavorites && favoritesChip != null)
+            {
+                GroupChips.Remove(favoritesChip);
+            }
         }
 
         // ── Remove ────────────────────────────────────────────────────────────

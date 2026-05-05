@@ -130,7 +130,9 @@
                         </Grid>
 
                         <!-- AI 服务监测区 -->
-                        <StackPanel Spacing="12" Margin="0,2,0,0" >
+                        <StackPanel Spacing="12"
+                                    Margin="0,2,0,0"
+                                    Visibility="{x:Bind ViewModel.AiUnlockVisibility, Mode=OneWay}">
                             <Grid x:Name="AIShadowCastGrid" />
                             <TextBlock Text="AI 访问解锁"
                                            FontSize="13"                                          
@@ -379,7 +381,8 @@
                         <!-- Latency row -->
                         <Grid ColumnDefinitions="*,Auto,Auto"
                               ColumnSpacing="12"
-                              VerticalAlignment="Center">
+                              VerticalAlignment="Center"
+                              Visibility="{x:Bind ViewModel.LatencyVisibility, Mode=OneWay}">
                             <TextBlock Text="网络延迟"
                                        FontSize="13"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"

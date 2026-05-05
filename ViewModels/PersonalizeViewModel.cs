@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Windows.UI;
 using XrayUI.Helpers;
+using XrayUI.Models;
 using XrayUI.Services;
 
 namespace XrayUI.ViewModels
@@ -18,6 +19,8 @@ namespace XrayUI.ViewModels
 
         private int _selectedThemeIndex;
         private int _selectedBackdropIndex;
+        private bool _showLatencyInDetails = true;
+        private bool _showAiUnlockInDetails = true;
 
         public event EventHandler? CloseRequested;
 
@@ -125,6 +128,18 @@ namespace XrayUI.ViewModels
             }
         }
 
+        public bool ShowLatencyInDetails
+        {
+            get => _showLatencyInDetails;
+            set => SetProperty(ref _showLatencyInDetails, value);
+        }
+
+        public bool ShowAiUnlockInDetails
+        {
+            get => _showAiUnlockInDetails;
+            set => SetProperty(ref _showAiUnlockInDetails, value);
+        }
+
         // ── Commands ──────────────────────────────────────────────────────────
 
         [RelayCommand]
@@ -152,6 +167,8 @@ namespace XrayUI.ViewModels
                 _                    => "Default"
             };
             s.BackdropSetting = ThemeHelper.CurrentBackdrop;
+            s.ShowLatencyInDetails = ShowLatencyInDetails;
+            s.ShowAiUnlockInDetails = ShowAiUnlockInDetails;
             await _settings.SaveSettingsAsync(s);
             CloseRequested?.Invoke(this, EventArgs.Empty);
         }
@@ -182,6 +199,12 @@ namespace XrayUI.ViewModels
 
             _selectedBackdropIndex = ThemeHelper.CurrentBackdrop == "Acrylic" ? 1 : 0;
             OnPropertyChanged(nameof(SelectedBackdropIndex));
+        }
+
+        public void LoadDisplayOptions(AppSettings settings)
+        {
+            ShowLatencyInDetails = settings.ShowLatencyInDetails;
+            ShowAiUnlockInDetails = settings.ShowAiUnlockInDetails;
         }
     }
 }

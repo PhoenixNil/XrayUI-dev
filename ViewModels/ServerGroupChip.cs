@@ -7,6 +7,7 @@ namespace XrayUI.ViewModels
         public enum ChipKind
         {
             All,
+            Favorites,
             Subscription,
             Ungrouped,
         }

@@ -22,5 +22,12 @@ namespace XrayUI.Services
         /// </summary>
         /// <param name="xamlRoot">Override which window the dialog is rooted in. Null = MainWindow.</param>
         Task ShowProgressDialogAsync(string title, Func<IProgress<string>, CancellationToken, Task> work, XamlRoot? xamlRoot = null);
+
+        /// <summary>
+        /// Shows a modal dialog with a progress bar + status text while <paramref name="work"/> runs.
+        /// When progress percent is null, the progress bar is indeterminate.
+        /// </summary>
+        /// <param name="xamlRoot">Override which window the dialog is rooted in. Null = MainWindow.</param>
+        Task ShowProgressBarDialogAsync(string title, Func<IProgress<ProgressDialogUpdate>, CancellationToken, Task> work, XamlRoot? xamlRoot = null);
     }
 }

@@ -447,6 +447,101 @@ namespace XrayUI.Services
             if (cts.IsCancellationRequested) throw new OperationCanceledException(cts.Token);
         }
 
+        public async Task ShowProgressBarDialogAsync(string title, Func<IProgress<ProgressDialogUpdate>, CancellationToken, Task> work, XamlRoot? xamlRoot = null)
+        {
+            using var cts = new CancellationTokenSource();
+
+            var statusText = new TextBlock
+            {
+                Text         = "正在准备…",
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth     = 320,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            };
+
+            var progressBar = new ProgressBar
+            {
+                IsIndeterminate = true,
+                Minimum         = 0,
+                Maximum         = 100,
+                Width           = 320,
+            };
+
+            var dialog = CreateDialog(xamlRoot);
+            dialog.Title           = title;
+            dialog.CloseButtonText = "取消";
+            dialog.Content = new StackPanel
+            {
+                Spacing             = 12,
+                MinWidth            = 320,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Children            = { progressBar, statusText }
+            };
+
+            var progress = new Progress<ProgressDialogUpdate>(update =>
+            {
+                statusText.Text = update.Message;
+
+                if (update.Percent.HasValue)
+                {
+                    progressBar.IsIndeterminate = false;
+                    progressBar.Value = Math.Clamp(update.Percent.Value, 0, 100);
+                }
+                else
+                {
+                    progressBar.IsIndeterminate = true;
+                }
+            });
+
+            Exception? error   = null;
+            int workFinished = 0;
+
+            dialog.Opened += (_, _) =>
+            {
+                if (Volatile.Read(ref workFinished) == 1)
+                {
+                    try { dialog.Hide(); } catch { }
+                }
+            };
+
+            var workTask = Task.Run(async () =>
+            {
+                try
+                {
+                    await work(progress, cts.Token);
+                }
+                catch (OperationCanceledException) when (cts.IsCancellationRequested)
+                {
+                    // Real user cancel — swallow here, we rethrow a fresh OCE below based on cts state.
+                    // Any *other* OperationCanceledException (e.g. HttpClient.Timeout throwing
+                    // TaskCanceledException with its own internal token) must not be swallowed —
+                    // it falls through to the generic catch so the caller can surface the failure.
+                }
+                catch (Exception ex)
+                {
+                    error = ex;
+                }
+                finally
+                {
+                    Volatile.Write(ref workFinished, 1);
+                    dialog.DispatcherQueue.TryEnqueue(() =>
+                    {
+                        try { dialog.Hide(); } catch { }
+                    });
+                }
+            });
+
+            await dialog.ShowAsync();
+
+            // If the dialog closed because the user clicked Cancel (work still running), signal it.
+            if (Volatile.Read(ref workFinished) == 0) cts.Cancel();
+
+            await workTask;
+
+            if (error != null) throw error;
+            if (cts.IsCancellationRequested) throw new OperationCanceledException(cts.Token);
+        }
+
         // ── Share link ────────────────────────────────────────────────────────
 
         public async Task ShowShareLinkDialogAsync(string serverName, string link)

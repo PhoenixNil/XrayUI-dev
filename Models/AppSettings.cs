@@ -31,6 +31,8 @@ namespace XrayUI.Models
         public string? ColorVmess     { get; set; }
         public string? ColorHysteria2 { get; set; }
         public string? ColorFallback  { get; set; }
+        public bool ShowLatencyInDetails { get; set; } = true;
+        public bool ShowAiUnlockInDetails { get; set; } = true;
 
         // ── Custom routing rules ──────────────────────────────────────────────
         /// <summary>User-defined routing rules. Applied only when RoutingMode == "smart".</summary>

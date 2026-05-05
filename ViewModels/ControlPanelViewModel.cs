@@ -857,7 +857,7 @@ namespace XrayUI.ViewModels
             UpdateStaging? staging = null;
             try
             {
-                await _dialogs.ShowProgressDialogAsync("正在更新 XrayUI",
+                await _dialogs.ShowProgressBarDialogAsync("正在更新 XrayUI",
                     async (progress, ct) =>
                     {
                         staging = await _update.DownloadVerifyAndExtractAsync(info, proxy, progress, ct);

@@ -28,7 +28,7 @@ namespace XrayUI.Services
         /// without touching the install dir.
         /// </summary>
         Task<UpdateStaging> DownloadVerifyAndExtractAsync(
-            UpdateInfo info, string? proxyUrl, IProgress<string> progress, CancellationToken ct);
+            UpdateInfo info, string? proxyUrl, IProgress<ProgressDialogUpdate> progress, CancellationToken ct);
 
         /// <summary>
         /// Spawns the staged updater with handoff arguments. Caller is responsible
