@@ -347,8 +347,10 @@ namespace XrayUI.ViewModels
             // Single pass: count servers grouped by SubscriptionId (empty/null → ungrouped bucket).
             var countsBySub = new Dictionary<string, int>(StringComparer.Ordinal);
             int ungroupedCount = 0;
+            bool hasFavorites = false;
             foreach (var s in Servers)
             {
+                hasFavorites |= s.IsFavorite;
                 if (string.IsNullOrEmpty(s.SubscriptionId))
                     ungroupedCount++;
                 else
@@ -368,7 +370,7 @@ namespace XrayUI.ViewModels
                 DisplayName = AllChipName,
             });
 
-            if (Servers.Any(s => s.IsFavorite))
+            if (hasFavorites)
             {
                 GroupChips.Add(new ServerGroupChip
                 {
@@ -825,6 +827,7 @@ namespace XrayUI.ViewModels
             var server = SelectedServer;
             var isFavoritesChip = _selectedChip?.Kind == ServerGroupChip.ChipKind.Favorites;
             server.IsFavorite = !server.IsFavorite;
+            var justFavorited = server.IsFavorite;
 
             if (isFavoritesChip && !server.IsFavorite)
             {
@@ -834,16 +837,16 @@ namespace XrayUI.ViewModels
             }
             else
             {
-                SyncFavoritesChipPresence();
+                SyncFavoritesChipPresence(justFavorited);
             }
 
             await SaveAsync();
         }
 
-        private void SyncFavoritesChipPresence()
+        private void SyncFavoritesChipPresence(bool justFavorited)
         {
             var favoritesChip = GroupChips.FirstOrDefault(c => c.Kind == ServerGroupChip.ChipKind.Favorites);
-            var hasFavorites = Servers.Any(s => s.IsFavorite);
+            var hasFavorites = justFavorited || Servers.Any(s => s.IsFavorite);
 
             if (hasFavorites && favoritesChip == null)
             {

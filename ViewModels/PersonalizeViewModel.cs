@@ -203,10 +203,8 @@ namespace XrayUI.ViewModels
 
         public void LoadDisplayOptions(AppSettings settings)
         {
-            _showLatencyInDetails = settings.ShowLatencyInDetails;
-            _showAiUnlockInDetails = settings.ShowAiUnlockInDetails;
-            OnPropertyChanged(nameof(ShowLatencyInDetails));
-            OnPropertyChanged(nameof(ShowAiUnlockInDetails));
+            ShowLatencyInDetails = settings.ShowLatencyInDetails;
+            ShowAiUnlockInDetails = settings.ShowAiUnlockInDetails;
         }
     }
 }

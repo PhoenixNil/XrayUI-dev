@@ -133,12 +133,9 @@ namespace XrayUI.Views
             editItem.Click += (_, _) => ViewModel.EditServerCommand.Execute(null);
 
             var isFavorite = ViewModel.SelectedServer?.IsFavorite == true;
-            var favoriteIcon = isFavorite ? new FontIcon { Glyph = "\uE8D9" } : new FontIcon { Glyph = "\uE734" };
-            var favoriteItem = new MenuFlyoutItem
-            {
-                Text = isFavorite ? "取消收藏" : "加入收藏",
-                Icon = favoriteIcon,
-            };
+            var favoriteItem = CreateMenuItem(
+                isFavorite ? "取消收藏" : "加入收藏",
+                isFavorite ? "\uE8D9" : "\uE734");
             favoriteItem.Click += (_, _) => ViewModel.ToggleFavoriteCommand.Execute(null);
 
             var deleteItem = CreateMenuItem("删除", "\uE74D");

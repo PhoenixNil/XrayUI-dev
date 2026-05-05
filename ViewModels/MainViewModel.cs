@@ -111,7 +111,8 @@ namespace XrayUI.ViewModels
             ControlPanel.IsSystemProxyEnabled  = s.IsSystemProxyEnabled;
             ControlPanel.InitializePersonalize(s);
             Personalize.LoadDisplayOptions(s);
-            ApplyDetailDisplayOptions(s.ShowLatencyInDetails, s.ShowAiUnlockInDetails);
+            ServerDetail.ShowLatencyInDetails = s.ShowLatencyInDetails;
+            ServerDetail.ShowAiUnlockInDetails = s.ShowAiUnlockInDetails;
 
             // Reconcile external state vs persisted setting (external is ground truth)
             var externalEnabled = _startupService.IsStartupEnabled();
@@ -222,12 +223,6 @@ namespace XrayUI.ViewModels
             OnPropertyChanged(nameof(MainContentVisibility));
             OnPropertyChanged(nameof(PersonalizeVisibility));
             OnPropertyChanged(nameof(BackButtonVisibility));
-        }
-
-        private void ApplyDetailDisplayOptions(bool showLatency, bool showAiUnlock)
-        {
-            ServerDetail.ShowLatencyInDetails = showLatency;
-            ServerDetail.ShowAiUnlockInDetails = showAiUnlock;
         }
 
         // ── Back navigation (TitleBar back button) ────────────────────────────
