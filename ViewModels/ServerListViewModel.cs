@@ -37,6 +37,7 @@ namespace XrayUI.ViewModels
         private const string FavoritesName         = "收藏列表";
         private const string UnnamedSubLabel       = "(未命名订阅)";
         private const string OrphanSubLabel        = "(已删除订阅)";
+        private const string SubscriptionUserAgent = "v2rayN/7.0";
 
         private readonly IDialogService  _dialogs;
         private readonly SettingsService _settings;
@@ -623,7 +624,12 @@ namespace XrayUI.ViewModels
             string raw;
             try
             {
-                raw = await Http.GetStringAsync(sub.Url);
+                using var request = new HttpRequestMessage(HttpMethod.Get, sub.Url);
+                request.Headers.UserAgent.ParseAdd(SubscriptionUserAgent);
+
+                using var response = await Http.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+                raw = await response.Content.ReadAsStringAsync();
             }
             catch (Exception ex)
             {
@@ -802,6 +808,17 @@ namespace XrayUI.ViewModels
             await SaveAsync();
         }
 
+        [RelayCommand]
+        private async Task AddChainProxy()
+        {
+            var entry = await _dialogs.ShowChainProxyDialogAsync(Servers);
+            if (entry == null) return;
+
+            Servers.Add(entry);
+            SelectedServer = entry;
+            await SaveAsync();
+        }
+
         // ── Edit ──────────────────────────────────────────────────────────────
 
         [RelayCommand]
@@ -809,6 +826,15 @@ namespace XrayUI.ViewModels
         {
             if (SelectedServer is null) return;
             if (HasMultipleSelectedServers) return;
+
+            if (SelectedServer.IsChain)
+            {
+                var chainResult = await _dialogs.ShowChainProxyDialogAsync(Servers, SelectedServer);
+                if (chainResult == null) return;
+
+                await SaveAsync();
+                return;
+            }
 
             // Pass existing so dialog can pre-populate; dialog mutates and returns same ref on Primary
             var result = await _dialogs.ShowEditServerDialogAsync(SelectedServer);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using XrayUI.Models;
@@ -10,6 +11,7 @@ namespace XrayUI.Services
         Task<string?> ShowImportLinkDialogAsync();
         Task<SubscriptionEntry?> ShowSubscriptionsDialogAsync(ManageSubscriptionsViewModel vm);
         Task<ServerEntry?> ShowEditServerDialogAsync(ServerEntry? existing);
+        Task<ServerEntry?> ShowChainProxyDialogAsync(IEnumerable<ServerEntry> servers, ServerEntry? existing = null);
         Task<int?> ShowEditPortDialogAsync(int currentPort);
         Task ShowErrorAsync(string title, string message, XamlRoot? xamlRoot = null);
         Task<bool> ShowConfirmationAsync(string title, string message, string confirmText = "确定", string cancelText = "取消", bool isDanger = false);

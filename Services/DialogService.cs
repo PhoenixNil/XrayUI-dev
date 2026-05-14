@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using System.ComponentModel;
+using System.Collections.Generic;
 using Windows.ApplicationModel.DataTransfer;
 using XrayUI.Helpers;
 using XrayUI.Models;
@@ -118,7 +119,7 @@ namespace XrayUI.Services
                 SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
             };
             var cmbProtocol = new ComboBox { Header = "协议", MinWidth = 200 };
-            foreach (var p in new[] { "ss", "vmess", "vless", "hysteria2", "trojan" })
+            foreach (var p in new[] { "ss", "vmess", "vless", "hysteria2", "trojan", "socks" })
                 cmbProtocol.Items.Add(p);
             cmbProtocol.SelectedItem = existing?.Protocol?.ToLower() ?? "ss";
 
@@ -132,6 +133,7 @@ namespace XrayUI.Services
             if (existing?.Encryption is { Length: > 0 } existingEnc && !cmbEncryption.Items.Contains(existingEnc))
                 cmbEncryption.Items.Add(existingEnc);
             cmbEncryption.SelectedItem = existing?.Encryption ?? "aes-128-gcm";
+            var txtUsername = new TextBox { Header = "用户名 (SOCKS)", Text = existing?.Username ?? string.Empty };
             var txtPassword = new PasswordBox { Header = "密码", Password = existing?.Password ?? string.Empty };
             var txtUuid = new TextBox { Header = "UUID (VMess / VLESS)", Text = existing?.Uuid ?? string.Empty };
             var numAlterId = new NumberBox
@@ -191,6 +193,7 @@ namespace XrayUI.Services
 
             // Row containers for conditional visibility
             var rowEncryption = Wrap(cmbEncryption);
+            var rowUsername = Wrap(txtUsername);
             var rowPassword = Wrap(txtPassword);
             var rowUuid = Wrap(txtUuid);
             var rowAlterId = Wrap(numAlterId);
@@ -219,18 +222,20 @@ namespace XrayUI.Services
                 bool isVless = proto == "vless";
                 bool isHysteria2 = proto == "hysteria2";
                 bool isTrojan = proto == "trojan";
-                bool hasWs = !isHysteria2 && net == "ws";
-                bool hasXhttp = !isHysteria2 && net == "xhttp";
-                bool hasGrpc = !isHysteria2 && net == "grpc";
-                bool hasTls = !isHysteria2 && (sec == "tls" || sec == "reality");
-                bool hasReality = !isHysteria2 && sec == "reality";
+                bool isSocks = proto == "socks";
+                bool hasWs = !isHysteria2 && !isSocks && net == "ws";
+                bool hasXhttp = !isHysteria2 && !isSocks && net == "xhttp";
+                bool hasGrpc = !isHysteria2 && !isSocks && net == "grpc";
+                bool hasTls = !isHysteria2 && !isSocks && (sec == "tls" || sec == "reality");
+                bool hasReality = !isHysteria2 && !isSocks && sec == "reality";
                 bool hasEch = isVless && sec == "tls";
 
-                cmbNetwork.Visibility = isHysteria2 ? Visibility.Collapsed : Visibility.Visible;
-                cmbSecurity.Visibility = isHysteria2 ? Visibility.Collapsed : Visibility.Visible;
+                cmbNetwork.Visibility = (isHysteria2 || isSocks) ? Visibility.Collapsed : Visibility.Visible;
+                cmbSecurity.Visibility = (isHysteria2 || isSocks) ? Visibility.Collapsed : Visibility.Visible;
 
                 rowEncryption.Visibility = isSs ? Visibility.Visible : Visibility.Collapsed;
-                rowPassword.Visibility = (isSs || isHysteria2 || isTrojan)
+                rowUsername.Visibility = isSocks ? Visibility.Visible : Visibility.Collapsed;
+                rowPassword.Visibility = (isSs || isHysteria2 || isTrojan || isSocks)
                     ? Visibility.Visible
                     : Visibility.Collapsed;
                 rowUuid.Visibility = (isVmess || isVless) ? Visibility.Visible : Visibility.Collapsed;
@@ -270,7 +275,7 @@ namespace XrayUI.Services
                 Children =
                 {
                     txtName, txtHost, numPort, cmbProtocol,
-                    rowEncryption, rowPassword, rowUuid, rowAlterId,
+                    rowEncryption, rowUsername, rowPassword, rowUuid, rowAlterId,
                     cmbNetwork, rowPath, rowWsHost,
                     cmbSecurity, rowSni, rowFp, rowAllowInsecure, rowEchConfigList, rowEchForceQuery,
                     rowPk, rowSid, rowSpx, rowFlow, rowVlessEncryption,
@@ -301,6 +306,7 @@ namespace XrayUI.Services
             entry.Port = (int)numPort.Value;
             entry.Protocol = cmbProtocol.SelectedItem?.ToString() ?? "ss";
             entry.Encryption = cmbEncryption.SelectedItem?.ToString() ?? string.Empty;
+            entry.Username = txtUsername.Text.Trim();
             entry.Password = txtPassword.Password.Trim();
             entry.Uuid = txtUuid.Text.Trim();
             entry.AlterId = (int)numAlterId.Value;
@@ -324,6 +330,31 @@ namespace XrayUI.Services
             {
                 entry.Security = "tls";
             }
+            else if (entry.Protocol == "socks")
+            {
+                entry.Network = "tcp";
+                entry.Security = "none";
+                entry.Encryption = string.Empty;
+                entry.Uuid = string.Empty;
+                entry.AlterId = 0;
+                entry.Path = string.Empty;
+                entry.WsHost = string.Empty;
+                entry.Sni = string.Empty;
+                entry.Fingerprint = string.Empty;
+                entry.AllowInsecure = false;
+                entry.EchConfigList = string.Empty;
+                entry.EchForceQuery = string.Empty;
+                entry.PublicKey = string.Empty;
+                entry.ShortId = string.Empty;
+                entry.SpiderX = string.Empty;
+                entry.Flow = string.Empty;
+                entry.VlessEncryption = string.Empty;
+                entry.Finalmask = string.Empty;
+            }
+            else
+            {
+                entry.Username = string.Empty;
+            }
 
             if (!string.Equals(entry.Protocol, "vless", StringComparison.OrdinalIgnoreCase)
                 || !string.Equals(entry.Security, "tls", StringComparison.OrdinalIgnoreCase)
@@ -333,7 +364,7 @@ namespace XrayUI.Services
                 entry.EchForceQuery = string.Empty;
             }
 
-            if (entry.Protocol != "ss")
+            if (entry.Protocol != "ss" && entry.Protocol != "socks")
             {
                 entry.Encryption = entry.Security == "reality" ? "Reality"
                     : entry.Security == "tls" ? "TLS"
@@ -341,6 +372,32 @@ namespace XrayUI.Services
             }
 
             return entry;
+        }
+
+        public async Task<ServerEntry?> ShowChainProxyDialogAsync(
+            IEnumerable<ServerEntry> servers,
+            ServerEntry? existing = null)
+        {
+            var content = new AddChainProxyDialog(servers, existing);
+            ServerEntry? saved = null;
+
+            var dialog = CreateDialog();
+            dialog.Title = existing is null ? "链式代理" : "编辑链式代理";
+            dialog.PrimaryButtonText = "保存";
+            dialog.CloseButtonText = "取消";
+            dialog.DefaultButton = ContentDialogButton.Primary;
+            dialog.Content = content;
+
+            dialog.PrimaryButtonClick += (_, args) =>
+            {
+                if (content.TryCreateOrUpdate(out saved))
+                    return;
+
+                args.Cancel = true;
+            };
+
+            var result = await dialog.ShowAsync();
+            return result == ContentDialogResult.Primary ? saved : null;
         }
 
         // ── Edit local port ───────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using XrayUI.Helpers;
@@ -38,6 +39,8 @@ namespace XrayUI.ViewModels
         public SettingsService SettingsService => _settings;
 
         public Func<ServerEntry?> GetSelectedServer { get; set; } = () => null;
+
+        public Func<IEnumerable<ServerEntry>> GetAllServers { get; set; } = () => Array.Empty<ServerEntry>();
 
         // Snapshot of the server xray is actually running with, so reapply restarts
         // against the live session rather than whatever is now selected in the list.
@@ -228,7 +231,7 @@ namespace XrayUI.ViewModels
                 await CleanupPersistedTunRoutesAsync(appSettings);
             }
 
-            var configJson = XrayConfigBuilder.Build(server, appSettings, tunOutboundInterfaceName);
+            var configJson = XrayConfigBuilder.Build(server, appSettings, tunOutboundInterfaceName, GetAllServers());
             var ok = await _xray.StartAsync(configJson);
 
             if (!ok)
@@ -309,7 +312,7 @@ namespace XrayUI.ViewModels
                     settings.IsTunMode             = IsTunMode;
                     settings.IsSystemProxyEnabled  = _isSystemProxyEnabled;
 
-                    var cfg = XrayConfigBuilder.Build(activeServer, settings);
+                    var cfg = XrayConfigBuilder.Build(activeServer, settings, availableServers: GetAllServers());
 
                     var ok = await _xray.StartAsync(cfg);
                     if (!ok)

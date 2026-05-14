@@ -91,3 +91,4 @@ Generated\ Files/
 # Claude / AI
 .claude/
 /CLAUDE.md
+/BuildAndRun.ps1

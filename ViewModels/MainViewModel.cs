@@ -78,6 +78,7 @@ namespace XrayUI.ViewModels
 
             // Wire ControlPanel so it knows the current selected server
             ControlPanel.GetSelectedServer = () => ServerList.SelectedServer;
+            ControlPanel.GetAllServers = () => ServerList.Servers.ToList();
 
             ServerList.PropertyChanged   += OnServerListPropertyChanged;
             ControlPanel.PropertyChanged += OnControlPanelPropertyChanged;

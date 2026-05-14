@@ -57,6 +57,13 @@
                                     <FontIcon Glyph="&#xE710;" />
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="链式代理"
+                                            Command="{x:Bind ViewModel.AddChainProxyCommand}"
+                                            FontWeight="Normal">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xEF90;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                         </MenuFlyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>
@@ -227,19 +234,27 @@
                                 </Border>
                             </Grid>
 
-                            <StackPanel Orientation="Horizontal"
-                                        Spacing="8">
-                                <TextBlock Text="{x:Bind Host, Mode=OneWay}"
-                                           FontSize="13"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                <TextBlock Text="{x:Bind Port, Mode=OneWay}"
-                                           FontSize="13"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                <TextBlock Text="{x:Bind DisplayProtocol, Mode=OneWay}"
+                            <Grid>
+                                <StackPanel Orientation="Horizontal"
+                                            Spacing="8"
+                                            Visibility="{x:Bind StandardListVisibility, Mode=OneWay}">
+                                    <TextBlock Text="{x:Bind Host, Mode=OneWay}"
+                                               FontSize="13"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="{x:Bind Port, Mode=OneWay}"
+                                               FontSize="13"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="{x:Bind DisplayProtocol, Mode=OneWay}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               Foreground="{x:Bind Protocol, Mode=OneWay, Converter={StaticResource ProtocolToBrushConverter}}" />
+                                </StackPanel>
+                                <TextBlock Text="ProxyChain"
+                                           Visibility="{x:Bind ChainListVisibility, Mode=OneWay}"
                                            FontSize="13"
                                            FontWeight="SemiBold"
                                            Foreground="{x:Bind Protocol, Mode=OneWay, Converter={StaticResource ProtocolToBrushConverter}}" />
-                            </StackPanel>
+                            </Grid>
                         </StackPanel>
                     </Grid>
                 </DataTemplate>

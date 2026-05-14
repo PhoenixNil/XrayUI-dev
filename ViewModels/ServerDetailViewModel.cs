@@ -84,18 +84,43 @@ namespace XrayUI.ViewModels
 
         public string SelectedName => SelectedServer?.Name ?? "未选择服务器";
 
-        public string SelectedHost => SelectedServer?.Host ?? "-";
+        public string SelectedHostLabel
+            => SelectedServer?.IsChain == true ? "入口" : "地址";
 
-        public string SelectedPort => SelectedServer?.Port.ToString() ?? "-";
+        public string SelectedHost
+            => SelectedServer?.IsChain == true
+                ? SelectedServer.ChainEntryDisplayName
+                : SelectedServer?.Host ?? "-";
+
+        public string SelectedPortLabel
+            => SelectedServer?.IsChain == true ? "出口" : "端口";
+
+        public string SelectedPort
+            => SelectedServer?.IsChain == true
+                ? SelectedServer.ChainExitDisplayName
+                : SelectedServer?.Port.ToString() ?? "-";
 
         public string SelectedProtocol => SelectedServer?.DisplayProtocol ?? "-";
 
         public string SelectedSecurityLabel
-            => string.Equals(SelectedServer?.Protocol, "ss", StringComparison.OrdinalIgnoreCase)
-                ? "加密"
-                : "安全";
+            => (SelectedServer?.Protocol?.ToLowerInvariant()) switch
+            {
+                "ss" => "加密",
+                "socks" => "认证",
+                "chain" => "链路",
+                _ => "安全"
+            };
 
-        public string SelectedEncryption => SelectedServer?.Encryption ?? "-";
+        public string SelectedEncryption
+            => (SelectedServer?.Protocol?.ToLowerInvariant()) switch
+            {
+                "socks" => string.IsNullOrWhiteSpace(SelectedServer?.Username)
+                           && string.IsNullOrWhiteSpace(SelectedServer?.Password)
+                    ? "无认证"
+                    : "用户名/密码",
+                "chain" => SelectedServer?.ChainProtocolSummary ?? "-",
+                _ => SelectedServer?.Encryption ?? "-"
+            };
 
         public string SelectedShareLink
             => SelectedServer is null ? string.Empty : (NodeLinkSerializer.ToLink(SelectedServer) ?? string.Empty);
@@ -123,6 +148,9 @@ namespace XrayUI.ViewModels
                 };
             }
         }
+
+        public Visibility SelectedTransportVisibility
+            => SelectedServer?.IsChain == true ? Visibility.Collapsed : Visibility.Visible;
 
         public string LatencyText
         {
@@ -231,22 +259,42 @@ namespace XrayUI.ViewModels
                     OnPropertyChanged(nameof(SelectedName));
                     break;
                 case nameof(ServerEntry.Host):
+                    OnPropertyChanged(nameof(SelectedHostLabel));
                     OnPropertyChanged(nameof(SelectedHost));
                     CancelPendingLatencyTest();
                     ResetLatencyDisplay();
                     break;
                 case nameof(ServerEntry.Port):
+                    OnPropertyChanged(nameof(SelectedPortLabel));
                     OnPropertyChanged(nameof(SelectedPort));
                     CancelPendingLatencyTest();
                     ResetLatencyDisplay();
                     break;
                 case nameof(ServerEntry.Protocol):
                     OnPropertyChanged(nameof(SelectedProtocol));
+                    OnPropertyChanged(nameof(SelectedHostLabel));
+                    OnPropertyChanged(nameof(SelectedHost));
+                    OnPropertyChanged(nameof(SelectedPortLabel));
+                    OnPropertyChanged(nameof(SelectedPort));
                     OnPropertyChanged(nameof(SelectedSecurityLabel));
                     OnPropertyChanged(nameof(SelectedTransport));
+                    OnPropertyChanged(nameof(SelectedTransportVisibility));
                     OnPropertyChanged(nameof(SelectedShareLink));
                     break;
                 case nameof(ServerEntry.Encryption):
+                case nameof(ServerEntry.Username):
+                case nameof(ServerEntry.Password):
+                    OnPropertyChanged(nameof(SelectedEncryption));
+                    OnPropertyChanged(nameof(SelectedShareLink));
+                    break;
+                case nameof(ServerEntry.ChainEntryName):
+                    OnPropertyChanged(nameof(SelectedHost));
+                    break;
+                case nameof(ServerEntry.ChainExitName):
+                    OnPropertyChanged(nameof(SelectedPort));
+                    break;
+                case nameof(ServerEntry.ChainEntryProtocol):
+                case nameof(ServerEntry.ChainExitProtocol):
                     OnPropertyChanged(nameof(SelectedEncryption));
                     break;
                 case nameof(ServerEntry.Security):
@@ -270,12 +318,15 @@ namespace XrayUI.ViewModels
         private void NotifySelectedServerFieldsChanged()
         {
             OnPropertyChanged(nameof(SelectedName));
+            OnPropertyChanged(nameof(SelectedHostLabel));
             OnPropertyChanged(nameof(SelectedHost));
+            OnPropertyChanged(nameof(SelectedPortLabel));
             OnPropertyChanged(nameof(SelectedPort));
             OnPropertyChanged(nameof(SelectedProtocol));
             OnPropertyChanged(nameof(SelectedSecurityLabel));
             OnPropertyChanged(nameof(SelectedEncryption));
             OnPropertyChanged(nameof(SelectedTransport));
+            OnPropertyChanged(nameof(SelectedTransportVisibility));
             OnPropertyChanged(nameof(SelectedShareLink));
             OnPropertyChanged(nameof(CanTestLatency));
             TestLatencyCommand.NotifyCanExecuteChanged();

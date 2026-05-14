@@ -84,7 +84,7 @@
                                        TextWrapping="WrapWholeWords" />
 
                             <!-- Row 2: 地址 -->
-                            <TextBlock Text="地址"
+                            <TextBlock Text="{x:Bind ViewModel.SelectedHostLabel, Mode=OneWay}"
                                        Grid.Row="2"
                                        Grid.Column="0"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -96,7 +96,7 @@
                                        TextWrapping="WrapWholeWords" />
 
                             <!-- Row 3: 端口 -->
-                            <TextBlock Text="端口"
+                            <TextBlock Text="{x:Bind ViewModel.SelectedPortLabel, Mode=OneWay}"
                                        Grid.Row="3"
                                        Grid.Column="0"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -119,11 +119,13 @@
                             <TextBlock Grid.Row="5"
                                        Grid.Column="0"
                                        Text="传输"
+                                       Visibility="{x:Bind ViewModel.SelectedTransportVisibility, Mode=OneWay}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        VerticalAlignment="Center" />
                             <TextBlock Grid.Row="5"
                                        Grid.Column="1"
                                        Text="{x:Bind ViewModel.SelectedTransport, Mode=OneWay}"
+                                       Visibility="{x:Bind ViewModel.SelectedTransportVisibility, Mode=OneWay}"
                                        FontSize="16" />
 
 
