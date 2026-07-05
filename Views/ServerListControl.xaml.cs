@@ -21,7 +21,6 @@ namespace XrayUI.Views
             this.InitializeComponent();
 
             // Localize attached properties that x:Uid does not address cleanly.
-            AutomationProperties.SetName(FilterToggle, L.ServerList_FilterTooltip);
             AutomationProperties.SetName(SortButton,   L.ServerList_SortTooltip);
             ToolTipService.SetToolTip(SortActiveItem,  L.ServerList_SortActiveHint);
         }
@@ -186,14 +185,6 @@ namespace XrayUI.Views
                 Icon = new FontIcon { Glyph = glyph }
             };
         }
-
-        // Right-click latency-test mode menu pushes the chosen mode into the VM; the toolbar icon
-        // follows automatically via x:Bind on LatencyTestMode (see *IconVisibility below).
-        private void TestModeConnectItem_Click(object sender, RoutedEventArgs e)
-            => ViewModel.LatencyTestMode = "connect";
-
-        private void TestModeRealItem_Click(object sender, RoutedEventArgs e)
-            => ViewModel.LatencyTestMode = "real";
 
         // Toolbar icon visibility derived from the latency-test mode (bound from XAML).
         public static Visibility ConnectModeIconVisibility(string mode)

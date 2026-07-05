@@ -1253,10 +1253,10 @@
     <value>正在下载 {0} … {1:0.0} MB</value>
   </data>
   <data name="ServerList_TestModeConnect.Text" xml:space="preserve">
-    <value>一键测试延迟</value>
+    <value>Tcping Latency</value>
   </data>
   <data name="ServerList_TestModeReal.Text" xml:space="preserve">
-    <value>真连接测试</value>
+    <value>Real Latency</value>
   </data>
   <data name="Personalize_RoutingRegionTitle.Text" xml:space="preserve">
     <value>区域设置</value>

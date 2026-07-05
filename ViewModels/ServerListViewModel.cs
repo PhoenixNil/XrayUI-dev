@@ -629,6 +629,24 @@ namespace XrayUI.ViewModels
         [ObservableProperty]
         public partial string LatencyTestMode { get; set; }
 
+        partial void OnLatencyTestModeChanged(string value)
+        {
+            OnPropertyChanged(nameof(IsLatencyModeConnect));
+            OnPropertyChanged(nameof(IsLatencyModeReal));
+        }
+
+        public bool IsLatencyModeConnect
+        {
+            get => LatencyTestMode != "real";
+            set { if (value) LatencyTestMode = "connect"; }
+        }
+
+        public bool IsLatencyModeReal
+        {
+            get => LatencyTestMode == "real";
+            set { if (value) LatencyTestMode = "real"; }
+        }
+
 		// Probes Probes Current group latency and writes the result onto each ServerEntry: the
 		// round-trip ms on success, or -1 for any failure (timeout/unreachable, shown as a
 		// single red label). The async command auto-disables while running, so the button is
