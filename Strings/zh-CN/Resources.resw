@@ -756,7 +756,7 @@
     <value>搜索服务器</value>
   </data>
   <data name="ServerList_FilterLabelText.Text" xml:space="preserve">
-    <value>筛选条件:</value>
+    <value>筛选:</value>
   </data>
   <data name="ServerList_SortDefaultItem.Text" xml:space="preserve">
     <value>默认</value>
@@ -792,6 +792,9 @@
     <value>排序</value>
   </data>
   <data name="ServerList_TestLatencyTooltip" xml:space="preserve">
+    <value>测试延迟</value>
+  </data>
+  <data name="ServerList_TestLatencyButtonText.Text" xml:space="preserve">
     <value>测试延迟</value>
   </data>
   <data name="Confirm_DeleteBatchMsg" xml:space="preserve">
@@ -1253,10 +1256,10 @@
     <value>正在下载 {0} … {1:0.0} MB</value>
   </data>
   <data name="ServerList_TestModeConnect.Text" xml:space="preserve">
-    <value>Tcping Latency</value>
+    <value>Tcping 延迟</value>
   </data>
   <data name="ServerList_TestModeReal.Text" xml:space="preserve">
-    <value>Real Latency</value>
+    <value>真实延迟</value>
   </data>
   <data name="Personalize_RoutingRegionTitle.Text" xml:space="preserve">
     <value>区域设置</value>

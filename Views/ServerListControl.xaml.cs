@@ -21,8 +21,13 @@ namespace XrayUI.Views
             this.InitializeComponent();
 
             // Localize attached properties that x:Uid does not address cleanly.
-            AutomationProperties.SetName(SortButton,   L.ServerList_SortTooltip);
-            ToolTipService.SetToolTip(SortActiveItem,  L.ServerList_SortActiveHint);
+            AutomationProperties.SetName(FilterComboBox,         L.ServerList_FilterTooltip);
+            AutomationProperties.SetName(SortButton,             L.ServerList_SortTooltip);
+            AutomationProperties.SetName(TestLatencySplitButton, L.ServerList_TestLatencyTooltip);
+            ToolTipService.SetToolTip(FilterComboBox,         L.ServerList_FilterTooltip);
+            ToolTipService.SetToolTip(SortButton,             L.ServerList_SortTooltip);
+            ToolTipService.SetToolTip(TestLatencySplitButton, L.ServerList_TestLatencyTooltip);
+            ToolTipService.SetToolTip(SortActiveItem,        L.ServerList_SortActiveHint);
         }
 
         private void ServerSearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
@@ -185,13 +190,6 @@ namespace XrayUI.Views
                 Icon = new FontIcon { Glyph = glyph }
             };
         }
-
-        // Toolbar icon visibility derived from the latency-test mode (bound from XAML).
-        public static Visibility ConnectModeIconVisibility(string mode)
-            => mode == "real" ? Visibility.Collapsed : Visibility.Visible;
-
-        public static Visibility RealModeIconVisibility(string mode)
-            => mode == "real" ? Visibility.Visible : Visibility.Collapsed;
 
         public static double ActiveBadgeOpacity(bool isActive)
             => isActive ? 1.0 : 0.0;

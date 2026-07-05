@@ -794,6 +794,9 @@
   <data name="ServerList_TestLatencyTooltip" xml:space="preserve">
     <value>Test latency</value>
   </data>
+  <data name="ServerList_TestLatencyButtonText.Text" xml:space="preserve">
+    <value>Test latency</value>
+  </data>
   <data name="Confirm_DeleteBatchMsg" xml:space="preserve">
     <value>Are you sure you want to delete the selected {0} items?</value>
   </data>
