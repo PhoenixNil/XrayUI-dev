@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -20,6 +20,7 @@ namespace XrayUI
         private readonly FrameworkElement _rootElement;
         private readonly Border _miniDragRegion;
         private readonly Button _miniExpandButton;
+        private readonly WindowManager _windowManager;
         private readonly WindowMessageMonitor _windowMessageMonitor;
         // We own the tray icon directly (rather than WindowManager.IsVisibleInTray) so the
         // tooltip can track connection state; see ConfigureTray.
@@ -47,7 +48,7 @@ namespace XrayUI
         private const uint WmNclButtonDown   = 0x00A1;
         private const uint WmNclButtonDblClk = 0x00A3;
         private const int HtCaption = 0x0002;
-        private const int FullWindowWidth = 950;
+        private const int FullWindowWidth = 1000;
         private const int FullWindowHeight = 600;
         private const int MiniWindowWidth = 330;
         private const int MiniWindowHeight = 136;
@@ -86,7 +87,9 @@ namespace XrayUI
             // Get attaches WinUIEx window management to this window for its side effects
             // (min-size clamping, placement); we don't keep the reference — the tray icon is
             // owned directly via _trayIcon so we can drive its tooltip from connection state.
-            WindowManager.Get(this);
+            _windowManager = WindowManager.Get(this);
+            _windowManager.MinWidth = FullWindowWidth;
+            _windowManager.MinHeight = FullWindowHeight;
             _windowMessageMonitor = new WindowMessageMonitor(this);
             _windowMessageMonitor.WindowMessageReceived += OnWindowMessageReceived;
             GlobalHotkeyStore.HotkeysChanged += OnGlobalHotkeysChanged;
@@ -642,3 +645,5 @@ namespace XrayUI
             IntPtr maximumWorkingSetSize);
     }
 }
+
+

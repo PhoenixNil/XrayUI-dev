@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 
 <UserControl x:Class="XrayUI.Views.ServerListControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -25,58 +25,59 @@
                        Text="服务器列表"
                        FontSize="20"
                        FontWeight="SemiBold" />
-            <StackPanel Orientation="Horizontal"
-                        HorizontalAlignment="Left"
-                        Spacing="8"
-                        Margin="0,8,0,0">
-                <DropDownButton x:Name="BtnAdd"
-                                Padding="12,6">
-                    <DropDownButton.Content>
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock x:Uid="ServerList_AddBtnText" Text="添加" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </DropDownButton.Content>
-                    <DropDownButton.Flyout>
-                        <MenuFlyout Placement="BottomEdgeAlignedLeft">
-                            <MenuFlyoutItem x:Uid="ServerList_ImportNodeItem"
-                                            Text="导入节点"
-                                            Command="{x:Bind ViewModel.ImportFromLinkCommand}"
-                                            FontWeight="Normal">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE77F;" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutItem x:Uid="ServerList_AddSubscriptionItem"
-                                            Text="添加订阅"
-                                            Command="{x:Bind ViewModel.OpenSubscriptionsCommand}"
-                                            FontWeight="Normal">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xED11;" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutItem x:Uid="ServerList_AddManualItem"
-                                            Text="手动添加"
-                                            Command="{x:Bind ViewModel.AddManualCommand}"
-                                            FontWeight="Normal">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE710;" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutItem x:Uid="ServerList_AddChainProxyItem"
-                                            Text="链式代理"
-                                            Command="{x:Bind ViewModel.AddChainProxyCommand}"
-                                            FontWeight="Normal">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xEF90;" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                        </MenuFlyout>
-                    </DropDownButton.Flyout>
-                </DropDownButton>
-                <Border Background="{ThemeResource ControlFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="4">
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Left"
+                            Spacing="8">
+                    <DropDownButton x:Name="BtnAdd"
+                                    Padding="12,6">
+                        <DropDownButton.Content>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock x:Uid="ServerList_AddBtnText" Text="添加" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DropDownButton.Content>
+                        <DropDownButton.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                                <MenuFlyoutItem x:Uid="ServerList_ImportNodeItem"
+                                                Text="导入节点"
+                                                Command="{x:Bind ViewModel.ImportFromLinkCommand}"
+                                                FontWeight="Normal">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE77F;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Uid="ServerList_AddSubscriptionItem"
+                                                Text="添加订阅"
+                                                Command="{x:Bind ViewModel.OpenSubscriptionsCommand}"
+                                                FontWeight="Normal">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xED11;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Uid="ServerList_AddManualItem"
+                                                Text="手动添加"
+                                                Command="{x:Bind ViewModel.AddManualCommand}"
+                                                FontWeight="Normal">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE710;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Uid="ServerList_AddChainProxyItem"
+                                                Text="链式代理"
+                                                Command="{x:Bind ViewModel.AddChainProxyCommand}"
+                                                FontWeight="Normal">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xEF90;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                            </MenuFlyout>
+                        </DropDownButton.Flyout>
+                    </DropDownButton>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -87,9 +88,9 @@
                                 Grid.Column="0"
                                 Command="{x:Bind ViewModel.EditServerCommand}"
                                 IsEnabled="{x:Bind ViewModel.CanEditSelectedServer, Mode=OneWay}"
-                                BorderThickness="0"
-                                CornerRadius="0"
-                                Padding="10,6">
+                                Padding="12,6"
+                                BorderThickness="1,1,0,1"
+                                CornerRadius="4,0,0,4">
                             <StackPanel Orientation="Horizontal">
                                 <FontIcon Glyph="&#xE70F;"
                                           Margin="0,0,5,0" />
@@ -103,9 +104,9 @@
                                 Grid.Column="2"
                                 Command="{x:Bind ViewModel.RemoveServerCommand}"
                                 IsEnabled="{x:Bind ViewModel.CanRemoveSelectedServer, Mode=OneWay}"
-                                BorderThickness="0"
-                                CornerRadius="0"
-                                Padding="10,6">
+                                Padding="12,6"
+                                BorderThickness="0,1,1,1"
+                                CornerRadius="0,4,4,0">
                             <StackPanel Orientation="Horizontal">
                                 <FontIcon Glyph="&#xE74D;"
                                           Margin="0,0,5,0" />
@@ -113,60 +114,64 @@
                             </StackPanel>
                         </Button>
                     </Grid>
-                </Border>
-                <StackPanel Orientation="Horizontal"
-                            Spacing="6"
-                            VerticalAlignment="Center"
-                            Visibility="{x:Bind ViewModel.IsChipBarVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <TextBlock x:Uid="ServerList_FilterLabelText"
-                               Text="筛选:"
-                               FontSize="14"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               VerticalAlignment="Center" />
-                    <ComboBox x:Name="FilterComboBox"
-                              ItemsSource="{x:Bind ViewModel.GroupChips, Mode=OneWay}"
-                              SelectedItem="{x:Bind ViewModel.SelectedChip, Mode=TwoWay}">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate x:DataType="vm:ServerGroupChip">
-                                <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}"
-                                           TextTrimming="CharacterEllipsis" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
                 </StackPanel>
-                <DropDownButton x:Name="SortButton"
-                                Background="Transparent"
-                                BorderBrush="Transparent"
-                                Visibility="{x:Bind ViewModel.IsChipBarVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <DropDownButton.Content>
-                        <FontIcon Glyph="&#xE8CB;" FontSize="16" />
-                    </DropDownButton.Content>
-                    <DropDownButton.Flyout>
-                        <MenuFlyout Placement="Bottom">
-                            <RadioMenuFlyoutItem x:Uid="ServerList_SortDefaultItem"
-                                                 Text="默认"
-                                                 GroupName="ServerSortMode"
-                                                 IsChecked="{x:Bind ViewModel.IsSortDefault, Mode=TwoWay}" />
-                            <RadioMenuFlyoutItem x:Name="SortActiveItem"
-                                                 x:Uid="ServerList_SortActiveItem"
-                                                 Text="当前连接"
-                                                 GroupName="ServerSortMode"
-                                                 IsChecked="{x:Bind ViewModel.IsSortActive, Mode=TwoWay}"
-                                                 IsEnabled="{x:Bind ViewModel.CanSortByActive, Mode=OneWay}" />
-                            <RadioMenuFlyoutItem x:Uid="ServerList_SortProtocolItem"
-                                                 Text="协议"
-                                                 GroupName="ServerSortMode"
-                                                 IsChecked="{x:Bind ViewModel.IsSortProtocol, Mode=TwoWay}" />
-                            <RadioMenuFlyoutItem x:Name="SortLatencyItem"
-                                                 x:Uid="ServerList_SortLatencyItem"
-                                                 Text="延迟"
-                                                 GroupName="ServerSortMode"
-                                                 IsChecked="{x:Bind ViewModel.IsSortLatency, Mode=TwoWay}"
-                                                 IsEnabled="{x:Bind ViewModel.CanSortByLatency, Mode=OneWay}" />
-                        </MenuFlyout>
-                    </DropDownButton.Flyout>
-                </DropDownButton>
-            </StackPanel>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Spacing="8"
+                            Visibility="{x:Bind ViewModel.IsChipBarVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal"
+                                Spacing="6"
+                                VerticalAlignment="Center">
+                        <TextBlock x:Uid="ServerList_FilterLabelText"
+                                   Text="筛选:"
+                                   FontSize="14"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   VerticalAlignment="Center" />
+                        <ComboBox x:Name="FilterComboBox"
+                                  Width="120"
+                                  ItemsSource="{x:Bind ViewModel.GroupChips, Mode=OneWay}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedChip, Mode=TwoWay}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ServerGroupChip">
+                                    <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+                    <DropDownButton x:Name="SortButton"
+                                    Padding="12,6">
+                        <DropDownButton.Content>
+                            <FontIcon Glyph="&#xE8CB;" FontSize="16" />
+                        </DropDownButton.Content>
+                        <DropDownButton.Flyout>
+                            <MenuFlyout Placement="Bottom">
+                                <RadioMenuFlyoutItem x:Uid="ServerList_SortDefaultItem"
+                                                     Text="默认"
+                                                     GroupName="ServerSortMode"
+                                                     IsChecked="{x:Bind ViewModel.IsSortDefault, Mode=TwoWay}" />
+                                <RadioMenuFlyoutItem x:Name="SortActiveItem"
+                                                     x:Uid="ServerList_SortActiveItem"
+                                                     Text="当前连接"
+                                                     GroupName="ServerSortMode"
+                                                     IsChecked="{x:Bind ViewModel.IsSortActive, Mode=TwoWay}"
+                                                     IsEnabled="{x:Bind ViewModel.CanSortByActive, Mode=OneWay}" />
+                                <RadioMenuFlyoutItem x:Uid="ServerList_SortProtocolItem"
+                                                     Text="协议"
+                                                     GroupName="ServerSortMode"
+                                                     IsChecked="{x:Bind ViewModel.IsSortProtocol, Mode=TwoWay}" />
+                                <RadioMenuFlyoutItem x:Name="SortLatencyItem"
+                                                     x:Uid="ServerList_SortLatencyItem"
+                                                     Text="延迟"
+                                                     GroupName="ServerSortMode"
+                                                     IsChecked="{x:Bind ViewModel.IsSortLatency, Mode=TwoWay}"
+                                                     IsEnabled="{x:Bind ViewModel.CanSortByLatency, Mode=OneWay}" />
+                            </MenuFlyout>
+                        </DropDownButton.Flyout>
+                    </DropDownButton>
+                </StackPanel>
+            </Grid>
         </StackPanel>
         <Grid Grid.Row="1"
               Margin="0,16,0,0"
@@ -333,3 +338,9 @@
         </ListView>
     </Grid>
 </UserControl>
+
+
+
+
+
+
