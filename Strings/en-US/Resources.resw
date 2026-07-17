@@ -332,8 +332,14 @@
   <data name="Log_MaskOff" xml:space="preserve">
     <value>Off</value>
   </data>
-  <data name="Log_Verbose" xml:space="preserve">
-    <value>Verbose logging</value>
+  <data name="Log_Level" xml:space="preserve">
+    <value>Log Level</value>
+  </data>
+  <data name="Log_DnsLog" xml:space="preserve">
+    <value>DNS Query Log</value>
+  </data>
+  <data name="Log_DnsLogOn" xml:space="preserve">
+    <value>On</value>
   </data>
   <data name="Log_AutoScroll" xml:space="preserve">
     <value>Auto Scroll</value>

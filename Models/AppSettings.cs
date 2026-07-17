@@ -36,10 +36,18 @@ namespace XrayUI.Models
         public string? LastSelectedServerId { get; set; }
         /// <summary>"" | "quarter" | "half" | "full"; controls Xray log IP masking.</summary>
         public string LogMaskAddress { get; set; } = string.Empty;
-        /// <summary>Verbose xray error log: true = loglevel "info" (per-connection sniffing/routing/
-        /// transport detail), false (default) = "warning". Independent of the access log, which
-        /// always prints one [inbound -> outbound] verdict line per connection.</summary>
+        /// <summary>Legacy verbose toggle (true → "info", false → "warning"). SettingsService
+        /// migrates this into <see cref="XrayLogLevel"/> on load; not read anywhere else.</summary>
         public bool VerboseXrayLog { get; set; } = false;
+        /// <summary>"debug" | "info" | "warning". Populated from the legacy
+        /// <see cref="VerboseXrayLog"/> bool by SettingsService.LoadSettingsAsync if unset, so
+        /// other readers can treat null as "not yet migrated" rather than re-deriving the
+        /// fallback themselves. See <see cref="XrayUI.Services.XrayLogLevel"/>. Independent of
+        /// the access log, which always prints one [inbound -> outbound] verdict line per
+        /// connection.</summary>
+        public string? XrayLogLevel { get; set; }
+        /// <summary>Enable Xray's per-query DNS resolution log (log.dnsLog).</summary>
+        public bool DnsLog { get; set; } = false;
 
         // ── Internationalization ──────────────────────────────────────────────
         /// <summary>BCP-47 tag from <see cref="XrayUI.Helpers.LanguageHelper.SupportedLanguages"/>, or null to follow system.</summary>

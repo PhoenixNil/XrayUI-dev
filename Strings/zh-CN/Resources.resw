@@ -332,8 +332,14 @@
   <data name="Log_MaskOff" xml:space="preserve">
     <value>关闭</value>
   </data>
-  <data name="Log_Verbose" xml:space="preserve">
-    <value>详细日志</value>
+  <data name="Log_Level" xml:space="preserve">
+    <value>日志级别</value>
+  </data>
+  <data name="Log_DnsLog" xml:space="preserve">
+    <value>DNS 查询日志</value>
+  </data>
+  <data name="Log_DnsLogOn" xml:space="preserve">
+    <value>开启</value>
   </data>
   <data name="Log_AutoScroll" xml:space="preserve">
     <value>自动滚动</value>

@@ -68,6 +68,11 @@ namespace XrayUI.Services
 
                 var json = await File.ReadAllTextAsync(SettingsFile).ConfigureAwait(false);
                 _cachedSettings = JsonSerializer.Deserialize(json, AppJsonSerializerContext.Default.AppSettings) ?? new AppSettings();
+
+                // One-time migration: settings.json written before XrayLogLevel existed only has
+                // the legacy VerboseXrayLog bool. Populate the new field so every other reader
+                // can trust it's non-null instead of re-deriving the fallback on every read.
+                _cachedSettings.XrayLogLevel ??= _cachedSettings.VerboseXrayLog ? XrayLogLevel.Info : XrayLogLevel.Warning;
                 return _cachedSettings;
             }
             catch (Exception ex)

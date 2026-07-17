@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Dispatching;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml.Media;
 using System;
@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
 using WinUIEx;
 using XrayUI.Helpers;
+using XrayUI.Models;
 using XrayUI.Services;
 
 namespace XrayUI.Views
@@ -52,7 +53,10 @@ namespace XrayUI.Views
 			ToolTipService.SetToolTip(LogPrivacyButton, L.Log_PrivacyTooltip);
             MaskAddressSubMenu.Text = L.Log_IpMask;
             MaskOffMenuItem.Text    = L.Log_MaskOff;
-            VerboseLogMenuItem.Text = L.Log_Verbose;
+            LogLevelSubMenu.Text    = L.Log_Level;
+            DnsLogSubMenu.Text      = L.Log_DnsLog;
+            DnsLogOffMenuItem.Text  = L.Log_MaskOff;
+            DnsLogOnMenuItem.Text   = L.Log_DnsLogOn;
             AutoScrollToggle.Content = L.Log_AutoScroll;
             CopyButton.Content       = L.Log_CopyAll;
             ClearButton.Content      = L.Log_Clear;
@@ -144,12 +148,14 @@ namespace XrayUI.Views
             {
                 var settings = await _settings.LoadSettingsAsync();
                 SetMaskAddressSelection(LogMaskAddress.Normalize(settings.LogMaskAddress));
-                VerboseLogMenuItem.IsChecked = settings.VerboseXrayLog;
+                SetLogLevelSelection(XrayLogLevel.Normalize(settings.XrayLogLevel));
+                SetDnsLogSelection(settings.DnsLog);
             }
             catch
             {
                 SetMaskAddressSelection(LogMaskAddress.Off);
-                VerboseLogMenuItem.IsChecked = false;
+                SetLogLevelSelection(XrayLogLevel.Warning);
+                SetDnsLogSelection(false);
             }
         }
 
@@ -159,6 +165,19 @@ namespace XrayUI.Views
             MaskQuarterMenuItem.IsChecked = value == LogMaskAddress.Quarter;
             MaskHalfMenuItem.IsChecked    = value == LogMaskAddress.Half;
             MaskFullMenuItem.IsChecked    = value == LogMaskAddress.Full;
+        }
+
+        private void SetLogLevelSelection(string value)
+        {
+            LogLevelDebugMenuItem.IsChecked   = value == XrayLogLevel.Debug;
+            LogLevelInfoMenuItem.IsChecked    = value == XrayLogLevel.Info;
+            LogLevelWarningMenuItem.IsChecked = value == XrayLogLevel.Warning;
+        }
+
+        private void SetDnsLogSelection(bool value)
+        {
+            DnsLogOffMenuItem.IsChecked = !value;
+            DnsLogOnMenuItem.IsChecked  = value;
         }
 
         private void UpdateStatus()
@@ -191,53 +210,82 @@ namespace XrayUI.Views
                 return;
             }
 
+            // The off item carries the sentinel tag "off" (an empty-string Tag round-trips
+            // unreliably through XAML); Normalize maps it back to Off ("").
             var value = LogMaskAddress.Normalize(item.Tag as string);
             SetMaskAddressSelection(value);
 
-            try
+            await ApplyLogSettingAsync(L.Log_PrivacyTitle, s =>
             {
-                var settings = await _settings.LoadSettingsAsync();
-                if (LogMaskAddress.Normalize(settings.LogMaskAddress) == value)
+                if (LogMaskAddress.Normalize(s.LogMaskAddress) == value)
                 {
-                    return;
+                    return false;
                 }
 
-                settings.LogMaskAddress = value;
-                await _settings.SaveSettingsAsync(settings);
-
-                if (!_xray.IsRunning)
-                {
-                    return;
-                }
-
-                if (settings.IsTunMode)
-                {
-                    await ShowInfoAsync(L.Log_PrivacyTitle, L.Log_PrivacySaved);
-                    return;
-                }
-
-                await _reapplyConfigAsync();
-            }
-            catch (Exception ex)
-            {
-                await ShowInfoAsync(L.Log_PrivacyTitle, Loc.Format("Log_PrivacyFailed", ex.Message));
-            }
+                s.LogMaskAddress = value;
+                return true;
+            });
         }
 
-        private async void VerboseLogMenuItem_Click(object sender, RoutedEventArgs e)
+        private async void LogLevelMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            // ToggleMenuFlyoutItem has already flipped IsChecked by the time Click fires.
-            var value = VerboseLogMenuItem.IsChecked;
+            if (sender is not RadioMenuFlyoutItem item)
+            {
+                return;
+            }
 
+            var value = XrayLogLevel.Normalize(item.Tag as string);
+            SetLogLevelSelection(value);
+
+            await ApplyLogSettingAsync(L.Log_Level, s =>
+            {
+                if (XrayLogLevel.Normalize(s.XrayLogLevel) == value)
+                {
+                    return false;
+                }
+
+                s.XrayLogLevel = value;
+                return true;
+            });
+        }
+
+        private async void DnsLogMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not RadioMenuFlyoutItem item)
+            {
+                return;
+            }
+
+            var value = (item.Tag as string) == "on";
+            SetDnsLogSelection(value);
+
+            await ApplyLogSettingAsync(L.Log_DnsLog, s =>
+            {
+                if (s.DnsLog == value)
+                {
+                    return false;
+                }
+
+                s.DnsLog = value;
+                return true;
+            });
+        }
+
+        /// <summary>
+        /// Shared save path for the log-settings flyout: persists the mutation, then hot-reapplies
+        /// the config (proxy mode) or tells the user it applies next session (TUN mode).
+        /// <paramref name="apply"/> returns false when the stored value already matches.
+        /// </summary>
+        private async Task ApplyLogSettingAsync(string title, Func<AppSettings, bool> apply)
+        {
             try
             {
                 var settings = await _settings.LoadSettingsAsync();
-                if (settings.VerboseXrayLog == value)
+                if (!apply(settings))
                 {
                     return;
                 }
 
-                settings.VerboseXrayLog = value;
                 await _settings.SaveSettingsAsync(settings);
 
                 if (!_xray.IsRunning)
@@ -247,7 +295,7 @@ namespace XrayUI.Views
 
                 if (settings.IsTunMode)
                 {
-                    await ShowInfoAsync(L.Log_Verbose, L.Log_PrivacySaved);
+                    await ShowInfoAsync(title, L.Log_PrivacySaved);
                     return;
                 }
 
@@ -255,7 +303,7 @@ namespace XrayUI.Views
             }
             catch (Exception ex)
             {
-                await ShowInfoAsync(L.Log_Verbose, Loc.Format("Log_PrivacyFailed", ex.Message));
+                await ShowInfoAsync(title, Loc.Format("Log_PrivacyFailed", ex.Message));
             }
         }
 

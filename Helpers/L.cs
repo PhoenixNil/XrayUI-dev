@@ -197,7 +197,9 @@ public static class L
     public static string Log_PrivacySaved  => Loc.GetString("Log_PrivacySaved");
     public static string Log_IpMask        => Loc.GetString("Log_IpMask");
     public static string Log_MaskOff       => Loc.GetString("Log_MaskOff");
-    public static string Log_Verbose       => Loc.GetString("Log_Verbose");
+    public static string Log_Level         => Loc.GetString("Log_Level");
+    public static string Log_DnsLog        => Loc.GetString("Log_DnsLog");
+    public static string Log_DnsLogOn      => Loc.GetString("Log_DnsLogOn");
     public static string Log_AutoScroll    => Loc.GetString("Log_AutoScroll");
     public static string Log_CopyAll       => Loc.GetString("Log_CopyAll");
     public static string Log_Clear         => Loc.GetString("Log_Clear");

@@ -67,7 +67,7 @@
                                     <RadioMenuFlyoutItem x:Name="MaskOffMenuItem"
                                                          Text="关闭"
                                                          GroupName="LogMaskAddressGroup"
-                                                         Tag=""
+                                                         Tag="off"
                                                          Click="MaskAddressMenuItem_Click" />
                                     <RadioMenuFlyoutItem x:Name="MaskQuarterMenuItem"
                                                          Text="quarter"
@@ -85,8 +85,35 @@
                                                          Tag="full"
                                                          Click="MaskAddressMenuItem_Click" />
                                 </MenuFlyoutSubItem>
-                                <ToggleMenuFlyoutItem x:Name="VerboseLogMenuItem"
-                                                      Click="VerboseLogMenuItem_Click" />
+                                <MenuFlyoutSubItem x:Name="LogLevelSubMenu" Text="日志级别">
+                                    <RadioMenuFlyoutItem x:Name="LogLevelDebugMenuItem"
+                                                         Text="Debug"
+                                                         GroupName="LogLevelGroup"
+                                                         Tag="debug"
+                                                         Click="LogLevelMenuItem_Click" />
+                                    <RadioMenuFlyoutItem x:Name="LogLevelInfoMenuItem"
+                                                         Text="Info"
+                                                         GroupName="LogLevelGroup"
+                                                         Tag="info"
+                                                         Click="LogLevelMenuItem_Click" />
+                                    <RadioMenuFlyoutItem x:Name="LogLevelWarningMenuItem"
+                                                         Text="Warning"
+                                                         GroupName="LogLevelGroup"
+                                                         Tag="warning"
+                                                         Click="LogLevelMenuItem_Click" />
+                                </MenuFlyoutSubItem>
+                                <MenuFlyoutSubItem x:Name="DnsLogSubMenu" Text="DNS 查询日志">
+                                    <RadioMenuFlyoutItem x:Name="DnsLogOffMenuItem"
+                                                         Text="关闭"
+                                                         GroupName="DnsLogGroup"
+                                                         Tag="off"
+                                                         Click="DnsLogMenuItem_Click" />
+                                    <RadioMenuFlyoutItem x:Name="DnsLogOnMenuItem"
+                                                         Text="开启"
+                                                         GroupName="DnsLogGroup"
+                                                         Tag="on"
+                                                         Click="DnsLogMenuItem_Click" />
+                                </MenuFlyoutSubItem>
                             </MenuFlyout>
                         </Button.Flyout>
                     </Button>
