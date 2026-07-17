@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Plain net10.0 (no -windows TFM, no WinUI): the tested sources are pure
+         parsing/serialization logic. Linking them here instead of referencing
+         the app project keeps the test build free of XAML compile, CsWinRT
+         projection, and the Windows App SDK runtime. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Keep versions in lockstep with XrayUI-dev.csproj so linked sources
+         compile against the same API surface the app ships with. -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="YamlDotNet" Version="18.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.1" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Production sources under test, compiled in directly. If a linked file
+         gains a dependency on WinUI/WinAppSDK types, this project stops
+         building — that is the signal to either stub the dependency (see
+         LocalizationStubs.cs) or keep the new dependency out of parser-layer
+         code. -->
+    <Compile Include="..\Models\ServerEntry.cs" Link="Prod\Models\ServerEntry.cs" />
+    <Compile Include="..\Services\NodeLinkParser.cs" Link="Prod\Services\NodeLinkParser.cs" />
+    <Compile Include="..\Services\NodeLinkSerializer.cs" Link="Prod\Services\NodeLinkSerializer.cs" />
+    <Compile Include="..\Services\ClashConfigParser.cs" Link="Prod\Services\ClashConfigParser.cs" />
+    <Compile Include="..\Services\CustomRuleValueParser.cs" Link="Prod\Services\CustomRuleValueParser.cs" />
+    <Compile Include="..\Services\XhttpSettings.cs" Link="Prod\Services\XhttpSettings.cs" />
+    <Compile Include="..\Services\EchSettings.cs" Link="Prod\Services\EchSettings.cs" />
+    <Compile Include="..\Services\FinalmaskJson.cs" Link="Prod\Services\FinalmaskJson.cs" />
+  </ItemGroup>
+
+</Project>

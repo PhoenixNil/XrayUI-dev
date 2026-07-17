@@ -42,6 +42,16 @@
     <ApplicationDefinition Remove="updater-rs\**" />
   </ItemGroup>
 
+  <!-- The unit test project (XrayUI.Tests) nests inside this project's root;
+       keep its sources out of the app's default globs the same way updater-rs is. -->
+  <ItemGroup>
+    <Compile Remove="XrayUI.Tests\**" />
+    <Content Remove="XrayUI.Tests\**" />
+    <None Remove="XrayUI.Tests\**" />
+    <Page Remove="XrayUI.Tests\**" />
+    <ApplicationDefinition Remove="XrayUI.Tests\**" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- Default engine binaries (x64). Used for empty RID (`dotnet build` / BuildAndRun.ps1)
          and explicit -r win-x64 publishes. Explicit form avoids silently matching
