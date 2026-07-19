@@ -62,7 +62,7 @@ namespace XrayUI.Services
             {
                 if (!File.Exists(SettingsFile))
                 {
-                    _cachedSettings = new AppSettings();
+                    _cachedSettings = new AppSettings { RoutingRegion = InferDefaultRoutingRegion() };
                     return _cachedSettings;
                 }
 
@@ -80,6 +80,27 @@ namespace XrayUI.Services
                 Debug.WriteLine($"[SettingsService] Failed to load settings: {ex.Message}");
                 return new AppSettings();
             }
+        }
+
+        /// <summary>
+        /// First-run default for <see cref="AppSettings.RoutingRegion"/>. Deliberately narrow:
+        /// only an explicit RU/IR Windows home region deviates from "cn" — geosite ships domestic
+        /// lists for cn/ru/ir only, and system locale/region is a weak signal for everyone else
+        /// (many zh users run en-US Windows or set region to US on VPS/VMs).
+        /// </summary>
+        private static string InferDefaultRoutingRegion()
+        {
+            try
+            {
+                var region = Windows.System.UserProfile.GlobalizationPreferences.HomeGeographicRegion;
+                if (string.Equals(region, "RU", StringComparison.OrdinalIgnoreCase)) return "ru";
+                if (string.Equals(region, "IR", StringComparison.OrdinalIgnoreCase)) return "ir";
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SettingsService] Region inference failed: {ex.Message}");
+            }
+            return "cn";
         }
 
         public async Task SaveSettingsAsync(AppSettings settings)
