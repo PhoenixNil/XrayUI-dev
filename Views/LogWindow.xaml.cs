@@ -47,6 +47,9 @@ namespace XrayUI.Views
 
             this.SetWindowSize(900, 600);
             AppWindow.Title = L.Log_Title;
+            ExtendsContentIntoTitleBar = true;
+            SetTitleBar(AppTitleBar);
+            AppTitleBar.Title = L.Log_Title;
             ThemeHelper.FollowAppTheme(this, WindowRoot);
             SystemBackdrop = new MicaBackdrop();
 

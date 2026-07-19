@@ -32,6 +32,7 @@ namespace XrayUI.Views
 
             this.SetWindowSize(620, 460);
             AppWindow.Title = L.CustomRules_Title;
+            AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "icons", "output.ico"));
             ThemeHelper.FollowAppTheme(this, WindowRoot);
             // Set the backdrop in code, AFTER FollowAppTheme has applied the correct theme.
             // Declaring it in XAML paints Mica in the default theme first, then visibly retints

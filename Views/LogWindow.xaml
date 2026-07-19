@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 
 <Window x:Class="XrayUI.Views.LogWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -10,13 +10,21 @@
 
     <Grid x:Name="WindowRoot" RowSpacing="0">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- Custom title bar — registered via SetTitleBar() in code-behind; Title set there via L.* -->
+        <TitleBar x:Name="AppTitleBar" Grid.Row="0">
+            <TitleBar.IconSource>
+                <FontIconSource  Glyph="&#xE9D9;" />
+            </TitleBar.IconSource>
+        </TitleBar>
+
         <!-- Log text area -->
         <ScrollViewer x:Name="LogScrollViewer"
-                      Grid.Row="0"
+                      Grid.Row="1"
                       Padding="12,12,12,0"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Auto">
@@ -29,7 +37,7 @@
         </ScrollViewer>
 
         <!-- Toolbar -->
-        <Border Grid.Row="1"
+        <Border Grid.Row="2"
                 Padding="12,8"
                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                 BorderThickness="0,1,0,0">
