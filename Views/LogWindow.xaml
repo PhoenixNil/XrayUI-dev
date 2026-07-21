@@ -22,19 +22,30 @@
             </TitleBar.IconSource>
         </TitleBar>
 
-        <!-- Log text area -->
+        <!-- Log text area — one Paragraph per buffer line, timestamp Run dimmed
+             (see LogLineParser); built in code-behind. -->
         <ScrollViewer x:Name="LogScrollViewer"
                       Grid.Row="1"
                       Padding="12,12,12,0"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Auto">
-            <TextBlock x:Name="LogTextBlock"
-                       FontFamily="Cascadia Code, Consolas, Courier New"
-                       FontSize="12"
-                       IsTextSelectionEnabled="True"
-                       TextWrapping="NoWrap"
-                       Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+            <RichTextBlock x:Name="LogRichText"
+                           FontFamily="Cascadia Code, Consolas, Courier New"
+                           FontSize="12"
+                           IsTextSelectionEnabled="True"
+                           TextWrapping="NoWrap"
+                           Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
         </ScrollViewer>
+
+        <!-- Code-created Runs can't reference {ThemeResource} directly, and
+             Application.Current.Resources[key] would resolve system brushes
+             against the (never-set) app-level theme instead of this window's
+             tracked theme — so this real, collapsed element carries the brush,
+             correctly inheriting WindowRoot's theme. Re-read on ActualThemeChanged. -->
+        <TextBlock x:Name="TimestampBrushSource"
+                   Grid.Row="1"
+                   Visibility="Collapsed"
+                   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
 
         <!-- Toolbar -->
         <Border Grid.Row="2"

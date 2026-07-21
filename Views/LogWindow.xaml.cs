@@ -1,7 +1,9 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
@@ -33,6 +35,10 @@ namespace XrayUI.Views
         private volatile bool _dirty;
         private int _linesReceivedSinceFlush; // Background-thread increments; UI thread reads + clears.
         private int _prevBufferCount;
+        private IReadOnlyList<string> _renderedLines = Array.Empty<string>();
+
+        // Timestamp brush, re-resolved (with a full re-render) when the theme changes.
+        private Brush _timestampBrush = null!;
 
         public LogWindow(
             XrayService xray,
@@ -66,7 +72,9 @@ namespace XrayUI.Views
 
             _xray.LogReceived     += OnLogReceived;
             _xray.RunningChanged  += OnRunningChanged;
+            WindowRoot.ActualThemeChanged += OnActualThemeChanged;
 
+            RefreshTimestampBrush();
             RenderLog();
             UpdateStatus();
             _ = InitializeLogSettingsMenuAsync();
@@ -87,6 +95,7 @@ namespace XrayUI.Views
             _flushTimer.Stop();
             _xray.LogReceived    -= OnLogReceived;
             _xray.RunningChanged -= OnRunningChanged;
+            WindowRoot.ActualThemeChanged -= OnActualThemeChanged;
         }
 
         private void OnLogReceived(object? sender, string line)
@@ -95,6 +104,24 @@ namespace XrayUI.Views
             // just mark dirty; the timer will re-render on the UI thread.
             Interlocked.Increment(ref _linesReceivedSinceFlush);
             _dirty = true;
+        }
+
+        private void OnActualThemeChanged(FrameworkElement sender, object args)
+        {
+            // Enqueue so TimestampBrushSource's {ThemeResource} lookup has settled
+            // before the brush is re-read; existing Runs keep their old brush
+            // instance, so a full re-render is required.
+            _queue.TryEnqueue(() =>
+            {
+                RefreshTimestampBrush();
+                var offset = LogScrollViewer.VerticalOffset;
+                RenderLog(forceRebuild: true);
+                LogScrollViewer.ChangeView(
+                    null,
+                    AutoScrollToggle.IsChecked == true ? double.MaxValue : offset,
+                    null,
+                    disableAnimation: true);
+            });
         }
 
         private void OnRunningChanged(object? sender, bool running)
@@ -136,13 +163,82 @@ namespace XrayUI.Views
 
         // ── Rendering ──────────────────────────────────────────────────────────
 
-        private void RenderLog()
+        private void RenderLog(bool forceRebuild = false)
         {
             // XrayService owns the single source of truth; we just render a snapshot.
             var lines = _xray.GetLogBuffer();
-            LogTextBlock.Text = string.Join('\n', lines);
+            var overlap = forceRebuild ? 0 : FindSuffixPrefixOverlap(_renderedLines, lines);
+
+            if (forceRebuild)
+            {
+                LogRichText.Blocks.Clear();
+            }
+            else
+            {
+                for (var i = _renderedLines.Count; i > overlap; i--)
+                {
+                    LogRichText.Blocks.RemoveAt(0);
+                }
+            }
+
+            for (var i = overlap; i < lines.Count; i++)
+            {
+                LogRichText.Blocks.Add(BuildParagraph(lines[i]));
+            }
+
+            _renderedLines = lines;
             LineCountText.Text = Loc.Format("Log_Lines", lines.Count);
             _prevBufferCount = lines.Count;
+        }
+
+        private static int FindSuffixPrefixOverlap(
+            IReadOnlyList<string> previous,
+            IReadOnlyList<string> current)
+        {
+            for (var overlap = Math.Min(previous.Count, current.Count); overlap > 0; overlap--)
+            {
+                var previousStart = previous.Count - overlap;
+                var matches = true;
+
+                for (var i = 0; i < overlap; i++)
+                {
+                    if (!string.Equals(previous[previousStart + i], current[i], StringComparison.Ordinal))
+                    {
+                        matches = false;
+                        break;
+                    }
+                }
+
+                if (matches)
+                {
+                    return overlap;
+                }
+            }
+
+            return 0;
+        }
+
+        private Paragraph BuildParagraph(string line)
+        {
+            var paragraph = new Paragraph();
+            var timestampLength = LogLineParser.TimestampLength(line);
+
+            if (timestampLength > 0)
+            {
+                paragraph.Inlines.Add(new Run { Text = line[..timestampLength], Foreground = _timestampBrush });
+            }
+
+            if (timestampLength < line.Length)
+            {
+                paragraph.Inlines.Add(new Run { Text = line[timestampLength..] });
+            }
+
+            return paragraph;
+        }
+
+        private void RefreshTimestampBrush()
+        {
+            _timestampBrush = TimestampBrushSource.Foreground;
         }
 
         private async Task InitializeLogSettingsMenuAsync()
@@ -195,14 +291,13 @@ namespace XrayUI.Views
         private void CopyButton_Click(object sender, RoutedEventArgs e)
         {
             var dp = new DataPackage();
-            dp.SetText(LogTextBlock.Text);
+            dp.SetText(string.Join('\n', _xray.GetLogBuffer()));
             Clipboard.SetContent(dp);
         }
 
         private void ClearButton_Click(object sender, RoutedEventArgs e)
         {
             _xray.ClearLogBuffer();
-            Interlocked.Exchange(ref _linesReceivedSinceFlush, 0);
             RenderLog();
         }
 
