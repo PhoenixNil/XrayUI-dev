@@ -22,19 +22,19 @@
             </TitleBar.IconSource>
         </TitleBar>
 
-        <!-- Log text area — one Paragraph per buffer line, timestamp Run dimmed
+        <!-- Log text area — one Span per buffer line, timestamp Run dimmed
              (see LogLineParser); built in code-behind. -->
         <ScrollViewer x:Name="LogScrollViewer"
                       Grid.Row="1"
                       Padding="12,12,12,0"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Auto">
-            <RichTextBlock x:Name="LogRichText"
-                           FontFamily="Cascadia Code, Consolas, Courier New"
-                           FontSize="12"
-                           IsTextSelectionEnabled="True"
-                           TextWrapping="NoWrap"
-                           Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+            <TextBlock x:Name="LogTextBlock"
+                       FontFamily="Cascadia Code, Consolas, Courier New"
+                       FontSize="12"
+                       IsTextSelectionEnabled="True"
+                       TextWrapping="NoWrap"
+                       Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
         </ScrollViewer>
 
         <!-- Code-created Runs can't reference {ThemeResource} directly, and

@@ -40,6 +40,9 @@ namespace XrayUI.Views
         // Timestamp brush, re-resolved (with a full re-render) when the theme changes.
         private Brush _timestampBrush = null!;
 
+        // Last observed "can scroll horizontally" state; see OnLogLayoutChanged.
+        private bool _horizontallyScrollable;
+
         public LogWindow(
             XrayService xray,
             SettingsService settings,
@@ -73,6 +76,8 @@ namespace XrayUI.Views
             _xray.LogReceived     += OnLogReceived;
             _xray.RunningChanged  += OnRunningChanged;
             WindowRoot.ActualThemeChanged += OnActualThemeChanged;
+            LogTextBlock.SizeChanged      += OnLogLayoutChanged;
+            LogScrollViewer.SizeChanged   += OnLogLayoutChanged;
 
             RefreshTimestampBrush();
             RenderLog();
@@ -96,6 +101,8 @@ namespace XrayUI.Views
             _xray.LogReceived    -= OnLogReceived;
             _xray.RunningChanged -= OnRunningChanged;
             WindowRoot.ActualThemeChanged -= OnActualThemeChanged;
+            LogTextBlock.SizeChanged      -= OnLogLayoutChanged;
+            LogScrollViewer.SizeChanged   -= OnLogLayoutChanged;
         }
 
         private void OnLogReceived(object? sender, string line)
@@ -127,6 +134,32 @@ namespace XrayUI.Views
         private void OnRunningChanged(object? sender, bool running)
         {
             _queue.TryEnqueue(UpdateStatus);
+        }
+
+        private void OnLogLayoutChanged(object sender, SizeChangedEventArgs e)
+        {
+            // Workaround for a WinUI ScrollBar state-machine bug: when horizontal
+            // scrollability flips on/off under frequent re-layout (long lines
+            // entering/leaving the ring buffer keep this window near the boundary),
+            // the bar can come back with its thumb stuck collapsed — arrows work,
+            // but track clicks jump to the far end. When scrollability returns,
+            // bounce the bar through Hidden (scrolling stays enabled, offset is
+            // preserved) so it re-materializes with a fresh thumb.
+            var scrollable = LogScrollViewer.ScrollableWidth > 0;
+            if (scrollable == _horizontallyScrollable)
+            {
+                return;
+            }
+
+            _horizontallyScrollable = scrollable;
+            if (!scrollable)
+            {
+                return;
+            }
+
+            LogScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
+            _queue.TryEnqueue(() =>
+                LogScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto);
         }
 
         private void OnFlushTick(DispatcherQueueTimer sender, object args)
@@ -168,22 +201,35 @@ namespace XrayUI.Views
             // XrayService owns the single source of truth; we just render a snapshot.
             var lines = _xray.GetLogBuffer();
             var overlap = forceRebuild ? 0 : FindSuffixPrefixOverlap(_renderedLines, lines);
+            var removed = _renderedLines.Count - overlap;
 
             if (forceRebuild)
             {
-                LogRichText.Blocks.Clear();
+                LogTextBlock.Inlines.Clear();
             }
             else
             {
                 for (var i = _renderedLines.Count; i > overlap; i--)
                 {
-                    LogRichText.Blocks.RemoveAt(0);
+                    LogTextBlock.Inlines.RemoveAt(0);
+                }
+
+                // Every non-first Span owns its leading line break. If the ring
+                // buffer evicted the old first line, promote the retained Span.
+                if (removed > 0 && overlap > 0 &&
+                    LogTextBlock.Inlines[0] is Span firstLine &&
+                    firstLine.Inlines.Count > 0 &&
+                    firstLine.Inlines[0] is LineBreak)
+                {
+                    firstLine.Inlines.RemoveAt(0);
                 }
             }
 
             for (var i = overlap; i < lines.Count; i++)
             {
-                LogRichText.Blocks.Add(BuildParagraph(lines[i]));
+                LogTextBlock.Inlines.Add(BuildLineSpan(
+                    lines[i],
+                    prependLineBreak: LogTextBlock.Inlines.Count > 0));
             }
 
             _renderedLines = lines;
@@ -218,22 +264,27 @@ namespace XrayUI.Views
             return 0;
         }
 
-        private Paragraph BuildParagraph(string line)
+        private Span BuildLineSpan(string line, bool prependLineBreak)
         {
-            var paragraph = new Paragraph();
+            var span = new Span();
             var timestampLength = LogLineParser.TimestampLength(line);
+
+            if (prependLineBreak)
+            {
+                span.Inlines.Add(new LineBreak());
+            }
 
             if (timestampLength > 0)
             {
-                paragraph.Inlines.Add(new Run { Text = line[..timestampLength], Foreground = _timestampBrush });
+                span.Inlines.Add(new Run { Text = line[..timestampLength], Foreground = _timestampBrush });
             }
 
             if (timestampLength < line.Length)
             {
-                paragraph.Inlines.Add(new Run { Text = line[timestampLength..] });
+                span.Inlines.Add(new Run { Text = line[timestampLength..] });
             }
 
-            return paragraph;
+            return span;
         }
 
         private void RefreshTimestampBrush()
