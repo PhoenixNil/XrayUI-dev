@@ -40,8 +40,11 @@ namespace XrayUI.Views
         // Timestamp brush, re-resolved (with a full re-render) when the theme changes.
         private Brush _timestampBrush = null!;
 
-        // Last observed "can scroll horizontally" state; see OnLogLayoutChanged.
-        private bool _horizontallyScrollable;
+        // ScrollView.ScrollTo has no "keep current offset" sentinel like
+        // ChangeView's null — the current offset is passed explicitly, and
+        // jumps must disable animation to match the old instant behavior.
+        private static readonly ScrollingScrollOptions JumpOptions =
+            new(ScrollingAnimationMode.Disabled);
 
         public LogWindow(
             XrayService xray,
@@ -76,8 +79,6 @@ namespace XrayUI.Views
             _xray.LogReceived     += OnLogReceived;
             _xray.RunningChanged  += OnRunningChanged;
             WindowRoot.ActualThemeChanged += OnActualThemeChanged;
-            LogTextBlock.SizeChanged      += OnLogLayoutChanged;
-            LogScrollViewer.SizeChanged   += OnLogLayoutChanged;
 
             RefreshTimestampBrush();
             RenderLog();
@@ -101,8 +102,6 @@ namespace XrayUI.Views
             _xray.LogReceived    -= OnLogReceived;
             _xray.RunningChanged -= OnRunningChanged;
             WindowRoot.ActualThemeChanged -= OnActualThemeChanged;
-            LogTextBlock.SizeChanged      -= OnLogLayoutChanged;
-            LogScrollViewer.SizeChanged   -= OnLogLayoutChanged;
         }
 
         private void OnLogReceived(object? sender, string line)
@@ -123,43 +122,19 @@ namespace XrayUI.Views
                 RefreshTimestampBrush();
                 var offset = LogScrollViewer.VerticalOffset;
                 RenderLog(forceRebuild: true);
-                LogScrollViewer.ChangeView(
-                    null,
-                    AutoScrollToggle.IsChecked == true ? double.MaxValue : offset,
-                    null,
-                    disableAnimation: true);
+                // Flush layout so ScrollableHeight reflects the rebuilt content
+                // before ScrollTo clamps against it.
+                LogScrollViewer.UpdateLayout();
+                LogScrollViewer.ScrollTo(
+                    LogScrollViewer.HorizontalOffset,
+                    AutoScrollToggle.IsChecked == true ? LogScrollViewer.ScrollableHeight : offset,
+                    JumpOptions);
             });
         }
 
         private void OnRunningChanged(object? sender, bool running)
         {
             _queue.TryEnqueue(UpdateStatus);
-        }
-
-        private void OnLogLayoutChanged(object sender, SizeChangedEventArgs e)
-        {
-            // Workaround for a WinUI ScrollBar state-machine bug: when horizontal
-            // scrollability flips on/off under frequent re-layout (long lines
-            // entering/leaving the ring buffer keep this window near the boundary),
-            // the bar can come back with its thumb stuck collapsed — arrows work,
-            // but track clicks jump to the far end. When scrollability returns,
-            // bounce the bar through Hidden (scrolling stays enabled, offset is
-            // preserved) so it re-materializes with a fresh thumb.
-            var scrollable = LogScrollViewer.ScrollableWidth > 0;
-            if (scrollable == _horizontallyScrollable)
-            {
-                return;
-            }
-
-            _horizontallyScrollable = scrollable;
-            if (!scrollable)
-            {
-                return;
-            }
-
-            LogScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
-            _queue.TryEnqueue(() =>
-                LogScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto);
         }
 
         private void OnFlushTick(DispatcherQueueTimer sender, object args)
@@ -178,7 +153,14 @@ namespace XrayUI.Views
 
             if (autoScroll)
             {
-                LogScrollViewer.ChangeView(null, double.MaxValue, null, disableAnimation: true);
+                // Flush layout first so ScrollableHeight already includes the
+                // lines just rendered — ScrollTo clamps at request time, unlike
+                // ChangeView's late clamping.
+                LogScrollViewer.UpdateLayout();
+                LogScrollViewer.ScrollTo(
+                    LogScrollViewer.HorizontalOffset,
+                    LogScrollViewer.ScrollableHeight,
+                    JumpOptions);
             }
             else
             {
@@ -189,7 +171,7 @@ namespace XrayUI.Views
                 {
                     var lineHeight = prevExtent / prevCount;
                     var target = Math.Max(0, prevOffset - evicted * lineHeight);
-                    LogScrollViewer.ChangeView(null, target, null, disableAnimation: true);
+                    LogScrollViewer.ScrollTo(LogScrollViewer.HorizontalOffset, target, JumpOptions);
                 }
             }
         }

@@ -23,19 +23,26 @@
         </TitleBar>
 
         <!-- Log text area — one Span per buffer line, timestamp Run dimmed
-             (see LogLineParser); built in code-behind. -->
-        <ScrollViewer x:Name="LogScrollViewer"
-                      Grid.Row="1"
-                      Padding="12,12,12,0"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Auto">
+             (see LogLineParser); built in code-behind. ScrollView (not the
+             legacy ScrollViewer): its scroll bars are driven by ScrollView's
+             own controller instead of the WUX visual-state storyboards whose
+             thumb kept wedging invisible on some machines. ContentOrientation
+             must stay "Both" or the NoWrap text gets clipped instead of
+             scrolling horizontally. Padding lives on the TextBlock as Margin
+             because ScrollView doesn't apply Padding to its content. -->
+        <ScrollView x:Name="LogScrollViewer"
+                    Grid.Row="1"
+                    ContentOrientation="Both"
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Auto">
             <TextBlock x:Name="LogTextBlock"
+                       Margin="12,12,12,0"
                        FontFamily="Cascadia Code, Consolas, Courier New"
                        FontSize="12"
                        IsTextSelectionEnabled="True"
                        TextWrapping="NoWrap"
                        Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-        </ScrollViewer>
+        </ScrollView>
 
         <!-- Code-created Runs can't reference {ThemeResource} directly, and
              Application.Current.Resources[key] would resolve system brushes
