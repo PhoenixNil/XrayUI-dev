@@ -461,6 +461,7 @@ namespace XrayUI
             windowManager.MinHeight = isMini ? MiniWindowHeight : FullModeMinHeight;
 
             presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: !isMini);
+            presenter.IsAlwaysOnTop = isMini;
             presenter.IsResizable = !isMini;
             presenter.IsMaximizable = !isMini;
             AppTitleBar.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;

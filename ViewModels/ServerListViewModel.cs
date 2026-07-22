@@ -698,6 +698,7 @@ namespace XrayUI.ViewModels
 
             IsTestingLatencies = true;
             _latencySortUnlocked = false;
+            _latencySortRefreshPending = false;
             try
             {
                 if (LatencyTestMode == "real")
@@ -707,7 +708,17 @@ namespace XrayUI.ViewModels
             }
             finally
             {
+                // Keep per-row latency values streaming during the sweep, but only rebuild
+                // the whole collection once after the last result. Capture and clear the
+                // pending state before rebuilding so an exception cannot leave the next run
+                // carrying stale batch state.
+                var refreshLatencySort = _latencySortRefreshPending
+                    && SortMode == ServerSortMode.Latency;
+                _latencySortRefreshPending = false;
                 IsTestingLatencies = false;
+
+                if (refreshLatencySort)
+                    RebuildGroupedView();
             }
         }
 
@@ -754,9 +765,10 @@ namespace XrayUI.ViewModels
 
         // Per-result bookkeeping shared by both probe modes (always invoked on the UI thread,
         // serially): record the latency, unlock the latency-sort option once the first result
-        // lands, and restream the grouped view live if latency sort is already active. The
-        // _latencySortUnlocked flag is reset at the start of each TestAllLatencies run.
+        // lands, and refresh latency sorting immediately for a standalone result or defer it
+        // until the current batch ends. The flags are reset for each TestAllLatencies run.
         private bool _latencySortUnlocked;
+        private bool _latencySortRefreshPending;
         private void ApplyLatencyResult(ServerEntry server, int latencyMs)
         {
             server.LatencyMs = latencyMs;
@@ -767,7 +779,12 @@ namespace XrayUI.ViewModels
                 OnPropertyChanged(nameof(CanSortByLatency));
             }
 
-            if (SortMode == ServerSortMode.Latency)
+            if (SortMode != ServerSortMode.Latency)
+                return;
+
+            if (IsTestingLatencies)
+                _latencySortRefreshPending = true;
+            else
                 RebuildGroupedView();
         }
 

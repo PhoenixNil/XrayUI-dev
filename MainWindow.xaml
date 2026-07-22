@@ -74,12 +74,14 @@
 
                 <!-- Server name + routing mode -->
                 <StackPanel Grid.Row="0"
-                            Margin="2,18,20,0"
+                            Margin="2,18,32,0"
                             VerticalAlignment="Top"
                             Spacing="6">
                     <TextBlock Text="{x:Bind ViewModel.ActiveServerName, Mode=OneWay}"
                                FontSize="16"
-                               FontWeight="SemiBold" />
+                               FontWeight="SemiBold"
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis" />
                     <TextBlock Text="{x:Bind ViewModel.MiniRoutingMode, Mode=OneWay}"
                                FontSize="12"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
