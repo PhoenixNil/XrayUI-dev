@@ -29,6 +29,14 @@ namespace XrayUI.ViewModels
         private const string UngroupedChipKey      = "__ungrouped__";
         private const string FavoritesChipKey      = "__favorites__";
         private const string SubscriptionUserAgent = "v2rayN/7.22";
+        // Retry UA for providers that only emit a Clash/mihomo YAML config under a Clash-looking UA.
+        // Mimics Clash Verge Rev (a widely-used mihomo-based client); the "clash" substring is what
+        // most backends key on to serve their config — see the zero-hit retry in FetchSubscriptionNodesAsync.
+        private const string ClashUserAgent        = "clash-verge/v2.5.2";
+        // The traffic/expiry probe is best-effort and runs concurrently with the node fetch. Kept under
+        // the client timeout above so a stalled Clash-UA request can't hold an otherwise-finished
+        // refresh spinning — it is headers-only, so it has less to do anyway. See FetchSubscriptionNodesAsync.
+        private static readonly TimeSpan SubscriptionMetaTimeout = TimeSpan.FromSeconds(8);
 
         // Localized labels — looked up lazily so language changes apply at startup.
         private static string AllChipName     => L.ServerList_AllServers;
@@ -41,7 +49,11 @@ namespace XrayUI.ViewModels
 
         private static HttpClient CreateSubscriptionHttpClient()
         {
-            var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            // Covers the whole operation (connect + TLS + body read), not just the response headers.
+            // A subscription body is small enough that anything which will succeed lands well inside
+            // this; past it we would only be delaying the same error, and Update all multiplies the
+            // wait by ceil(count / MaxConcurrentRefresh).
+            var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             client.DefaultRequestHeaders.UserAgent.ParseAdd(SubscriptionUserAgent);
             return client;
         }
@@ -51,6 +63,7 @@ namespace XrayUI.ViewModels
         private readonly LatencyProbeService _latencyProbe;
         private readonly RealLatencyProbeService _realLatencyProbe;
         private readonly SemaphoreSlim      _settingsWriteLock = new(1, 1);
+        private readonly SemaphoreSlim      _serversWriteLock  = new(1, 1);
         private const int MaxConcurrentProbes = 16;
         private readonly List<ServerEntry> _selectedServers = new();
         private bool _disposed;
@@ -98,6 +111,7 @@ namespace XrayUI.ViewModels
                 server.PropertyChanged -= OnSelectedItemPropertyChanged;
             }
             _settingsWriteLock.Dispose();
+            _serversWriteLock.Dispose();
         }
 
         [ObservableProperty]
@@ -375,7 +389,24 @@ namespace XrayUI.ViewModels
             }
         }
 
-        private Task SaveAsync() => _settings.SaveServersAsync(Servers);
+        // Serializes servers.json writers the way _settingsWriteLock already does for settings.json.
+        // SaveServersAsync snapshots and serializes synchronously, then awaits a temp-write + atomic
+        // File.Replace; two overlapping saves therefore commit in whatever order their writes happen
+        // to finish, and an older snapshot landing last rolls the file back over the newer one. The
+        // wait resumes on the UI thread, so the snapshot is taken by whichever writer holds the lock —
+        // the last commit is always the newest list. Update all made this routine rather than rare.
+        private async Task SaveAsync()
+        {
+            await _serversWriteLock.WaitAsync();
+            try
+            {
+                await _settings.SaveServersAsync(Servers);
+            }
+            finally
+            {
+                _serversWriteLock.Release();
+            }
+        }
 
         public async Task SaveOrderAsync()
         {
@@ -873,16 +904,106 @@ namespace XrayUI.ViewModels
 
         private static async Task<(List<ServerEntry>? entries, string? error)> FetchSubscriptionNodesAsync(SubscriptionEntry sub)
         {
-            string raw;
+            // Kick off the traffic/expiry probe concurrently with the node fetch, headers-only so the
+            // clash config body is never downloaded. Deliberately not deferred until the node fetch
+            // shows no header: measured against real providers, ~95% emit `subscription-userinfo` only
+            // to a Clash-looking UA, which the v2rayN fetch below never sends. Probing lazily would
+            // therefore add a serial round trip to almost every refresh (a + b instead of max(a, b))
+            // to save a request on the rare provider that answers any UA.
+            var metaTask = FetchSubscriptionAsync(sub.Url, ClashUserAgent, headersOnly: true, timeout: SubscriptionMetaTimeout);
+
+            var (raw, mainUsage, error) = await FetchSubscriptionAsync(sub.Url, userAgent: null);
+
+            // Best-effort, and applied even if node parsing fails below. The probe wins when it lands;
+            // the node response is the fallback for the minority of providers that do answer a v2rayN
+            // UA, so a probe that timed out no longer leaves stale figures on the card. A miss on both
+            // keeps the previous figures. A response that *did* carry the header mirrors it exactly, so
+            // a dropped quota/expiry clears — leaving a stale date would keep re-saving it forever.
+            var usage = (await metaTask).usage ?? mainUsage;
+            if (usage is { } u)
+                sub.Usage = u;
+
+            if (raw == null)
+                return (null, error);
+
+            var entries = ParseSubscriptionText(raw);
+
+            if (entries.Count == 0)
+            {
+                // Nothing parsed as a v2rayN link list, and the first response wasn't YAML either.
+                // Many providers do UA-based content negotiation and only emit a Clash/mihomo config
+                // when the request *looks* like Clash, so the v2rayN fetch above never saw that YAML.
+                // Re-fetch once with a Clash UA before giving up. Only reached on a zero-hit first
+                // fetch, so normal link-list subscriptions never pay for this extra request. A network
+                // error on the retry is ignored: the first fetch succeeded, its content was just
+                // unparseable, so the NoParsed error below is the accurate outcome.
+                var (clashRaw, clashUsage, _) = await FetchSubscriptionAsync(sub.Url, ClashUserAgent);
+
+                // Same UA as the probe, so this response carries the header whenever the probe would
+                // have. Worth taking when the probe itself came back empty (typically a timeout).
+                if (usage == null && clashUsage is { } cu)
+                    sub.Usage = cu;
+
+                if (clashRaw != null)
+                    entries = ParseSubscriptionText(clashRaw);
+            }
+
+            if (entries.Count == 0)
+                return (null, L.Subscription_NoParsed);
+
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                if (string.IsNullOrEmpty(entry.Name))
+                    entry.Name = $"{sub.Name} #{i + 1}";
+                entry.SubscriptionId = sub.Id;
+            }
+
+            return (entries, null);
+        }
+
+        // One subscription request, shared by the node fetch, the Clash-UA retry and the traffic probe.
+        // A null userAgent leaves the request with no UA of its own, so it inherits the shared client's
+        // default v2rayN UA. headersOnly skips the body (raw comes back null) for probes that only want
+        // the `subscription-userinfo` header; timeout overrides the shared client's. Never throws —
+        // failures come back in error, and usage is simply null when the provider didn't send the header.
+        private static async Task<(string? raw, SubscriptionUserInfo? usage, string? error)> FetchSubscriptionAsync(
+            string url, string? userAgent, bool headersOnly = false, TimeSpan? timeout = null)
+        {
             try
             {
-                raw = await Http.GetStringAsync(sub.Url);
+                using var cts = timeout is { } t ? new CancellationTokenSource(t) : null;
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                if (userAgent != null)
+                    req.Headers.UserAgent.ParseAdd(userAgent);
+
+                using var resp = await Http.SendAsync(
+                    req,
+                    headersOnly ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead,
+                    cts?.Token ?? CancellationToken.None);
+                resp.EnsureSuccessStatusCode();
+
+                return (headersOnly ? null : await resp.Content.ReadAsStringAsync(), ReadUserInfo(resp), null);
             }
             catch (Exception ex)
             {
-                return (null, ex.Message);
+                return (null, null, ex.Message);
             }
+        }
 
+        // `subscription-userinfo` lands on the response or the content headers depending on the server.
+        // Null when absent, which the caller reads as "no news" rather than "quota cleared".
+        private static SubscriptionUserInfo? ReadUserInfo(HttpResponseMessage resp) =>
+            resp.Headers.TryGetValues("subscription-userinfo", out var values) ||
+            resp.Content.Headers.TryGetValues("subscription-userinfo", out values)
+                ? ParseSubscriptionUserInfo(values.FirstOrDefault())
+                : null;
+
+        // Decodes a subscription body (base64 or plain) and parses it as a v2rayN link list, falling
+        // back to a Clash/Clash.Meta YAML parse only when no line parsed as a share link — so a normal
+        // link-list subscription never pays for a YAML parse attempt.
+        private static List<ServerEntry> ParseSubscriptionText(string raw)
+        {
             var trimmed = raw.Trim();
             var decoded = new byte[trimmed.Length];
             var text = Convert.TryFromBase64String(trimmed, decoded, out var written)
@@ -899,31 +1020,42 @@ namespace XrayUI.ViewModels
 
             if (entries.Count == 0)
             {
-                // Some providers ("universal" subscriptions) serve a Clash/Clash.Meta YAML config
-                // instead of a plain link list. Only attempted when no line parsed as a share link,
-                // so a normal link-list subscription never pays for a YAML parse attempt.
                 try
                 {
                     entries.AddRange(ClashConfigParser.Parse(text).Nodes);
                 }
                 catch
                 {
-                    // Not valid YAML either - falls through to the NoParsed error below.
+                    // Not valid YAML either - caller treats an empty list as "nothing parsed".
                 }
             }
 
-            if (entries.Count == 0)
-                return (null, L.Subscription_NoParsed);
+            return entries;
+        }
 
-            for (int i = 0; i < entries.Count; i++)
+        // Parses `upload=..; download=..; total=..; expire=..` (bytes; expire in unix seconds).
+        private static SubscriptionUserInfo ParseSubscriptionUserInfo(string? value)
+        {
+            long? up = null, down = null, total = null;
+            DateTimeOffset? expire = null;
+            if (string.IsNullOrWhiteSpace(value))
+                return default;
+
+            foreach (var part in value.Split(';'))
             {
-                var entry = entries[i];
-                if (string.IsNullOrEmpty(entry.Name))
-                    entry.Name = $"{sub.Name} #{i + 1}";
-                entry.SubscriptionId = sub.Id;
+                var kv = part.Split('=', 2);
+                if (kv.Length != 2) continue;
+                var key = kv[0].Trim();
+                var val = kv[1].Trim();
+                switch (key)
+                {
+                    case "upload":   if (long.TryParse(val, out var u)) up = u; break;
+                    case "download": if (long.TryParse(val, out var d)) down = d; break;
+                    case "total":    if (long.TryParse(val, out var t)) total = t; break;
+                    case "expire":   if (long.TryParse(val, out var e) && e > 0) expire = DateTimeOffset.FromUnixTimeSeconds(e); break;
+                }
             }
-
-            return (entries, null);
+            return new SubscriptionUserInfo(up, down, total, expire);
         }
 
         private async Task RefreshSubscriptionAsync(SubscriptionEntry sub)
@@ -1142,6 +1274,7 @@ namespace XrayUI.ViewModels
             Url         = sub.Url,
             LastUpdated = sub.LastUpdated,
             LastError   = sub.LastError,
+            Usage       = sub.Usage,
         };
 
         // ── Add manual ────────────────────────────────────────────────────────

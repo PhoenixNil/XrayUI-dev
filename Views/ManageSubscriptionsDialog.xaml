@@ -70,9 +70,21 @@
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
         </StackPanel>
 
+        <!-- MaxHeight caps the whole page rather than the list: the Auto/star rows below then
+             subtract the bulk-action row and the spacing themselves, instead of the ScrollView
+             carrying a hand-computed number that goes stale the moment that row changes size. -->
         <Grid Grid.Row="1"
+              RowSpacing="8"
+              MaxHeight="440"
+              VerticalAlignment="Top"
               Visibility="{x:Bind ViewModel.ManagePageVisibility, Mode=OneWay}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
             <TextBlock x:Uid="Subscription_EmptyText"
+                       Grid.Row="1"
                        Text="暂无订阅"
                        HorizontalAlignment="Center"
                        Margin="0,48,0,48"
@@ -80,7 +92,37 @@
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                        Visibility="{x:Bind ViewModel.EmptyStateVisibility, Mode=OneWay}" />
 
-            <ScrollView MaxHeight="440"
+            <!-- Bulk action row: only meaningful once at least one subscription exists. -->
+            <Grid Grid.Row="0"
+                  ColumnDefinitions="*,Auto"
+                  Padding="2,0"
+                  Visibility="{x:Bind ViewModel.ListVisibility, Mode=OneWay}">
+                <TextBlock Grid.Column="0"
+                           Text="{x:Bind ViewModel.SubscriptionCountText, Mode=OneWay}"
+                           FontSize="13"
+                           VerticalAlignment="Center"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Button Grid.Column="1"
+                        AutomationProperties.AutomationId="RefreshAllSubscriptionsButton"
+                        Padding="10,4"
+                        Command="{x:Bind ViewModel.RefreshAllCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Grid Width="14" Height="14">
+                            <FontIcon Glyph="&#xE895;"
+                                      FontSize="14"
+                                      Visibility="{x:Bind ViewModel.IsRefreshingAll, Mode=OneWay, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                            <ProgressRing Width="14"
+                                          Height="14"
+                                          IsActive="{x:Bind ViewModel.IsRefreshingAll, Mode=OneWay}"
+                                          Visibility="{x:Bind ViewModel.IsRefreshingAll, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        </Grid>
+                        <TextBlock Text="{x:Bind ViewModel.RefreshAllText, Mode=OneWay}"
+                                   FontSize="13" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <ScrollView Grid.Row="1"
                         VerticalScrollBarVisibility="Auto"
                         HorizontalScrollBarVisibility="Hidden"
                         Visibility="{x:Bind ViewModel.ListVisibility, Mode=OneWay}">
@@ -102,18 +144,31 @@
                                                    FontSize="14"
                                                    FontWeight="SemiBold"
                                                    TextTrimming="CharacterEllipsis" />
+
+                                        <!-- Second line: traffic, plus expiry after a bullet, when the
+                                             provider returned subscription-userinfo; otherwise falls
+                                             back to the URL below. -->
+                                        <TextBlock Text="{x:Bind TrafficLineText, Mode=OneWay}"
+                                                   FontSize="12"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   Visibility="{x:Bind HasTraffic, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
                                         <TextBlock Text="{x:Bind Url, Mode=OneWay}"
                                                    FontSize="12"
                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                   TextTrimming="CharacterEllipsis" />
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Visibility="{x:Bind HasTraffic, Mode=OneWay, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+
                                         <TextBlock Text="{x:Bind LastUpdatedText, Mode=OneWay}"
                                                    FontSize="12"
                                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                                    Visibility="{x:Bind HasError, Mode=OneWay, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                        <!-- Wraps rather than ellipsizes: a truncated error ("...status
+                                             code does n") tells the user nothing about what broke. -->
                                         <TextBlock Text="{x:Bind LastErrorText, Mode=OneWay}"
                                                    FontSize="12"
                                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="Wrap"
                                                    Visibility="{x:Bind HasError, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                     </StackPanel>
 
@@ -160,7 +215,7 @@
                                                       Visibility="{x:Bind IsNotBusy, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                             <ProgressRing Width="16"
                                                           Height="16"
-                                                          IsActive="True"
+                                                          IsActive="{x:Bind IsBusy, Mode=OneWay}"
                                                           Visibility="{x:Bind IsBusy, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                         </Grid>
                                     </Button>
