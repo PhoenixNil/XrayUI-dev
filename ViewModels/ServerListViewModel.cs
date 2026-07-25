@@ -94,7 +94,7 @@ namespace XrayUI.ViewModels
             _realLatencyProbe = realLatencyProbe;
             Servers = new ObservableCollection<ServerEntry>();
             SearchQuery = string.Empty;
-            LatencyTestMode = "connect";
+            LatencyTestMode = "real";
 
             ProtocolColorStore.ColorsChanged += OnProtocolColorsChanged;
         }
@@ -742,6 +742,9 @@ namespace XrayUI.ViewModels
         // Business code (CLAUDE.md convention), set from the test button's right-click menu:
         //   "connect" → TCP handshake to the server endpoint (no core needed)
         //   "real"    → HTTP round-trip routed through a throwaway xray core (v2rayN "real delay")
+        // Seeded to "real" in the ctor — a TCP handshake says nothing about whether the node
+        // actually proxies traffic, so the useful number is the default. Keep the ctor seed and
+        // TestModeRealItem's IsChecked in ServerListControl.xaml in sync.
         [ObservableProperty]
         public partial string LatencyTestMode { get; set; }
 

@@ -163,12 +163,12 @@
                                              x:Uid="ServerList_TestModeConnect"
                                              Text="Tcping延迟"
                                              GroupName="LatencyTestMode"
-                                             IsChecked="True"
                                              Click="TestModeConnectItem_Click" />
                         <RadioMenuFlyoutItem x:Name="TestModeRealItem"
                                              x:Uid="ServerList_TestModeReal"
                                              Text="真连接延迟"
                                              GroupName="LatencyTestMode"
+                                             IsChecked="True"
                                              Click="TestModeRealItem_Click" />
                     </MenuFlyout>
                 </Button.ContextFlyout>

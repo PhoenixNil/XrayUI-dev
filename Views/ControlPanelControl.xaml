@@ -10,7 +10,7 @@
              Unloaded="UserControl_Unloaded">
 
     <Grid RowSpacing="6"
-          Margin="8,0,12,0">
+          Margin="0,0,12,0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -133,8 +133,7 @@
             <StackPanel Grid.Column="0"
                         Orientation="Horizontal"
                         VerticalAlignment="Center"
-                        Spacing="12"
-                        Margin="8,0,0,0">
+                        Spacing="12">
                 <ToggleButton MinWidth="88"
                               Content="{x:Bind ViewModel.StartStopButtonContent, Mode=OneWay}"
                               IsChecked="{x:Bind ViewModel.StartStopButtonChecked, Mode=OneWay}"
