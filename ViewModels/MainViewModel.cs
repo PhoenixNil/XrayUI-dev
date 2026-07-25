@@ -92,6 +92,11 @@ namespace XrayUI.ViewModels
             ControlPanel.GetAllServers = () => ServerList.Servers;
             ControlPanel.CanStartSelectedServer = () => ServerList.CanRunSelectedServer;
             ServerDetail.GetAllServers = () => ServerList.Servers;
+            ServerDetail.ResolveGroupName = ServerList.GetGroupDisplayName;
+            ServerDetail.OpenSubscriptions = ServerList.OpenSubscriptionsOnManagePageAsync;
+            // A subscription rename/delete changes the detail pane's group label without touching
+            // the selected node, so property notifications on ServerEntry can't cover it.
+            ServerList.GroupNamesChanged += ServerDetail.RefreshGroupName;
             ServerList.RequestSwitchToSelectedServer = ControlPanel.SwitchToSelectedServerAsync;
             Personalize.IsProxyRunning = () => ControlPanel.IsRunning;
             // Live TUN state for the speed test's egress pin — settings.IsTunMode alone lags
@@ -137,6 +142,7 @@ namespace XrayUI.ViewModels
             Personalize.LoadRegion(s);
             ServerDetail.ShowLatencyInDetails = s.ShowLatencyInDetails;
             ServerDetail.ShowAiUnlockInDetails = s.ShowAiUnlockInDetails;
+            ServerDetail.ShowGroupInDetails = s.ShowGroupInDetails;
             ServerList.IsFilterPanelOpen = s.OpenServerFilterPanelOnStartup;
 
             // Reconcile external state vs persisted setting (external is ground truth)
@@ -315,6 +321,10 @@ namespace XrayUI.ViewModels
             else if (e.PropertyName == nameof(PersonalizeViewModel.ShowAiUnlockInDetails))
             {
                 ServerDetail.ShowAiUnlockInDetails = Personalize.ShowAiUnlockInDetails;
+            }
+            else if (e.PropertyName == nameof(PersonalizeViewModel.ShowGroupInDetails))
+            {
+                ServerDetail.ShowGroupInDetails = Personalize.ShowGroupInDetails;
             }
             else if (e.PropertyName == nameof(PersonalizeViewModel.OpenServerFilterPanelOnStartup))
             {

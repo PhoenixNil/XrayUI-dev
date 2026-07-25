@@ -45,6 +45,11 @@ namespace XrayUI.ViewModels
         private static string UnnamedSubLabel => L.ServerList_UnnamedSub;
         private static string OrphanSubLabel  => L.ServerList_OrphanSub;
 
+        // What a subscription is called in the UI. Shared by the filter chips and the detail
+        // pane's group row so the two can't drift apart on the unnamed-subscription fallback.
+        private static string SubscriptionLabel(SubscriptionEntry sub)
+            => string.IsNullOrWhiteSpace(sub.Name) ? UnnamedSubLabel : sub.Name;
+
         private static readonly HttpClient Http = CreateSubscriptionHttpClient();
 
         private static HttpClient CreateSubscriptionHttpClient()
@@ -543,7 +548,7 @@ namespace XrayUI.ViewModels
                 GroupChips.Add(new ServerGroupChip
                 {
                     Kind           = ServerGroupChip.ChipKind.Subscription,
-                    DisplayName    = string.IsNullOrWhiteSpace(sub.Name) ? UnnamedSubLabel : sub.Name,
+                    DisplayName    = SubscriptionLabel(sub),
                     SubscriptionId = sub.Id,
                     Subscription   = sub,
                 });
@@ -584,6 +589,24 @@ namespace XrayUI.ViewModels
 
             OnPropertyChanged(nameof(IsChipBarVisible));
             OnPropertyChanged(nameof(IsFilterBarVisible));
+        }
+
+        /// <summary>
+        /// Display name of the group a node belongs to — the subscription it came from, or the
+        /// ungrouped label for manually added nodes. Shares <see cref="SubscriptionLabel"/> with the
+        /// chips built in <see cref="RebuildGroupChips"/>, and repeats the orphan case, so the detail
+        /// pane and the filter dropdown can't disagree on a node's group. Favorites is not a group:
+        /// it is a cross-cutting flag, so it never appears here.
+        /// </summary>
+        public string GetGroupDisplayName(ServerEntry? server)
+        {
+            if (server is null) return string.Empty;
+            if (string.IsNullOrEmpty(server.SubscriptionId)) return UngroupedName;
+
+            var sub = _knownSubscriptions.FirstOrDefault(s => s.Id == server.SubscriptionId);
+            if (sub is null) return OrphanSubLabel;
+
+            return SubscriptionLabel(sub);
         }
 
         private static string? ChipKey(ServerGroupChip? chip) => chip?.Kind switch
@@ -659,12 +682,20 @@ namespace XrayUI.ViewModels
             _      => 0,
         };
 
+        /// <summary>
+        /// Raised once whenever the known-subscription set changes — added, refreshed, renamed or
+        /// deleted. A rename changes what a node's group is called without touching the node, so
+        /// <see cref="ServerEntry"/> property notifications can't cover it; this is that signal.
+        /// </summary>
+        public event Action? GroupNamesChanged;
+
         private async Task ReloadKnownSubscriptionsAsync()
         {
             var settings = await _settings.LoadSettingsAsync();
             _knownSubscriptions = settings.Subscriptions != null
                 ? new List<SubscriptionEntry>(settings.Subscriptions)
                 : new List<SubscriptionEntry>();
+            GroupNamesChanged?.Invoke();
         }
 
         private void OnSelectedItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -857,7 +888,15 @@ namespace XrayUI.ViewModels
         // ── Subscriptions ─────────────────────────────────────────────────────
 
         [RelayCommand]
-        private async Task OpenSubscriptions()
+        private Task OpenSubscriptions() => ShowSubscriptionsDialogAsync(startOnManagePage: false);
+
+        /// <summary>
+        /// Same dialog, opened straight on the manage page. Used by entry points that name an
+        /// existing subscription (the detail pane's group link) rather than offering to add one.
+        /// </summary>
+        public Task OpenSubscriptionsOnManagePageAsync() => ShowSubscriptionsDialogAsync(startOnManagePage: true);
+
+        private async Task ShowSubscriptionsDialogAsync(bool startOnManagePage)
         {
             var settings = await _settings.LoadSettingsAsync();
             var vm = new ManageSubscriptionsViewModel(
@@ -865,6 +904,9 @@ namespace XrayUI.ViewModels
                 RefreshSubscriptionAsync,
                 DeleteSubscriptionAsync,
                 EditSubscriptionAsync);
+
+            if (startOnManagePage)
+                vm.ShowManagePage();
 
             var sub = await _dialogs.ShowSubscriptionsDialogAsync(vm);
             if (sub == null) return;

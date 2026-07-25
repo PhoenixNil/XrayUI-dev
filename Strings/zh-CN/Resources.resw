@@ -836,8 +836,11 @@
   <data name="ServerDetail_HeaderText.Text" xml:space="preserve">
     <value>服务器详情</value>
   </data>
-  <data name="ServerDetail_NameLabel.Text" xml:space="preserve">
-    <value>名称</value>
+  <data name="ServerDetail_GroupLabel.Text" xml:space="preserve">
+    <value>分组</value>
+  </data>
+  <data name="ServerDetail_Favorited" xml:space="preserve">
+    <value>已加入收藏列表</value>
   </data>
   <data name="ServerDetail_ProtocolLabel.Text" xml:space="preserve">
     <value>协议</value>
@@ -1009,6 +1012,12 @@
   </data>
   <data name="Personalize_DetailAiUnlockDesc.Text" xml:space="preserve">
     <value>节点卡片上展示AI的解锁状态</value>
+  </data>
+  <data name="Personalize_DetailGroup.Text" xml:space="preserve">
+    <value>分组</value>
+  </data>
+  <data name="Personalize_DetailGroupDesc.Text" xml:space="preserve">
+    <value>节点卡片上展示所属订阅分组</value>
   </data>
   <data name="Personalize_OpenFilterPanelOnStartup.Text" xml:space="preserve">
     <value>启动时展开筛选栏</value>

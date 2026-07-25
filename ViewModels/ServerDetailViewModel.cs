@@ -32,10 +32,17 @@ namespace XrayUI.ViewModels
             LatencyText = L.ServerDetail_NotTested;
             ShowLatencyInDetails = true;
             ShowAiUnlockInDetails = true;
+            ShowGroupInDetails = true;
             ResetAiUnlockDisplay();
         }
 
         public Func<IEnumerable<ServerEntry>> GetAllServers { get; set; } = () => Array.Empty<ServerEntry>();
+
+        /// <summary>
+        /// Resolves a node's group label. Set by MainViewModel so this VM can read the
+        /// subscription list that lives in ServerListViewModel without a back-reference.
+        /// </summary>
+        public Func<ServerEntry?, string> ResolveGroupName { get; set; } = _ => string.Empty;
 
         private ServerEntry? ResolveChainServer(string id)
             => string.IsNullOrEmpty(id) ? null : GetAllServers().FirstOrDefault(s => s.Id == id);
@@ -68,6 +75,60 @@ namespace XrayUI.ViewModels
                 : SelectedServer?.Port.ToString() ?? "-";
 
         public string SelectedProtocol => SelectedServer?.DisplayProtocol ?? "-";
+
+        public string SelectedGroupName => ResolveGroupName(SelectedServer);
+
+        /// <summary>
+        /// Opens subscription management. Set by MainViewModel — same indirection as
+        /// <see cref="GetAllServers"/>, so this VM never references ServerListViewModel.
+        /// </summary>
+        public Func<Task> OpenSubscriptions { get; set; } = () => Task.CompletedTask;
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(GroupVisibility))]
+        public partial bool ShowGroupInDetails { get; set; }
+
+        // Only for nodes that actually came from a subscription — the value is a link into
+        // subscription management, and a manually added node has nothing on the other end of it.
+        // Expressed via CanOpenGroup so the row and the link can never disagree.
+        public Visibility GroupVisibility
+            => ShowGroupInDetails && CanOpenGroup ? Visibility.Visible : Visibility.Collapsed;
+
+        public bool CanOpenGroup => !string.IsNullOrEmpty(SelectedServer?.SubscriptionId);
+
+        // Favourite marks the node, not its group, so the star trails the card title. It is an
+        // inline Run rather than a sibling element: a separate FontIcon would need either a fixed
+        // width on the name (killing its wrap) or right-alignment (detaching the star from the
+        // text it marks). Empty string when not favourited — the Run then occupies nothing.
+        // Segoe Fluent Icons FavoriteStarFill, with the separator space baked in so the two
+        // Runs need no significant whitespace between their XAML tags.
+        private const string FavoriteStarFill = " \uE735";
+
+        public string FavoriteGlyph => SelectedServer?.IsFavorite == true ? FavoriteStarFill : string.Empty;
+
+        /// <summary>
+        /// Title text for screen readers. The star is a private-use codepoint that reads as garbage,
+        /// so the favourite state has to be spelled out here instead of inferred from the glyph.
+        /// </summary>
+        public string SelectedNameAutomationText
+            => SelectedServer?.IsFavorite == true
+                ? $"{SelectedName} {L.ServerDetail_Favorited}"
+                : SelectedName;
+
+        [RelayCommand(CanExecute = nameof(CanOpenGroup))]
+        private Task OpenGroup() => OpenSubscriptions();
+
+        /// <summary>
+        /// Re-reads the group label. Needed for edits that change the label without touching the
+        /// selected <see cref="ServerEntry"/> itself — renaming or deleting a subscription.
+        /// </summary>
+        public void RefreshGroupName()
+        {
+            OnPropertyChanged(nameof(SelectedGroupName));
+            OnPropertyChanged(nameof(GroupVisibility));
+            OnPropertyChanged(nameof(CanOpenGroup));
+            OpenGroupCommand.NotifyCanExecuteChanged();
+        }
 
         public string SelectedSecurityLabel
             => (SelectedServer?.Protocol?.ToLowerInvariant()) switch
@@ -215,6 +276,7 @@ namespace XrayUI.ViewModels
             {
                 case nameof(ServerEntry.Name):
                     OnPropertyChanged(nameof(SelectedName));
+                    OnPropertyChanged(nameof(SelectedNameAutomationText));
                     break;
                 case nameof(ServerEntry.Host):
                     OnPropertyChanged(nameof(SelectedHostLabel));
@@ -254,6 +316,13 @@ namespace XrayUI.ViewModels
                 case nameof(ServerEntry.Network):
                     OnPropertyChanged(nameof(SelectedTransport));
                     break;
+                case nameof(ServerEntry.SubscriptionId):
+                    RefreshGroupName();
+                    break;
+                case nameof(ServerEntry.IsFavorite):
+                    OnPropertyChanged(nameof(FavoriteGlyph));
+                    OnPropertyChanged(nameof(SelectedNameAutomationText));
+                    break;
             }
 
             // Any persisted config field can feed NodeLinkSerializer, so refresh the share link
@@ -279,6 +348,9 @@ namespace XrayUI.ViewModels
             OnPropertyChanged(nameof(SelectedPortLabel));
             OnPropertyChanged(nameof(SelectedPort));
             OnPropertyChanged(nameof(SelectedProtocol));
+            OnPropertyChanged(nameof(FavoriteGlyph));
+            OnPropertyChanged(nameof(SelectedNameAutomationText));
+            RefreshGroupName();
             OnPropertyChanged(nameof(SelectedSecurityLabel));
             OnPropertyChanged(nameof(SelectedEncryption));
             OnPropertyChanged(nameof(SelectedTransport));
