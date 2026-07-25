@@ -710,6 +710,18 @@
   <data name="Subscription_LastUpdated" xml:space="preserve">
     <value>Last updated: {0}</value>
   </data>
+  <data name="Subscription_Expires" xml:space="preserve">
+    <value>Expires {0}</value>
+  </data>
+  <data name="Subscription_UpdateAll" xml:space="preserve">
+    <value>Update all</value>
+  </data>
+  <data name="Subscription_UpdatingAll" xml:space="preserve">
+    <value>Updating {0}/{1}…</value>
+  </data>
+  <data name="Subscription_Count" xml:space="preserve">
+    <value>{0} subscriptions</value>
+  </data>
   <data name="ControlPanel_EditPortItem.Text" xml:space="preserve">
     <value>Edit Port</value>
   </data>

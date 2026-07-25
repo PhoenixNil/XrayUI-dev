@@ -710,6 +710,18 @@
   <data name="Subscription_LastUpdated" xml:space="preserve">
     <value>上次更新: {0}</value>
   </data>
+  <data name="Subscription_Expires" xml:space="preserve">
+    <value>到期 {0}</value>
+  </data>
+  <data name="Subscription_UpdateAll" xml:space="preserve">
+    <value>全部更新</value>
+  </data>
+  <data name="Subscription_UpdatingAll" xml:space="preserve">
+    <value>更新中 {0}/{1}…</value>
+  </data>
+  <data name="Subscription_Count" xml:space="preserve">
+    <value>{0} 个订阅</value>
+  </data>
   <data name="ControlPanel_EditPortItem.Text" xml:space="preserve">
     <value>编辑本地端口</value>
   </data>

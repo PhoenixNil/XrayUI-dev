@@ -6,6 +6,14 @@ using XrayUI.Helpers;
 
 namespace XrayUI.Models
 {
+    /// <summary>
+    /// Traffic + expiry as reported by a provider's <c>subscription-userinfo</c> response header.
+    /// Kept as one value so the fetch, the model and the edit-rollback path all move the whole set
+    /// instead of enumerating four fields each — the failure mode when they diverge is a figure that
+    /// silently stops persisting.
+    /// </summary>
+    public readonly record struct SubscriptionUserInfo(long? Up, long? Down, long? Total, DateTimeOffset? Expire);
+
     public class SubscriptionEntry : INotifyPropertyChanged
     {
         private string _id = Guid.NewGuid().ToString("N");
@@ -14,6 +22,10 @@ namespace XrayUI.Models
         private DateTimeOffset? _lastUpdated;
         private string? _lastError;
         private bool _isBusy;
+        private long? _upload;
+        private long? _download;
+        private long? _total;
+        private DateTimeOffset? _expire;
 
         public string Id
         {
@@ -75,6 +87,96 @@ namespace XrayUI.Models
 
         [JsonIgnore]
         public string LastErrorText => _lastError ?? string.Empty;
+
+        // Traffic + expiry parsed from the provider's `subscription-userinfo` response header
+        // (bytes / unix-seconds). Optional — many self-built or converter subscriptions omit it,
+        // in which case the card falls back to showing the URL. Persisted so the figures survive
+        // a restart without a re-fetch. The individual properties exist for the JSON round trip;
+        // code holding the whole set assigns Usage instead.
+        public long? Upload
+        {
+            get => _upload;
+            set => Usage = Usage with { Up = value };
+        }
+
+        public long? Download
+        {
+            get => _download;
+            set => Usage = Usage with { Down = value };
+        }
+
+        public long? Total
+        {
+            get => _total;
+            set => Usage = Usage with { Total = value };
+        }
+
+        public DateTimeOffset? Expire
+        {
+            get => _expire;
+            set => Usage = Usage with { Expire = value };
+        }
+
+        /// <summary>
+        /// All four userinfo figures as one value. Assigning writes them together and raises the
+        /// derived notifications once, so the common case — a refresh reporting an unchanged quota —
+        /// costs nothing instead of re-rendering the card four times.
+        /// </summary>
+        [JsonIgnore]
+        public SubscriptionUserInfo Usage
+        {
+            get => new(_upload, _download, _total, _expire);
+            set
+            {
+                if (value == Usage) return;
+
+                (_upload, _download, _total, _expire) = (value.Up, value.Down, value.Total, value.Expire);
+                OnPropertyChanged(nameof(Upload));
+                OnPropertyChanged(nameof(Download));
+                OnPropertyChanged(nameof(Total));
+                OnPropertyChanged(nameof(Expire));
+                OnPropertyChanged(nameof(HasTraffic));
+                OnPropertyChanged(nameof(TrafficText));
+                OnPropertyChanged(nameof(HasExpiry));
+                OnPropertyChanged(nameof(ExpiryText));
+                OnPropertyChanged(nameof(TrafficLineText));
+            }
+        }
+
+        // Traffic requires a known positive quota; total == 0 means "unlimited" and has no bar to show.
+        [JsonIgnore] public bool HasTraffic => _total.HasValue && _total.Value > 0;
+
+        [JsonIgnore]
+        public string TrafficText =>
+            HasTraffic ? $"{FormatBytes((_upload ?? 0) + (_download ?? 0))} / {FormatBytes(_total!.Value)}" : string.Empty;
+
+        [JsonIgnore] public bool HasExpiry => _expire.HasValue;
+
+        [JsonIgnore]
+        public string ExpiryText =>
+            _expire.HasValue ? Loc.Format("Subscription_Expires", _expire.Value.LocalDateTime.ToString("yyyy-MM-dd")) : string.Empty;
+
+        // The card's second line, e.g. "6.21GB / 100GB · Expires 2026-08-01". Composed here rather
+        // than from nested XAML panels because Run.Text is not a dependency property in WinUI, so
+        // the alternative is a StackPanel per fragment with its own visibility binding.
+        [JsonIgnore]
+        public string TrafficLineText => HasExpiry ? $"{TrafficText} · {ExpiryText}" : TrafficText;
+
+        private static readonly string[] ByteUnits = { "B", "KB", "MB", "GB", "TB", "PB" };
+
+        // Human-readable bytes matching the Clash Verge convention: base-1024 units with no space
+        // before the unit, ~3 significant figures (6.21GB, 60.0GB, 341MB, 580KB, 100GB).
+        private static string FormatBytes(long bytes)
+        {
+            if (bytes < 0) bytes = 0;
+            double value = bytes;
+            int unit = 0;
+            while (value >= 1024 && unit < ByteUnits.Length - 1) { value /= 1024; unit++; }
+            string number = value >= 100 ? value.ToString("0")
+                          : value >= 10  ? value.ToString("0.0")
+                          :                value.ToString("0.00");
+            return number + ByteUnits[unit];
+        }
 
         [JsonIgnore]
         public bool IsBusy

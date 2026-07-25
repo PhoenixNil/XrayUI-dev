@@ -124,6 +124,7 @@ public static class L
     public static string Subscription_AddTooltip         => Loc.GetString("Subscription_AddTooltip");
     public static string Subscription_ManageTooltip      => Loc.GetString("Subscription_ManageTooltip");
     public static string Subscription_Refresh            => Loc.GetString("Subscription_Refresh");
+    public static string Subscription_UpdateAll          => Loc.GetString("Subscription_UpdateAll");
     public static string Subscription_DeleteTooltip      => Loc.GetString("Subscription_DeleteTooltip");
     public static string Subscription_EditTooltip        => Loc.GetString("Subscription_EditTooltip");
     public static string Subscription_NeverUpdated       => Loc.GetString("Subscription_NeverUpdated");

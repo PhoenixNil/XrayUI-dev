@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using XrayUI.Helpers;
 using XrayUI.Models;
@@ -10,6 +12,10 @@ namespace XrayUI.ViewModels
 {
     public partial class ManageSubscriptionsViewModel : ObservableObject
     {
+        // Bulk-refresh fan-out. Each subscription costs two requests plus a settings write and a list
+        // rebuild, so this stays low enough to avoid tripping provider rate limits.
+        private const int MaxConcurrentRefresh = 3;
+
         private readonly Func<SubscriptionEntry, Task> _onRefresh;
         private readonly Func<SubscriptionEntry, Task<bool>> _onDelete;
         private readonly Func<SubscriptionEntry, Task> _onEdit;
@@ -48,11 +54,20 @@ namespace XrayUI.ViewModels
         [ObservableProperty]
         public partial string SubscriptionName { get; set; }
 
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(RefreshAllText))]
+        public partial bool IsRefreshingAll { get; set; }
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(RefreshAllText))]
+        public partial int RefreshAllDone { get; set; }
+
         private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
             OnPropertyChanged(nameof(HasSubscriptions));
             OnPropertyChanged(nameof(EmptyStateVisibility));
             OnPropertyChanged(nameof(ListVisibility));
+            OnPropertyChanged(nameof(SubscriptionCountText));
         }
 
         public bool HasSubscriptions => Subscriptions.Count > 0;
@@ -67,6 +82,13 @@ namespace XrayUI.ViewModels
         public Visibility EmptyStateVisibility => HasSubscriptions ? Visibility.Collapsed : Visibility.Visible;
         public Visibility ListVisibility       => HasSubscriptions ? Visibility.Visible : Visibility.Collapsed;
 
+        public string SubscriptionCountText => Loc.Format("Subscription_Count", Subscriptions.Count);
+
+        /// <summary>Idle shows the action label; mid-run it doubles as the progress readout.</summary>
+        public string RefreshAllText => IsRefreshingAll
+            ? Loc.Format("Subscription_UpdatingAll", RefreshAllDone, Subscriptions.Count)
+            : L.Subscription_UpdateAll;
+
         public SubscriptionEntry? CreateSubscription()
         {
             var url = SubscriptionUrl.Trim();
@@ -78,16 +100,63 @@ namespace XrayUI.ViewModels
         [RelayCommand]
         private Task RefreshSubscription(SubscriptionEntry sub) => _onRefresh(sub);
 
+        /// <summary>
+        /// Refreshes every subscription, at most <see cref="MaxConcurrentRefresh"/> at a time. Capped
+        /// rather than fully parallel: each refresh issues two requests and ends in a settings/server
+        /// write plus a list rebuild, so an unbounded sweep would spike request count and pile up
+        /// concurrent rebuilds. Individual failures land in that entry's LastError (handled inside the
+        /// refresh callback), so the sweep never aborts early.
+        /// </summary>
+        [RelayCommand]
+        private async Task RefreshAll()
+        {
+            if (IsRefreshingAll || Subscriptions.Count == 0) return;
+
+            IsRefreshingAll = true;
+            RefreshAllDone  = 0;
+            try
+            {
+                using var gate = new SemaphoreSlim(MaxConcurrentRefresh);
+                var tasks = Subscriptions.ToList().Select(async sub =>
+                {
+                    await gate.WaitAsync();
+                    try
+                    {
+                        await _onRefresh(sub);
+                    }
+                    finally
+                    {
+                        gate.Release();
+                        // Continuations resume on the UI thread (no ConfigureAwait above), so the
+                        // tally needs no synchronization of its own.
+                        RefreshAllDone++;
+                    }
+                });
+
+                await Task.WhenAll(tasks);
+            }
+            finally
+            {
+                IsRefreshingAll = false;
+            }
+        }
+
         public async Task CommitEditAsync(SubscriptionEntry sub, string url, string name)
         {
-            var oldUrl  = sub.Url;
-            var oldName = sub.Name;
+            var oldUrl   = sub.Url;
+            var oldName  = sub.Name;
+            var oldUsage = sub.Usage;
             var urlChanged = !string.Equals(sub.Url, url, StringComparison.Ordinal);
             var editSaved = false;
 
             sub.Url  = url;
             sub.Name = ResolveName(name, url);
-            if (urlChanged) sub.LastError = null;
+            if (urlChanged)
+            {
+                // A different link is a different account, so the old quota/expiry no longer describes it.
+                sub.LastError = null;
+                sub.Usage     = default;
+            }
 
             try
             {
@@ -99,8 +168,9 @@ namespace XrayUI.ViewModels
             {
                 if (!editSaved)
                 {
-                    sub.Url  = oldUrl;
-                    sub.Name = oldName;
+                    sub.Url   = oldUrl;
+                    sub.Name  = oldName;
+                    sub.Usage = oldUsage;
                 }
 
                 // Fetch failures are handled inside the refresh callback and land in
