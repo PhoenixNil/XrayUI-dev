@@ -72,8 +72,18 @@ namespace XrayUI.ViewModels
 
         public bool HasSubscriptions => Subscriptions.Count > 0;
 
-        public bool IsAddPage => SelectedIndex == 0;
-        public bool IsManagePage => SelectedIndex == 1;
+        // Dialog page indices, in selector order.
+        private const int AddPageIndex    = 0;
+        private const int ManagePageIndex = 1;
+
+        /// <summary>
+        /// Opens the dialog straight on the manage page. For entry points that already name an
+        /// existing subscription (the detail pane's group link) instead of offering to add one.
+        /// </summary>
+        public void ShowManagePage() => SelectedIndex = ManagePageIndex;
+
+        public bool IsAddPage => SelectedIndex == AddPageIndex;
+        public bool IsManagePage => SelectedIndex == ManagePageIndex;
         public bool CanAddSubscription => IsAddPage && !string.IsNullOrWhiteSpace(SubscriptionUrl);
         public string DialogTitle => IsAddPage ? L.Subscription_DialogTitle_Add : L.Subscription_DialogTitle_Manage;
 

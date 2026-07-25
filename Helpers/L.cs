@@ -253,6 +253,7 @@ public static class L
     public static string ServerDetail_Failed         => Loc.GetString("ServerDetail_Failed");
     public static string ServerDetail_RetestLatency  => Loc.GetString("ServerDetail_RetestLatency");
     public static string ServerDetail_CopyShareLink  => Loc.GetString("ServerDetail_CopyShareLink");
+    public static string ServerDetail_Favorited      => Loc.GetString("ServerDetail_Favorited");
 
     // ── Import link dialog ────────────────────────────────────────────────
     public static string Import_ParseFailed    => Loc.GetString("Import_ParseFailed");

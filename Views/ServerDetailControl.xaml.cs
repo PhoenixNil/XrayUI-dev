@@ -35,6 +35,15 @@ namespace XrayUI.Views
             SetTooltipAndName(CopyShareLinkButton, L.ServerDetail_CopyShareLink);
         }
 
+        // The group subtitle is ~19px tall, so hiding it would leave the card that much shorter and
+        // strand dead space at the bottom of the pane. The gap above the AI section absorbs it:
+        // 16px here restores the pre-group spacing exactly (the 12 + 2 + 12 this section used to
+        // carry before it was tightened to make room for the subtitle).
+        public static Thickness AiSectionMargin(Visibility groupVisibility)
+            => groupVisibility == Visibility.Visible
+                ? new Thickness(0)
+                : new Thickness(0, 16, 0, 0);
+
         private void ShadowRect_Loaded(object sender, RoutedEventArgs e)
         {
             if (_shadowsWired) return;

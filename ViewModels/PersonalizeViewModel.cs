@@ -38,6 +38,7 @@ namespace XrayUI.ViewModels
             _settings = settings;
             ShowLatencyInDetails = true;
             ShowAiUnlockInDetails = true;
+            ShowGroupInDetails = true;
         }
 
         // ── Colors ────────────────────────────────────────────────────────────
@@ -183,24 +184,29 @@ namespace XrayUI.ViewModels
         partial void OnShowAiUnlockInDetailsChanged(bool value) => UpdateDisplaySettingsUnsavedHint();
 
         [ObservableProperty]
+        public partial bool ShowGroupInDetails { get; set; }
+
+        partial void OnShowGroupInDetailsChanged(bool value) => UpdateDisplaySettingsUnsavedHint();
+
+        [ObservableProperty]
         public partial bool OpenServerFilterPanelOnStartup { get; set; }
 
         partial void OnOpenServerFilterPanelOnStartupChanged(bool value) => UpdateDisplaySettingsUnsavedHint();
 
-        /// <summary>True once any of the three display toggles above diverges from the
-        /// last-loaded/last-saved baseline. All three apply live immediately (see
+        /// <summary>True once any of the display toggles above diverges from the
+        /// last-loaded/last-saved baseline. They all apply live immediately (see
         /// MainViewModel's PropertyChanged wiring), but only persist to disk when "完成" is
         /// clicked — same live-now/persist-on-Done split as hotkeys — so this drives an InfoBar
         /// reminder instead of leaving a silent toggle as the only feedback.</summary>
         [ObservableProperty]
         public partial bool ShowDisplaySettingsUnsavedHint { get; set; }
 
-        private (bool Latency, bool AiUnlock, bool FilterPanel)? _displaySettingsBaseline;
+        private (bool Latency, bool AiUnlock, bool Group, bool FilterPanel)? _displaySettingsBaseline;
 
         private void UpdateDisplaySettingsUnsavedHint()
         {
             ShowDisplaySettingsUnsavedHint = _displaySettingsBaseline is { } baseline &&
-                baseline != (ShowLatencyInDetails, ShowAiUnlockInDetails, OpenServerFilterPanelOnStartup);
+                baseline != (ShowLatencyInDetails, ShowAiUnlockInDetails, ShowGroupInDetails, OpenServerFilterPanelOnStartup);
         }
 
         // ── Global hotkeys ────────────────────────────────────────────────────
@@ -325,11 +331,12 @@ namespace XrayUI.ViewModels
             s.BackdropSetting = ThemeHelper.CurrentBackdrop;
             s.ShowLatencyInDetails = ShowLatencyInDetails;
             s.ShowAiUnlockInDetails = ShowAiUnlockInDetails;
+            s.ShowGroupInDetails = ShowGroupInDetails;
             s.OpenServerFilterPanelOnStartup = OpenServerFilterPanelOnStartup;
-            // Re-baseline so the unsaved-changes hint clears now that these three match disk —
+            // Re-baseline so the unsaved-changes hint clears now that these match disk —
             // otherwise reopening Personalize later would show a stale "unsaved" hint for
             // values that were, in fact, already saved here.
-            _displaySettingsBaseline = (ShowLatencyInDetails, ShowAiUnlockInDetails, OpenServerFilterPanelOnStartup);
+            _displaySettingsBaseline = (ShowLatencyInDetails, ShowAiUnlockInDetails, ShowGroupInDetails, OpenServerFilterPanelOnStartup);
             ShowDisplaySettingsUnsavedHint = false;
             // Language and region don't take effect until the next process start, but Done
             // still persists them — otherwise the user would have to click the restart hint
@@ -367,8 +374,9 @@ namespace XrayUI.ViewModels
         {
             ShowLatencyInDetails = settings.ShowLatencyInDetails;
             ShowAiUnlockInDetails = settings.ShowAiUnlockInDetails;
+            ShowGroupInDetails = settings.ShowGroupInDetails;
             OpenServerFilterPanelOnStartup = settings.OpenServerFilterPanelOnStartup;
-            _displaySettingsBaseline = (ShowLatencyInDetails, ShowAiUnlockInDetails, OpenServerFilterPanelOnStartup);
+            _displaySettingsBaseline = (ShowLatencyInDetails, ShowAiUnlockInDetails, ShowGroupInDetails, OpenServerFilterPanelOnStartup);
         }
 
         public void LoadLanguage(AppSettings settings)

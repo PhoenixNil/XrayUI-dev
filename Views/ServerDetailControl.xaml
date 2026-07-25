@@ -6,6 +6,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:controls="using:XrayUI.Controls"
+             xmlns:views="using:XrayUI.Views"
              mc:Ignorable="d"
              d:DesignWidth="500"
              d:DesignHeight="600">
@@ -23,12 +24,14 @@
                    Text="服务器详情"
                    FontSize="20"
                    FontWeight="SemiBold"
-                   Margin="0,0,0,16" />
+                   Margin="0,0,0,12" />
 
-        <StackPanel Orientation="Vertical"
-                    Grid.Row="1"
-                    Padding="0,0,12,40">
-
+        <!-- ScrollView, not StackPanel: a StackPanel measures its child with infinite height, so
+             the card was silently clipped from the bottom whenever it outgrew the row instead of
+             becoming scrollable. No bottom padding — the control panel below brings its own
+             breathing room, and every pixel here is one the card can't use. -->
+        <ScrollView Grid.Row="1"
+                    Padding="0,0,12,0">
 
             <Border
                 Background="{ThemeResource LayerFillColorDefaultBrush}"
@@ -41,6 +44,51 @@
                 <Grid>
                     <StackPanel Orientation="Vertical"
                                 Spacing="12">
+
+                        <!-- Card header. The node name is the card's title, not a labelled field —
+                             a 16px SemiBold string at the top of the card needs no "名称" telling
+                             you what it is, and dropping that label is what lets the group sit
+                             underneath as a subtitle without adding a row to the table below.
+                             Right margin keeps long names clear of the copy button. -->
+                        <StackPanel Spacing="4"
+                                    Margin="0,0,40,0">
+                            <TextBlock FontSize="16"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="WrapWholeWords"
+                                       AutomationProperties.Name="{x:Bind ViewModel.SelectedNameAutomationText, Mode=OneWay}">
+                                <Run Text="{x:Bind ViewModel.SelectedName, Mode=OneWay}" />
+                                <Run Text="{x:Bind ViewModel.FavoriteGlyph, Mode=OneWay}"
+                                     FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                     FontSize="14"
+                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </TextBlock>
+                            <!-- Grid, not a horizontal StackPanel: a StackPanel measures children
+                                 with unbounded width, so the link's TextTrimming would never fire
+                                 and a long subscription name would just run off the card. -->
+                            <Grid ColumnSpacing="6"
+                                  ColumnDefinitions="Auto,*"
+                                  Visibility="{x:Bind ViewModel.GroupVisibility, Mode=OneWay}">
+                                <TextBlock x:Uid="ServerDetail_GroupLabel"
+                                           Text="分组"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                <HyperlinkButton x:Name="OpenGroupLink"
+                                                 AutomationProperties.AutomationId="OpenGroupLink"
+                                                 Grid.Column="1"
+                                                 Padding="0"
+                                                 MinHeight="0"
+                                                 HorizontalAlignment="Left"
+                                                 HorizontalContentAlignment="Left"
+                                                 VerticalAlignment="Center"
+                                                 Command="{x:Bind ViewModel.OpenGroupCommand}">
+                                    <TextBlock Text="{x:Bind ViewModel.SelectedGroupName, Mode=OneWay}"
+                                               FontSize="12"
+                                               TextWrapping="NoWrap"
+                                               TextTrimming="CharacterEllipsis" />
+                                </HyperlinkButton>
+                            </Grid>
+                        </StackPanel>
 
                         <Grid
                             ColumnSpacing="12"
@@ -55,77 +103,62 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <!-- Row 0: name -->
-                            <TextBlock x:Uid="ServerDetail_NameLabel"
-                                       Text="名称"
+                            <!-- Row 0: protocol -->
+                            <TextBlock x:Uid="ServerDetail_ProtocolLabel"
+                                       Text="协议"
                                        Grid.Row="0"
                                        Grid.Column="0"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        VerticalAlignment="Center" />
                             <TextBlock Grid.Row="0"
                                        Grid.Column="1"
-                                       Text="{x:Bind ViewModel.SelectedName, Mode=OneWay}"
+                                       Text="{x:Bind ViewModel.SelectedProtocol, Mode=OneWay}"
                                        FontSize="16"
-                                       FontWeight="SemiBold"
                                        TextWrapping="WrapWholeWords" />
 
-                            <!-- Row 1: protocol (new) -->
-                            <TextBlock x:Uid="ServerDetail_ProtocolLabel"
-                                       Text="协议"
+                            <!-- Row 1: address -->
+                            <TextBlock Text="{x:Bind ViewModel.SelectedHostLabel, Mode=OneWay}"
                                        Grid.Row="1"
                                        Grid.Column="0"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        VerticalAlignment="Center" />
                             <TextBlock Grid.Row="1"
                                        Grid.Column="1"
-                                       Text="{x:Bind ViewModel.SelectedProtocol, Mode=OneWay}"
+                                       Text="{x:Bind ViewModel.SelectedHost, Mode=OneWay}"
                                        FontSize="16"
                                        TextWrapping="WrapWholeWords" />
 
-                            <!-- Row 2: address -->
-                            <TextBlock Text="{x:Bind ViewModel.SelectedHostLabel, Mode=OneWay}"
+                            <!-- Row 2: port -->
+                            <TextBlock Text="{x:Bind ViewModel.SelectedPortLabel, Mode=OneWay}"
                                        Grid.Row="2"
                                        Grid.Column="0"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        VerticalAlignment="Center" />
                             <TextBlock Grid.Row="2"
                                        Grid.Column="1"
-                                       Text="{x:Bind ViewModel.SelectedHost, Mode=OneWay}"
-                                       FontSize="16"
-                                       TextWrapping="WrapWholeWords" />
+                                       Text="{x:Bind ViewModel.SelectedPort, Mode=OneWay}"
+                                       FontSize="16" />
 
-                            <!-- Row 3: port -->
-                            <TextBlock Text="{x:Bind ViewModel.SelectedPortLabel, Mode=OneWay}"
+                            <!-- Row 3: encryption / security -->
+                            <TextBlock Text="{x:Bind ViewModel.SelectedSecurityLabel, Mode=OneWay}"
                                        Grid.Row="3"
                                        Grid.Column="0"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        VerticalAlignment="Center" />
                             <TextBlock Grid.Row="3"
                                        Grid.Column="1"
-                                       Text="{x:Bind ViewModel.SelectedPort, Mode=OneWay}"
-                                       FontSize="16" />
-
-                            <!-- Row 4: encryption / security -->
-                            <TextBlock Text="{x:Bind ViewModel.SelectedSecurityLabel, Mode=OneWay}"
-                                       Grid.Row="4"
-                                       Grid.Column="0"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       VerticalAlignment="Center" />
-                            <TextBlock Grid.Row="4"
-                                       Grid.Column="1"
                                        Text="{x:Bind ViewModel.SelectedEncryption, Mode=OneWay}"
                                        FontSize="16" />
                             <TextBlock x:Uid="ServerDetail_TransportLabel"
-                                       Grid.Row="5"
+                                       Grid.Row="4"
                                        Grid.Column="0"
                                        Text="传输"
                                        Visibility="{x:Bind ViewModel.SelectedTransportVisibility, Mode=OneWay}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        VerticalAlignment="Center" />
-                            <TextBlock Grid.Row="5"
+                            <TextBlock Grid.Row="4"
                                        Grid.Column="1"
                                        Text="{x:Bind ViewModel.SelectedTransport, Mode=OneWay}"
                                        Visibility="{x:Bind ViewModel.SelectedTransportVisibility, Mode=OneWay}"
@@ -134,15 +167,17 @@
 
                         </Grid>
 
-                        <!-- AI service check area -->
-                        <StackPanel Spacing="12"
-                                    Margin="0,2,0,0"
+                        <!-- AI service check area. Spacing is 0 with the gap carried on the label
+                             instead: AIShadowCastGrid is a zero-height shadow receiver, and under
+                             a uniform Spacing it still claimed a full gap for nothing. -->
+                        <StackPanel Margin="{x:Bind views:ServerDetailControl.AiSectionMargin(ViewModel.GroupVisibility), Mode=OneWay}"
                                     Visibility="{x:Bind ViewModel.AiUnlockVisibility, Mode=OneWay}">
                             <Grid x:Name="AIShadowCastGrid" />
                             <TextBlock x:Uid="ServerDetail_AiUnlockLabel"
                                        Text="AI 访问解锁"
                                        FontSize="13"
                                        CharacterSpacing="80"
+                                       Margin="0,0,0,12"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        VerticalAlignment="Center" />
 
@@ -424,6 +459,6 @@
                 </Grid>
             </Border>
 
-        </StackPanel>
+        </ScrollView>
     </Grid>
 </UserControl>

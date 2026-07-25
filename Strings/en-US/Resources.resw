@@ -836,8 +836,11 @@
   <data name="ServerDetail_HeaderText.Text" xml:space="preserve">
     <value>Server Details</value>
   </data>
-  <data name="ServerDetail_NameLabel.Text" xml:space="preserve">
-    <value>Name</value>
+  <data name="ServerDetail_GroupLabel.Text" xml:space="preserve">
+    <value>Group</value>
+  </data>
+  <data name="ServerDetail_Favorited" xml:space="preserve">
+    <value>In the favorites list</value>
   </data>
   <data name="ServerDetail_ProtocolLabel.Text" xml:space="preserve">
     <value>Protocol</value>
@@ -1009,6 +1012,12 @@
   </data>
   <data name="Personalize_DetailAiUnlockDesc.Text" xml:space="preserve">
     <value>Show AI unlock status on the node card</value>
+  </data>
+  <data name="Personalize_DetailGroup.Text" xml:space="preserve">
+    <value>Group</value>
+  </data>
+  <data name="Personalize_DetailGroupDesc.Text" xml:space="preserve">
+    <value>Show the subscription group on the node card</value>
   </data>
   <data name="Personalize_OpenFilterPanelOnStartup.Text" xml:space="preserve">
     <value>Expand filter bar on startup</value>
