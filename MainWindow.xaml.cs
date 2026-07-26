@@ -347,17 +347,15 @@ namespace XrayUI
                 // and WM_HOTKEY simply never arrives for an id Windows didn't actually register.
                 var (mods, vk) = GlobalHotkeyStore.GetCombo(id);
                 if (vk != 0)
-                    TryRegisterGlobalHotkey(hWnd, id, mods, vk);
+                    RegisterHotkeyOrLog(hWnd, id, mods, vk);
             }
         }
 
-        private static bool TryRegisterGlobalHotkey(IntPtr hWnd, int id, uint modifiers, uint virtualKey)
+        private static void RegisterHotkeyOrLog(IntPtr hWnd, int id, uint modifiers, uint virtualKey)
         {
-            if (HotkeyInterop.RegisterHotKey(hWnd, id, modifiers | GlobalHotkeyStore.ModNoRepeat, virtualKey))
-                return true;
+            if (HotkeyInterop.RegisterHotKey(hWnd, id, modifiers | GlobalHotkeyStore.ModNoRepeat, virtualKey)) return;
 
             Debug.WriteLine($"[Hotkey] Failed to register hotkey id={id} ({modifiers}:{virtualKey}). LastWin32Error={Marshal.GetLastWin32Error()}");
-            return false;
         }
 
         private void CenterOnPrimaryDisplay()

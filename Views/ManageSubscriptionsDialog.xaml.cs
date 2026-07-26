@@ -1,11 +1,11 @@
-using Microsoft.UI.Xaml.Controls.Primitives;
+﻿using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using XrayUI.Helpers;
 using XrayUI.Models;
 
 namespace XrayUI.Views
 {
-    public sealed partial class ManageSubscriptionsDialog : UserControl
+    public sealed partial class ManageSubscriptionsDialog
     {
         public ManageSubscriptionsViewModel ViewModel { get; }
 
