@@ -5,6 +5,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -58,9 +59,43 @@ namespace XrayUI.ViewModels
             // A subscription body is small enough that anything which will succeed lands well inside
             // this; past it we would only be delaying the same error, and Update all multiplies the
             // wait by ceil(count / MaxConcurrentRefresh).
-            var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var client = new HttpClient(new HttpClientHandler
+            {
+                Proxy = new RunningCoreOrSystemProxy(),
+                UseProxy = true,
+            })
+            { Timeout = TimeSpan.FromSeconds(10) };
             client.DefaultRequestHeaders.UserAgent.ParseAdd(SubscriptionUserAgent);
             return client;
+        }
+
+        /// <summary>Set by MainViewModel: the local SOCKS port while the core is running, null
+        /// otherwise. Static because the shared <see cref="Http"/> client is; wired once at
+        /// composition time.</summary>
+        internal static Func<int?>? GetLocalProxyPort { get; set; }
+
+        /// <summary>
+        /// Routes subscription fetches through the running core's local SOCKS inbound instead of
+        /// trusting the Windows proxy settings. IsProxyRunning only says the core is up: in manual
+        /// mode the system proxy stays untouched, so a default HttpClient would fetch DIRECT, fail
+        /// on proxy-only links, and — because a failed attempt advances the schedule anchor — burn
+        /// the whole interval silently. GetProxy is consulted per request, so start/stop and port
+        /// edits are picked up without rebuilding the client; with the core stopped this falls
+        /// back to the system default, which is what manual refresh always did. The SOCKS inbound
+        /// exists in every mode (TUN only adds its own inbound on top), so the port is always
+        /// live while the core is.
+        /// </summary>
+        private sealed class RunningCoreOrSystemProxy : IWebProxy
+        {
+            public ICredentials? Credentials { get; set; }
+
+            public Uri? GetProxy(Uri destination) =>
+                GetLocalProxyPort?.Invoke() is int port
+                    ? new Uri($"socks5://127.0.0.1:{port}")
+                    : HttpClient.DefaultProxy.GetProxy(destination);
+
+            public bool IsBypassed(Uri host) =>
+                GetLocalProxyPort?.Invoke() is not int && HttpClient.DefaultProxy.IsBypassed(host);
         }
 
         private readonly IDialogService     _dialogs;

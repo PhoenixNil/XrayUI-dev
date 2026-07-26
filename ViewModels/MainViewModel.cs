@@ -105,6 +105,11 @@ namespace XrayUI.ViewModels
             // Live TUN state for the speed test's egress pin — settings.IsTunMode alone lags
             // the UI toggle and can survive a crash as a stale true (see IDialogService remarks).
             realLatencyProbe.IsTunActive = () => ControlPanel.IsRunning && ControlPanel.IsTunMode;
+            // Subscription fetches ride the core's own SOCKS inbound whenever it is running:
+            // IsProxyRunning can't tell manual mode (system proxy untouched) from system-proxy
+            // mode, and a direct fetch on a proxy-only link burns the schedule's whole interval.
+            ServerListViewModel.GetLocalProxyPort =
+                () => ControlPanel.IsRunning ? ControlPanel.LocalPort : (int?)null;
 
             ServerList.PropertyChanged   += OnServerListPropertyChanged;
             ControlPanel.PropertyChanged += OnControlPanelPropertyChanged;
