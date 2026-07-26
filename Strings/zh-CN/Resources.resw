@@ -302,9 +302,6 @@
   <data name="CustomRules_Title" xml:space="preserve">
     <value>自定义路由规则</value>
   </data>
-  <data name="CustomRules_UpdateGeoTooltip" xml:space="preserve">
-    <value>更新geoFile路由数据</value>
-  </data>
   <data name="AddRule_Title" xml:space="preserve">
     <value>添加规则</value>
   </data>
@@ -608,6 +605,21 @@
   <data name="Update_Updating" xml:space="preserve">
     <value>正在更新 XrayUI</value>
   </data>
+  <data name="Update_ConfirmTitle" xml:space="preserve">
+    <value>XrayUI {0} 已发布</value>
+  </data>
+  <data name="Update_ConfirmNotesHeader" xml:space="preserve">
+    <value>更新内容</value>
+  </data>
+  <data name="Update_ChangelogLanguage" xml:space="preserve">
+    <value>zh</value>
+  </data>
+  <data name="Update_ConfirmNow" xml:space="preserve">
+    <value>立即更新</value>
+  </data>
+  <data name="Update_ConfirmLater" xml:space="preserve">
+    <value>稍后</value>
+  </data>
   <data name="Tun_EnableTitle" xml:space="preserve">
     <value>开启TUN模式</value>
   </data>
@@ -619,33 +631,6 @@
   </data>
   <data name="Main_NotConnected" xml:space="preserve">
     <value>未连接</value>
-  </data>
-  <data name="GeoUpdate_Updating" xml:space="preserve">
-    <value>正在更新路由数据</value>
-  </data>
-  <data name="GeoUpdate_AlreadyLatest" xml:space="preserve">
-    <value>已是最新</value>
-  </data>
-  <data name="GeoUpdate_AlreadyLatestMsg" xml:space="preserve">
-    <value>geoip.dat 和 geosite.dat 都已是最新版本，无需下载。</value>
-  </data>
-  <data name="GeoUpdate_Success" xml:space="preserve">
-    <value>更新成功</value>
-  </data>
-  <data name="GeoUpdate_TunRestart" xml:space="preserve">
-    <value>已更新。TUN 模式下请手动重启以生效。</value>
-  </data>
-  <data name="GeoUpdate_ReloadedOk" xml:space="preserve">
-    <value>已更新并重新加载 xray。</value>
-  </data>
-  <data name="GeoUpdate_ReloadFailed" xml:space="preserve">
-    <value>已更新数据文件，但重启 xray 失败：{0}</value>
-  </data>
-  <data name="GeoUpdate_RestartRequired" xml:space="preserve">
-    <value>已更新。请重启 xray 以生效。</value>
-  </data>
-  <data name="GeoUpdate_NextStart" xml:space="preserve">
-    <value>已更新。下次启动 xray 时生效。</value>
   </data>
   <data name="Update_FetchingChecksum" xml:space="preserve">
     <value>正在获取校验文件…</value>
@@ -1305,24 +1290,6 @@
   <data name="Tun_WintunNotFound" xml:space="preserve">
     <value>找不到 wintun.dll
 路径：{0}</value>
-  </data>
-  <data name="GeoUpdate_ViaProxy" xml:space="preserve">
-    <value>通过本地代理下载（{0}）…</value>
-  </data>
-  <data name="GeoUpdate_Checking" xml:space="preserve">
-    <value>正在检查 {0}.dat …</value>
-  </data>
-  <data name="GeoUpdate_UpToDate" xml:space="preserve">
-    <value>{0}.dat 已是最新</value>
-  </data>
-  <data name="GeoUpdate_ChecksumFailed" xml:space="preserve">
-    <value>{0}.dat 校验失败：下载文件的 SHA256 与服务器公布的不一致。</value>
-  </data>
-  <data name="GeoUpdate_Downloading" xml:space="preserve">
-    <value>正在下载 {0} … {1:0.0} / {2:0.0} MB</value>
-  </data>
-  <data name="GeoUpdate_DownloadingNoTotal" xml:space="preserve">
-    <value>正在下载 {0} … {1:0.0} MB</value>
   </data>
   <data name="ServerList_TestModeConnect.Text" xml:space="preserve">
     <value>Tcping延迟</value>

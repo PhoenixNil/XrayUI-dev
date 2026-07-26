@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -18,16 +19,16 @@ namespace XrayUI.Services
      Checks GitHub Releases for a newer XrayUI build, downloads +verifies the
      matching zip asset, extracts and validates it, then hands off to the
      standalone XrayUI.Updater.exe to overwrite the install directory.
-    
-     HTTP / SHA256 / progress patterns are intentionally cloned from
-     <see cref = "GeoDataUpdateService" /> rather than refactored into a shared
-     helper — they are ~50 LOC each and the two services have different
-     failure-policy requirements.
      </summary> */
     public sealed class UpdateService : IUpdateService
     {
         private const string ReleaseApiUrl =
             "https://api.github.com/repos/PhoenixNil/XrayUI-dev/releases/latest";
+
+        // User-facing release notes live on the website, not in the GitHub release body —
+        // the release page stays a plain technical PR list, and the notes shown in-app can
+        // be written (and translated) for end users.
+        private const string ChangelogUrl = "https://www.xrayui.site/changelog.json";
 
         private const string AppExeName     = "XrayUI-dev.exe";
         private const string UpdaterExeName = "XrayUI.Updater.exe";
@@ -52,7 +53,7 @@ namespace XrayUI.Services
             // skip so dev iteration never tries to "upgrade" to the latest public release.
             if (AppVersion.IsDevBuild) return null;
 
-            using var client = CreateHttpClient(proxyUrl, TimeSpan.FromSeconds(20));
+            using var client = CreateGithubClient(proxyUrl, TimeSpan.FromSeconds(20));
 
             GhRelease? release;
             try
@@ -71,7 +72,7 @@ namespace XrayUI.Services
 
             var tag = (release.TagName ?? string.Empty).TrimStart('v');
             if (!Version.TryParse(tag, out var remoteVersion)) return null;
-            if (remoteVersion <= AppVersion.Current) return null;
+            if (AppVersion.CompareNormalized(remoteVersion, AppVersion.Current) <= 0) return null;
 
             var rid = CurrentRid();
             if (rid is null) return null;
@@ -97,6 +98,34 @@ namespace XrayUI.Services
             return new UpdateInfo(remoteVersion, release.TagName!, zipUrl, shaUrl, zipName);
         }
 
+        public async Task<IReadOnlyList<ChangelogEntry>> FetchChangelogAsync(
+            UpdateInfo info, string? language, string? proxyUrl, CancellationToken ct)
+        {
+            try
+            {
+                using var client = CreateHttpClient(proxyUrl, TimeSpan.FromSeconds(10));
+
+                // Cache-buster: an edge node still holding the previous file would otherwise
+                // hide the notes for a release that just went out.
+                var url = $"{ChangelogUrl}?v={info.NewVersion}";
+
+                var feed = await client.GetFromJsonAsync(
+                    url, AppJsonSerializerContext.Default.ChangelogFeed, ct);
+
+                return ChangelogSelector.Select(feed, AppVersion.Current, info.NewVersion, language);
+            }
+            // Only a real caller cancellation propagates. HttpClient.Timeout also raises
+            // OperationCanceledException (as TaskCanceledException) with ct untouched, and
+            // rethrowing that would let a slow changelog host suppress the whole update
+            // notification — the notes are decoration, they must never do that.
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Update] Changelog fetch failed: {ex.Message}");
+                return Array.Empty<ChangelogEntry>();
+            }
+        }
+
         public async Task<UpdateStaging> DownloadVerifyAndExtractAsync(
             UpdateInfo info, string? proxyUrl, IProgress<ProgressDialogUpdate> progress, CancellationToken ct)
         {
@@ -115,7 +144,7 @@ namespace XrayUI.Services
             Directory.CreateDirectory(extractDir);
             Directory.CreateDirectory(runnerDir);
 
-            using var client = CreateHttpClient(proxyUrl, TimeSpan.FromMinutes(10));
+            using var client = CreateGithubClient(proxyUrl, TimeSpan.FromMinutes(10));
 
             // ── 1. .sha256 first (small, fail-fast on bad release) ─────────────────
             progress.Report(new ProgressDialogUpdate(Loc.GetString("Update_FetchingChecksum")));
@@ -165,7 +194,7 @@ namespace XrayUI.Services
             var actualFileVersion = FileVersionInfo.GetVersionInfo(newAppExe).FileVersion;
             if (string.IsNullOrEmpty(actualFileVersion) ||
                 !Version.TryParse(actualFileVersion, out var parsedFv) ||
-                NormalizeForCompare(parsedFv) != NormalizeForCompare(info.NewVersion))
+                AppVersion.CompareNormalized(parsedFv, info.NewVersion) != 0)
             {
                 throw new InvalidDataException(
                     Loc.Format("Update_VersionMismatch", info.NewVersion, actualFileVersion));
@@ -237,10 +266,6 @@ namespace XrayUI.Services
             _ => null,
         };
 
-        // System.Version normalizes missing components to -1; align so 1.2.3 == 1.2.3.0.
-        private static (int, int, int, int) NormalizeForCompare(Version v) =>
-            (v.Major, v.Minor, Math.Max(v.Build, 0), Math.Max(v.Revision, 0));
-
         private static HttpClient CreateHttpClient(string? proxyUrl, TimeSpan timeout)
         {
             var handler = new HttpClientHandler();
@@ -255,8 +280,14 @@ namespace XrayUI.Services
             }
 
             var client = new HttpClient(handler) { Timeout = timeout };
-            client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
             client.DefaultRequestHeaders.UserAgent.ParseAdd($"XrayUI/{AppVersion.Current}");
+            return client;
+        }
+
+        private static HttpClient CreateGithubClient(string? proxyUrl, TimeSpan timeout)
+        {
+            var client = CreateHttpClient(proxyUrl, timeout);
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
             return client;
         }
 

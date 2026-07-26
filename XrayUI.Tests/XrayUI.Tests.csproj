@@ -27,10 +27,13 @@
          building — that is the signal to either stub the dependency (see
          LocalizationStubs.cs) or keep the new dependency out of parser-layer
          code. -->
+    <Compile Include="..\Helpers\AppVersion.cs" Link="Prod\Helpers\AppVersion.cs" />
     <Compile Include="..\Models\ServerEntry.cs" Link="Prod\Models\ServerEntry.cs" />
     <Compile Include="..\Models\SubscriptionEntry.cs" Link="Prod\Models\SubscriptionEntry.cs" />
     <Compile Include="..\Models\SubscriptionPresetEntry.cs" Link="Prod\Models\SubscriptionPresetEntry.cs" />
     <Compile Include="..\Models\SubscriptionRefreshSchedule.cs" Link="Prod\Models\SubscriptionRefreshSchedule.cs" />
+    <Compile Include="..\Models\ChangelogFeed.cs" Link="Prod\Models\ChangelogFeed.cs" />
+    <Compile Include="..\Services\ChangelogSelector.cs" Link="Prod\Services\ChangelogSelector.cs" />
     <Compile Include="..\Services\NodeLinkParser.cs" Link="Prod\Services\NodeLinkParser.cs" />
     <Compile Include="..\Services\NodeLinkSerializer.cs" Link="Prod\Services\NodeLinkSerializer.cs" />
     <Compile Include="..\Services\ClashConfigParser.cs" Link="Prod\Services\ClashConfigParser.cs" />

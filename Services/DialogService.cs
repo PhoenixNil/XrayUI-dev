@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.ComponentModel;
 using System.Collections.Generic;
 using Windows.ApplicationModel.DataTransfer;
+using Microsoft.UI.Xaml.Automation;
 using XrayUI.Controls;
 using XrayUI.Helpers;
 using XrayUI.Models;
@@ -734,102 +735,6 @@ namespace XrayUI.Services
 
         // ── Progress ──────────────────────────────────────────────────────────
 
-        public async Task ShowProgressDialogAsync(string title, Func<IProgress<string>, CancellationToken, Task> work,
-            XamlRoot? xamlRoot = null)
-        {
-            using var cts = new CancellationTokenSource();
-
-            var statusText = new TextBlock
-            {
-                Text = L.Dialog_Preparing,
-                TextWrapping = TextWrapping.Wrap,
-                MaxWidth = 320,
-                HorizontalAlignment = HorizontalAlignment.Center,
-            };
-
-            var ring = new ProgressRing
-            {
-                IsActive = true,
-                Width = 36,
-                Height = 36,
-            };
-
-            var dialog = CreateDialog(xamlRoot);
-            dialog.Title = title;
-            dialog.CloseButtonText = L.Dialog_Cancel;
-            dialog.Content = new StackPanel
-            {
-                Spacing = 16,
-                MinWidth = 320,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Children = { ring, statusText }
-            };
-
-            // Progress<T> captures the current SynchronizationContext — since we're on the UI
-            // thread here, reports from the worker thread are marshalled back automatically.
-            var progress = new Progress<string>(s => statusText.Text = s);
-
-            Exception? error = null;
-            int workFinished = 0;
-
-            dialog.Opened += (_, _) =>
-            {
-                if (Volatile.Read(ref workFinished) == 1)
-                {
-                    try
-                    {
-                        dialog.Hide();
-                    }
-                    catch
-                    {
-                    }
-                }
-            };
-
-            var workTask = Task.Run(async () =>
-            {
-                try
-                {
-                    await work(progress, cts.Token);
-                }
-                catch (OperationCanceledException) when (cts.IsCancellationRequested)
-                {
-                    // Real user cancel — swallow here, we rethrow a fresh OCE below based on cts state.
-                    // Any *other* OperationCanceledException (e.g. HttpClient.Timeout throwing
-                    // TaskCanceledException with its own internal token) must not be swallowed —
-                    // it falls through to the generic catch so the caller can surface the failure.
-                }
-                catch (Exception ex)
-                {
-                    error = ex;
-                }
-                finally
-                {
-                    Volatile.Write(ref workFinished, 1);
-                    dialog.DispatcherQueue.TryEnqueue(() =>
-                    {
-                        try
-                        {
-                            dialog.Hide();
-                        }
-                        catch
-                        {
-                        }
-                    });
-                }
-            });
-
-            await dialog.ShowAsync();
-
-            // If the dialog closed because the user clicked Cancel (work still running), signal it.
-            if (Volatile.Read(ref workFinished) == 0) cts.Cancel();
-
-            await workTask;
-
-            if (error != null) throw error;
-            if (cts.IsCancellationRequested) throw new OperationCanceledException(cts.Token);
-        }
-
         public async Task ShowProgressBarDialogAsync(string title,
             Func<IProgress<ProgressDialogUpdate>, CancellationToken, Task> work, XamlRoot? xamlRoot = null)
         {
@@ -1096,6 +1001,108 @@ namespace XrayUI.Services
             if (result != ContentDialogResult.Primary) return null;
 
             return (toggle.IsOn, checkBox.IsChecked == true);
+        }
+
+        // ── App update confirm ────────────────────────────────────────────────
+
+        public async Task<bool> ShowUpdateConfirmDialogAsync(
+            Version newVersion, IReadOnlyList<ChangelogEntry> notes)
+        {
+            var dialog = CreateDialog();
+            dialog.Title = Loc.Format("Update_ConfirmTitle", newVersion);
+            dialog.PrimaryButtonText = L.Update_ConfirmNow;
+            dialog.CloseButtonText = L.Update_ConfirmLater;
+            dialog.DefaultButton = ContentDialogButton.Primary;
+
+            // No notes → no Content at all: the dialog stays a compact title + buttons.
+            if (notes.Count > 0)
+            {
+                // Grid root, not StackPanel: a StackPanel root breaks the measure chain and
+                // ContentDialog clips tall content instead of letting the notes list scroll.
+                // Fixed width keeps the dialog compact — without it the longest note line
+                // stretches it toward ContentDialog's max width.
+                var root = new Grid { Width = 380 };
+                root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // notes header
+                root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // notes list
+
+                // Opacity instead of TextFillColorSecondaryBrush: Application.Current.Resources
+                // resolves theme brushes against the app-level theme (never set here), which goes
+                // stale under the Personalize theme override — see Views/LogWindow.xaml.
+                var notesHeader = new TextBlock
+                {
+                    Text = L.Update_ConfirmNotesHeader,
+                    FontSize = 12,
+                    Opacity = 0.65,
+                    Margin = new Thickness(0, 0, 0, 6),
+                };
+                Grid.SetRow(notesHeader, 0);
+                root.Children.Add(notesHeader);
+
+                var list = new StackPanel { Spacing = 4 };
+                foreach (var entry in notes)
+                {
+                    // Only label versions when the upgrade spans more than one release —
+                    // for the common single-version case the dialog title already says it.
+                    if (notes.Count > 1)
+                    {
+                        list.Children.Add(new TextBlock
+                        {
+                            Text = entry.Version.ToString(),
+                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                            Margin = new Thickness(0, list.Children.Count == 0 ? 0 : 8, 0, 2),
+                        });
+                    }
+
+                    foreach (var line in entry.Lines)
+                        list.Children.Add(BuildNoteLine(line));
+                }
+
+                var scroller = new ScrollViewer
+                {
+                    Content = list,
+                    MaxHeight = 220,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollMode = ScrollMode.Disabled,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                };
+                Grid.SetRow(scroller, 1);
+                root.Children.Add(scroller);
+
+                dialog.Content = root;
+            }
+
+            return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        }
+
+        /// <summary>
+        /// One bullet as a two-column Grid rather than a "• "-prefixed string, so wrapped
+        /// lines keep a hanging indent instead of running back under the bullet.
+        /// </summary>
+        private static Grid BuildNoteLine(string text)
+        {
+            var row = new Grid { ColumnSpacing = 6 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var bullet = new TextBlock
+            {
+                Text = "•",
+                FontSize = 13,
+                Opacity = 0.65,
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+
+            var body = new TextBlock
+            {
+                Text = text,
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap,
+            };
+            Grid.SetColumn(body, 1);
+
+            row.Children.Add(bullet);
+            row.Children.Add(body);
+            return row;
         }
 
         // ── DNS settings ──────────────────────────────────────────────────────

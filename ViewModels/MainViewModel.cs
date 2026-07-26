@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -279,7 +280,15 @@ namespace XrayUI.ViewModels
                         _updateCheckQueued = false;
                         return;
                     }
-                    _uiDispatcher?.TryEnqueue(() => ControlPanel.SetAvailableUpdate(info));
+
+                    // Fetch the notes here, off the UI thread, so the confirm dialog opens
+                    // instantly with them already in hand. Best-effort per the
+                    // IUpdateService contract: a failed fetch returns an empty list
+                    // rather than throwing, so it can never cost the notification.
+                    var notes = await _updateService.FetchChangelogAsync(
+                        info, L.Update_ChangelogLanguage, proxyUrl, CancellationToken.None);
+
+                    _uiDispatcher?.TryEnqueue(() => ControlPanel.SetAvailableUpdate(info, notes));
                 }
                 catch
                 {

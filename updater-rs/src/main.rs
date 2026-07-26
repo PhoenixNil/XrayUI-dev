@@ -9,7 +9,8 @@
 //!   4. relaunches the new app — unelevated, even if we had to elevate to copy.
 //!
 //! CLI contract — must stay byte-compatible with `Services/UpdateService.cs`:
-//!   --parent-pid=N --extracted-dir=PATH --install-dir=PATH --launch-after=NAME [--elevated]
+//!   --parent-pid=N --extracted-dir=PATH --install-dir=PATH --launch-after=NAME
+//!   [--elevated]
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -234,6 +235,7 @@ fn copy_overwrite(source: &Path, dest: &Path, log: &mut Logger) -> std::io::Resu
     for src_file in enumerate_files(source)? {
         let rel = src_file.strip_prefix(source).unwrap_or(&src_file);
         let dst_file = dest.join(rel);
+
         if let Some(parent) = dst_file.parent() {
             fs::create_dir_all(parent)?;
         }

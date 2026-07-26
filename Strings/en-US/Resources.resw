@@ -302,9 +302,6 @@
   <data name="CustomRules_Title" xml:space="preserve">
     <value>Custom Routing Rules</value>
   </data>
-  <data name="CustomRules_UpdateGeoTooltip" xml:space="preserve">
-    <value>Update GeoFile routing data</value>
-  </data>
   <data name="AddRule_Title" xml:space="preserve">
     <value>Add Rule</value>
   </data>
@@ -608,6 +605,21 @@
   <data name="Update_Updating" xml:space="preserve">
     <value>Updating XrayUI</value>
   </data>
+  <data name="Update_ConfirmTitle" xml:space="preserve">
+    <value>XrayUI {0} is available</value>
+  </data>
+  <data name="Update_ConfirmNotesHeader" xml:space="preserve">
+    <value>What's new</value>
+  </data>
+  <data name="Update_ChangelogLanguage" xml:space="preserve">
+    <value>en</value>
+  </data>
+  <data name="Update_ConfirmNow" xml:space="preserve">
+    <value>Update now</value>
+  </data>
+  <data name="Update_ConfirmLater" xml:space="preserve">
+    <value>Later</value>
+  </data>
   <data name="Tun_EnableTitle" xml:space="preserve">
     <value>Enable TUN Mode</value>
   </data>
@@ -619,33 +631,6 @@
   </data>
   <data name="Main_NotConnected" xml:space="preserve">
     <value>Not connected</value>
-  </data>
-  <data name="GeoUpdate_Updating" xml:space="preserve">
-    <value>Updating routing data</value>
-  </data>
-  <data name="GeoUpdate_AlreadyLatest" xml:space="preserve">
-    <value>Already Up to Date</value>
-  </data>
-  <data name="GeoUpdate_AlreadyLatestMsg" xml:space="preserve">
-    <value>geoip.dat and geosite.dat are already the latest version. No download needed.</value>
-  </data>
-  <data name="GeoUpdate_Success" xml:space="preserve">
-    <value>Update Successful</value>
-  </data>
-  <data name="GeoUpdate_TunRestart" xml:space="preserve">
-    <value>Updated. Please restart manually in TUN mode for changes to take effect.</value>
-  </data>
-  <data name="GeoUpdate_ReloadedOk" xml:space="preserve">
-    <value>Updated and xray reloaded.</value>
-  </data>
-  <data name="GeoUpdate_ReloadFailed" xml:space="preserve">
-    <value>Data files updated, but xray restart failed: {0}</value>
-  </data>
-  <data name="GeoUpdate_RestartRequired" xml:space="preserve">
-    <value>Updated. Please restart xray for changes to take effect.</value>
-  </data>
-  <data name="GeoUpdate_NextStart" xml:space="preserve">
-    <value>Updated. Changes will take effect on next xray start.</value>
   </data>
   <data name="Update_FetchingChecksum" xml:space="preserve">
     <value>Fetching checksum file…</value>
@@ -1302,24 +1287,6 @@ Path: {0}</value>
   <data name="Tun_WintunNotFound" xml:space="preserve">
     <value>Could not find wintun.dll
 Path: {0}</value>
-  </data>
-  <data name="GeoUpdate_ViaProxy" xml:space="preserve">
-    <value>Downloading via local proxy ({0}) …</value>
-  </data>
-  <data name="GeoUpdate_Checking" xml:space="preserve">
-    <value>Checking {0}.dat …</value>
-  </data>
-  <data name="GeoUpdate_UpToDate" xml:space="preserve">
-    <value>{0}.dat is up to date</value>
-  </data>
-  <data name="GeoUpdate_ChecksumFailed" xml:space="preserve">
-    <value>{0}.dat checksum failed: the downloaded file's SHA256 does not match the server's.</value>
-  </data>
-  <data name="GeoUpdate_Downloading" xml:space="preserve">
-    <value>Downloading {0} … {1:0.0} / {2:0.0} MB</value>
-  </data>
-  <data name="GeoUpdate_DownloadingNoTotal" xml:space="preserve">
-    <value>Downloading {0} … {1:0.0} MB</value>
   </data>
   <data name="ServerList_TestModeConnect.Text" xml:space="preserve">
     <value>Tcping Latency</value>
