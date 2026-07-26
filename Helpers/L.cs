@@ -106,6 +106,13 @@ public static class L
     // ── Startup / Update / TUN ─────────────────────────────────────────────
     public static string Startup_SetFailed => Loc.GetString("Startup_SetFailed");
     public static string Update_Updating   => Loc.GetString("Update_Updating");
+    public static string Update_ConfirmNotesHeader     => Loc.GetString("Update_ConfirmNotesHeader");
+    /// <summary>Language code for picking a branch of the website changelog feed ("zh" / "en").
+    /// Resolved through the resource loader so it follows the active UI language automatically,
+    /// including the "follow system" case — no locale parsing needed.</summary>
+    public static string Update_ChangelogLanguage     => Loc.GetString("Update_ChangelogLanguage");
+    public static string Update_ConfirmNow            => Loc.GetString("Update_ConfirmNow");
+    public static string Update_ConfirmLater          => Loc.GetString("Update_ConfirmLater");
     public static string Tun_EnableMsg     => Loc.GetString("Tun_EnableMsg.Text");
 
     // ── ChainProxy ─────────────────────────────────────────────────────────
@@ -163,7 +170,6 @@ public static class L
 
     // ── CustomRules / AddRule ──────────────────────────────────────────────
     public static string CustomRules_Title                  => Loc.GetString("CustomRules_Title");
-    public static string CustomRules_UpdateGeoTooltip       => Loc.GetString("CustomRules_UpdateGeoTooltip");
     public static string CustomRules_AdvancedEditorTooltip  => Loc.GetString("CustomRules_AdvancedEditorTooltip");
     public static string CustomRules_EditRowTooltip         => Loc.GetString("CustomRules_EditRowTooltip");
     public static string CustomRules_DeleteRowTooltip       => Loc.GetString("CustomRules_DeleteRowTooltip");
@@ -181,15 +187,6 @@ public static class L
     public static string AddRule_HintDomain  => Loc.GetString("AddRule_HintDomain");
     public static string AddRule_HintIp      => Loc.GetString("AddRule_HintIp");
     public static string AddRule_HintProcess => Loc.GetString("AddRule_HintProcess");
-
-    public static string GeoUpdate_Updating         => Loc.GetString("GeoUpdate_Updating");
-    public static string GeoUpdate_AlreadyLatest    => Loc.GetString("GeoUpdate_AlreadyLatest");
-    public static string GeoUpdate_AlreadyLatestMsg => Loc.GetString("GeoUpdate_AlreadyLatestMsg");
-    public static string GeoUpdate_TunRestart       => Loc.GetString("GeoUpdate_TunRestart");
-    public static string GeoUpdate_ReloadedOk       => Loc.GetString("GeoUpdate_ReloadedOk");
-    public static string GeoUpdate_RestartRequired  => Loc.GetString("GeoUpdate_RestartRequired");
-    public static string GeoUpdate_NextStart        => Loc.GetString("GeoUpdate_NextStart");
-    public static string GeoUpdate_Success          => Loc.GetString("GeoUpdate_Success");
 
     // ── LogWindow ──────────────────────────────────────────────────────────
     public static string Log_Title         => Loc.GetString("Log_Title");

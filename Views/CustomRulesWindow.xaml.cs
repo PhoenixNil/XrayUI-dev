@@ -40,7 +40,6 @@ namespace XrayUI.Views
             SystemBackdrop = new MicaBackdrop();
 
             ToolTipService.SetToolTip(OpenAdvancedEditorButton, L.CustomRules_AdvancedEditorTooltip);
-            ToolTipService.SetToolTip(UpdateGeoButton,          L.CustomRules_UpdateGeoTooltip);
 
 			var presenter = OverlappedPresenter.CreateForDialog();
 
@@ -56,8 +55,8 @@ namespace XrayUI.Views
             //    window has any prior presenter state.
             AppWindow.Show();
 
-            // Let the VM route dialogs (progress / success / error) to this window's XamlRoot
-            // instead of falling back to MainWindow's — otherwise they render behind.
+            // Let the VM route its error dialogs to this window's XamlRoot instead of
+            // falling back to MainWindow's — otherwise they render behind.
             ViewModel.GetXamlRoot = () => Content?.XamlRoot;
 
             // VM events
@@ -147,13 +146,6 @@ namespace XrayUI.Views
         {
             if (sender is FrameworkElement { DataContext: CustomRoutingRule rule })
                 ViewModel.DeleteRuleCommand.Execute(rule);
-        }
-
-        // ── Update GeoFiles ──────────────────────────────────────────────────
-
-        private void UpdateGeoButton_Click(object sender, RoutedEventArgs e)
-        {
-            ViewModel.UpdateGeoDataCommand.Execute(null);
         }
 
         private void SetWindowOwner(Window owner)

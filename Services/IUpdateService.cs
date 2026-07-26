@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using XrayUI.Models;
@@ -29,6 +30,15 @@ namespace XrayUI.Services
         /// </summary>
         Task<UpdateStaging> DownloadVerifyAndExtractAsync(
             UpdateInfo info, string? proxyUrl, IProgress<ProgressDialogUpdate> progress, CancellationToken ct);
+
+        /// <summary>
+        /// Fetches the user-facing release notes for this upgrade from the website feed.
+        /// Best-effort decoration: any failure (offline, feed not updated yet, malformed)
+        /// returns an empty list instead of throwing, so the update flow never depends on it.
+        /// </summary>
+        /// <param name="language">UI language code, e.g. <c>"zh"</c> or <c>"en"</c>.</param>
+        Task<IReadOnlyList<ChangelogEntry>> FetchChangelogAsync(
+            UpdateInfo info, string? language, string? proxyUrl, CancellationToken ct);
 
         /// <summary>
         /// Spawns the staged updater with handoff arguments. Caller is responsible

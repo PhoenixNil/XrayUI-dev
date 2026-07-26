@@ -25,11 +25,15 @@ namespace XrayUI.Services
         Task<(bool enabled, bool autoConnect)?> ShowStartupDialogAsync(bool currentEnabled, bool currentAutoConnect);
 
         /// <summary>
-        /// Shows a modal dialog with a progress ring + status text while <paramref name="work"/> runs.
-        /// Throws <see cref="OperationCanceledException"/> if the user cancels; rethrows any other exception from the work.
+        /// Confirmation shown before an app update starts. Returns true when the
+        /// user chose to update now.
         /// </summary>
-        /// <param name="xamlRoot">Override which window the dialog is rooted in. Null = MainWindow.</param>
-        Task ShowProgressDialogAsync(string title, Func<IProgress<string>, CancellationToken, Task> work, XamlRoot? xamlRoot = null);
+        /// <param name="notes">
+        /// Release notes to show in the dialog body. Empty leaves the dialog a
+        /// compact title + buttons confirm.
+        /// </param>
+        Task<bool> ShowUpdateConfirmDialogAsync(
+            Version newVersion, IReadOnlyList<ChangelogEntry> notes);
 
         /// <summary>
         /// Shows a modal dialog with a progress bar + status text while <paramref name="work"/> runs.

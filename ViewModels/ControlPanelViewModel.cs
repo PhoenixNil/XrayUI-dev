@@ -16,9 +16,9 @@ namespace XrayUI.ViewModels
         private readonly XrayService _xray;
         private readonly TunService _tunService;
         private readonly StartupService _startupService;
-        private readonly GeoDataUpdateService _geoUpdate = new();
         private readonly IUpdateService _update;
         private UpdateInfo? _availableUpdate;
+        private IReadOnlyList<ChangelogEntry> _availableUpdateNotes = Array.Empty<ChangelogEntry>();
         // Guards OnIsTunModeChanged from firing the dialog when we update internally
         private bool _isTunInternalUpdate;
 
@@ -645,14 +645,8 @@ namespace XrayUI.ViewModels
             var vm = new CustomRulesViewModel(
                 _settings,
                 _xray,
-                _geoUpdate,
                 _dialogs,
-                ReapplyRoutingAsync,
-                () => IsTunMode,
-                // In TUN mode the local SOCKS port still proxies traffic for non-TUN-captured
-                // processes (including ourselves), so routing the download through it is fine.
-                // When xray is stopped, null = direct connection.
-                () => _xray.IsRunning ? $"socks5://127.0.0.1:{LocalPort}" : null);
+                ReapplyRoutingAsync);
             ShowCustomRulesRequested?.Invoke(this, vm);
         }
 
@@ -836,10 +830,13 @@ namespace XrayUI.ViewModels
         public string     UpdateMenuText        => Loc.Format("ControlPanel_UpdateFound", _availableUpdate?.NewVersion);
 
         /// <summary>Called from MainViewModel after the background check completes.
-        /// Pass null to clear (e.g. after a failed update attempt).</summary>
-        public void SetAvailableUpdate(UpdateInfo? info)
+        /// Pass a null <paramref name="info"/> to clear (e.g. after a failed update
+        /// attempt). <paramref name="notes"/> is the already-fetched release notes
+        /// shown on the confirm dialog; empty means none.</summary>
+        public void SetAvailableUpdate(UpdateInfo? info, IReadOnlyList<ChangelogEntry> notes)
         {
             _availableUpdate = info;
+            _availableUpdateNotes = notes;
             IsUpdateAvailable = info is not null;
         }
 
@@ -848,6 +845,9 @@ namespace XrayUI.ViewModels
         {
             var info = _availableUpdate;
             if (info is null) return;
+
+            if (!await _dialogs.ShowUpdateConfirmDialogAsync(info.NewVersion, _availableUpdateNotes))
+                return;
 
             // Route the download through xray when it's running so users behind GFW
             // can still reach github.com / objects.githubusercontent.com.

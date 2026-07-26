@@ -13,11 +13,8 @@ namespace XrayUI.ViewModels
     {
         private readonly SettingsService _settings;
         private readonly XrayService _xray;
-        private readonly GeoDataUpdateService _geoUpdate;
         private readonly IDialogService _dialogs;
         private readonly Func<Task>? _reapplyRouting;
-        private readonly Func<bool>? _isTunMode;
-        private readonly Func<string?>? _getProxyUrl;
 
         public ObservableCollection<CustomRoutingRule> Rules { get; } = new();
 
@@ -48,27 +45,21 @@ namespace XrayUI.ViewModels
 
         /// <summary>
         /// Returns the XamlRoot of the hosting CustomRulesWindow. Set by the View in its ctor.
-        /// Used so dialogs raised from this VM (progress, success/error toasts) render on the
-        /// CustomRulesWindow instead of behind it on MainWindow.
+        /// Used so error dialogs raised from this VM render on the CustomRulesWindow instead
+        /// of behind it on MainWindow.
         /// </summary>
         public Func<XamlRoot?>? GetXamlRoot { get; set; }
 
         public CustomRulesViewModel(
             SettingsService settings,
             XrayService xray,
-            GeoDataUpdateService geoUpdate,
             IDialogService dialogs,
-            Func<Task>? reapplyRouting,
-            Func<bool>? isTunMode,
-            Func<string?>? getProxyUrl = null)
+            Func<Task>? reapplyRouting)
         {
             _settings       = settings;
             _xray           = xray;
-            _geoUpdate      = geoUpdate;
             _dialogs        = dialogs;
             _reapplyRouting = reapplyRouting;
-            _isTunMode      = isTunMode;
-            _getProxyUrl    = getProxyUrl;
         }
 
         public async Task LoadAsync()
@@ -196,89 +187,6 @@ namespace XrayUI.ViewModels
                     Loc.Format("CustomRules_OpenEditorFailedMsg", ex.Message),
                     xamlRoot);
             }
-        }
-
-        // ── Update geo data ──────────────────────────────────────────────────
-
-        /// <summary>
-        /// Invoked directly when the user clicks the refresh button.
-        /// Shows a modal progress dialog, downloads (or skips if already latest), restarts xray
-        /// if something actually changed, then surfaces the result. All dialogs are rooted in
-        /// the CustomRulesWindow via <see cref="GetXamlRoot"/>.
-        /// </summary>
-        [RelayCommand]
-        private async Task UpdateGeoData()
-        {
-            var xamlRoot = GetXamlRoot?.Invoke();
-
-            // Route through xray's local SOCKS5 port when it's running — in mainland China
-            // GitHub's releases CDN is often unreachable or painfully slow, and the user
-            // already has a working tunnel up. Null = direct connection.
-            var proxyUrl = _getProxyUrl?.Invoke();
-
-            GeoDataUpdateService.UpdateResult result = default;
-
-            try
-            {
-                await _dialogs.ShowProgressDialogAsync(
-                    L.GeoUpdate_Updating,
-                    async (progress, ct) => result = await _geoUpdate.UpdateAsync(progress, proxyUrl, ct),
-                    xamlRoot);
-            }
-            catch (OperationCanceledException ex) when (ex.GetType() == typeof(OperationCanceledException))
-            {
-                // DialogService throws exactly `OperationCanceledException` for user cancel.
-                // Any subclass (e.g. TaskCanceledException from HttpClient.Timeout) falls through
-                // to the generic Exception catch below so the failure is surfaced, not swallowed.
-                return;
-            }
-            catch (Exception ex)
-            {
-                await _dialogs.ShowErrorAsync(L.Error_UpdateFailed, ex.Message, xamlRoot);
-                return;
-            }
-
-            // Everything was already current — don't bother restarting xray.
-            if (!result.AnyUpdated)
-            {
-                await _dialogs.ShowErrorAsync(
-                    L.GeoUpdate_AlreadyLatest,
-                    L.GeoUpdate_AlreadyLatestMsg,
-                    xamlRoot);
-                return;
-            }
-
-            // At least one file changed — decide whether to reload xray.
-            string message;
-            if (_xray.IsRunning)
-            {
-                if (_isTunMode?.Invoke() == true)
-                {
-                    message = L.GeoUpdate_TunRestart;
-                }
-                else if (_reapplyRouting != null)
-                {
-                    try
-                    {
-                        await _reapplyRouting();
-                        message = L.GeoUpdate_ReloadedOk;
-                    }
-                    catch (Exception ex)
-                    {
-                        message = Loc.Format("GeoUpdate_ReloadFailed", ex.Message);
-                    }
-                }
-                else
-                {
-                    message = L.GeoUpdate_RestartRequired;
-                }
-            }
-            else
-            {
-                message = L.GeoUpdate_NextStart;
-            }
-
-            await _dialogs.ShowErrorAsync(L.GeoUpdate_Success, message, xamlRoot);
         }
     }
 }

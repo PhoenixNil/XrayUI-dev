@@ -37,14 +37,6 @@
                         Command="{x:Bind ViewModel.OpenAdvancedEditorCommand}">
                     <FontIcon Glyph="&#xE70F;" FontSize="16" />
                 </Button>
-                <Button x:Name="UpdateGeoButton"
-                        Padding="6"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        VerticalAlignment="Center"
-                        Click="UpdateGeoButton_Click">
-                    <FontIcon Glyph="&#xE895;" FontSize="14" />
-                </Button>
                 <Button Style="{ThemeResource AccentButtonStyle}"
                         Command="{x:Bind ViewModel.AddRuleCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
