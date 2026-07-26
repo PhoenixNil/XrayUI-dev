@@ -918,7 +918,7 @@ namespace XrayUI.ViewModels
                     {
                         sub.LastError = Loc.Format("Subscription_UpdateFailed", ex.Message);
                         Debug.WriteLine($"[Subscriptions] Refresh failed for {sub.Id}: {ex}");
-                        if (!IsKnownSubscription(sub.Id)) return;
+                        if (!IsKnownSubscription(sub)) return;
                         try
                         {
                             await UpsertSubscriptionAsync(sub);
@@ -946,7 +946,7 @@ namespace XrayUI.ViewModels
                     // could exhaust them.
                     if (fetchedUrl is not null &&
                         !string.Equals(fetchedUrl, sub.Url, StringComparison.Ordinal) &&
-                        IsKnownSubscription(sub.Id))
+                        IsKnownSubscription(sub))
                         _ = CarryMissedUrlEditAsync(sub);
                 },
                 (completed, _) => progress?.Invoke(skipped + completed, subscriptions.Count));
@@ -970,8 +970,16 @@ namespace XrayUI.ViewModels
             }
         }
 
-        private bool IsKnownSubscription(string id) =>
-            _knownSubscriptions.Any(s => string.Equals(s.Id, id, StringComparison.Ordinal));
+        /// <summary>
+        /// Liveness check for an in-flight refresh: by reference, not id. Every live path shares
+        /// one instance (the dialog binds the entries in <see cref="_knownSubscriptions"/>), so a
+        /// same-id different-instance means the list was rebuilt underneath us — a mid-session
+        /// preset import, whose entries keep their exported ids. The stale object's result must
+        /// be discarded there just like after a delete, or its final upsert would overwrite the
+        /// freshly imported name, URL and cleared refresh schedule.
+        /// </summary>
+        private bool IsKnownSubscription(SubscriptionEntry sub) =>
+            _knownSubscriptions.Any(s => ReferenceEquals(s, sub));
 
         /// <summary>
         /// An enabled schedule without an anchor came from an external/hand-edited settings file.
@@ -1282,10 +1290,11 @@ namespace XrayUI.ViewModels
                     (newEntries, error) = await FetchSubscriptionNodesAsync(sub);
                 }
 
-                // Deleted while the fetch was in flight: applying the result would re-add the
-                // nodes as an orphan group, and the finally's upsert would re-create the
-                // settings entry — the subscription would come back from the dead on restart.
-                if (!IsKnownSubscription(sub.Id)) return urlAtFetch;
+                // Deleted — or replaced wholesale by a mid-session preset import — while the
+                // fetch was in flight: applying the result would re-add the nodes as an orphan
+                // group, and the finally's upsert would re-create (or overwrite) the settings
+                // entry with pre-delete/pre-import state.
+                if (!IsKnownSubscription(sub)) return urlAtFetch;
 
                 if (newEntries == null)
                 {
@@ -1386,7 +1395,7 @@ namespace XrayUI.ViewModels
             {
                 try
                 {
-                    if (IsKnownSubscription(sub.Id))
+                    if (IsKnownSubscription(sub))
                         await UpsertSubscriptionAsync(sub);
                 }
                 finally
