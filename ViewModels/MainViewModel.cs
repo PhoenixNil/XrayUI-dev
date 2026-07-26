@@ -1,7 +1,9 @@
 ﻿using System.ComponentModel;
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.UI.Dispatching;
 using XrayUI.Helpers;
 using XrayUI.Models;
 using XrayUI.Services;
@@ -13,7 +15,8 @@ namespace XrayUI.ViewModels
         private readonly SettingsService _settings;
         private readonly StartupService _startupService;
         private readonly IUpdateService _updateService;
-        private readonly Microsoft.UI.Dispatching.DispatcherQueue? _uiDispatcher;
+        private readonly DispatcherQueue? _uiDispatcher;
+        private DispatcherQueueTimer? _subscriptionRefreshTimer;
         private bool _updateCheckQueued;
         private ServerEntry? _activeServer;
         private string _activeLatencyText = string.Empty;
@@ -102,6 +105,11 @@ namespace XrayUI.ViewModels
             // Live TUN state for the speed test's egress pin — settings.IsTunMode alone lags
             // the UI toggle and can survive a crash as a stale true (see IDialogService remarks).
             realLatencyProbe.IsTunActive = () => ControlPanel.IsRunning && ControlPanel.IsTunMode;
+            // Subscription fetches ride the core's own SOCKS inbound whenever it is running:
+            // IsProxyRunning can't tell manual mode (system proxy untouched) from system-proxy
+            // mode, and a direct fetch on a proxy-only link burns the schedule's whole interval.
+            ServerListViewModel.GetLocalProxyPort =
+                () => ControlPanel.IsRunning ? ControlPanel.LocalPort : (int?)null;
 
             ServerList.PropertyChanged   += OnServerListPropertyChanged;
             ControlPanel.PropertyChanged += OnControlPanelPropertyChanged;
@@ -172,10 +180,82 @@ namespace XrayUI.ViewModels
             if (isBootLaunch && s.IsStartupEnabled && s.IsAutoConnect)
                 await TryAutoConnectAsync(s);
 
+            await ServerList.InitializeSubscriptionRefreshSchedulesAsync(DateTimeOffset.UtcNow);
+            StartSubscriptionRefreshScheduler();
+
             // Fire-and-forget background tasks. Failures here must never block
             // startup or surface as dialogs (per the auto-update failure policy).
             _ = Task.Run(() => _updateService.CleanupOldStagingDirs());
             QueueUpdateCheck(CurrentProxyUrl());
+        }
+
+        private void StartSubscriptionRefreshScheduler()
+        {
+            if (_uiDispatcher is null || _subscriptionRefreshTimer is not null) return;
+
+            var timer = _uiDispatcher.CreateTimer();
+            timer.Interval = TimeSpan.FromMinutes(1);
+            timer.IsRepeating = true;
+            timer.Tick += OnSubscriptionRefreshTimerTick;
+            _subscriptionRefreshTimer = timer;
+            timer.Start();
+
+            // Check once at startup so a schedule missed while the app was closed is caught up.
+            // Lands immediately on the boot path, where auto-connect has already run above; on a
+            // manual launch the proxy is still down and the sweep declines (see
+            // RefreshDueSubscriptionsAsync) until the connect below wakes it.
+            _ = RunSubscriptionRefreshCheckAsync();
+        }
+
+        private async void OnSubscriptionRefreshTimerTick(DispatcherQueueTimer sender, object args)
+        {
+            await RunSubscriptionRefreshCheckAsync();
+        }
+
+        /// <summary>
+        /// Fired from three places (startup, the minute timer, and connecting), so calls can overlap;
+        /// re-entrancy is excluded by RefreshDueSubscriptionsAsync, which owns the sweep state. All
+        /// this layer adds is the catch — scheduled refreshes are silent background work, per-entry
+        /// failures are already handled inside the shared batch runner, and anything unexpected must
+        /// stay out of startup and off the UI.
+        /// </summary>
+        private async Task RunSubscriptionRefreshCheckAsync()
+        {
+            try
+            {
+                await ServerList.RefreshDueSubscriptionsAsync(DateTimeOffset.UtcNow);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Subscriptions] Scheduled refresh check failed: {ex}");
+            }
+        }
+
+        public void StopSubscriptionRefreshScheduler()
+        {
+            var timer = _subscriptionRefreshTimer;
+            _subscriptionRefreshTimer = null;
+            if (timer is null) return;
+
+            void StopTimer()
+            {
+                try
+                {
+                    timer.Stop();
+                    timer.Tick -= OnSubscriptionRefreshTimerTick;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[Subscriptions] Failed to stop refresh timer: {ex.Message}");
+                }
+            }
+
+            if (_uiDispatcher?.HasThreadAccess != false)
+                StopTimer();
+            else
+                _uiDispatcher.TryEnqueue(StopTimer);
         }
 
         private string? CurrentProxyUrl() =>
@@ -374,6 +454,12 @@ namespace XrayUI.ViewModels
 
             if (isRunning && !ControlPanel.IsUpdateAvailable)
                 QueueUpdateCheck(CurrentProxyUrl());
+
+            // Scheduled refreshes stand down while the proxy is down, so connecting is the moment
+            // an overdue subscription becomes fetchable. Without this it would sit until the next
+            // minute tick — a visible lag right after the user connects and opens the list.
+            if (isRunning)
+                _ = RunSubscriptionRefreshCheckAsync();
         }
 
         private void UpdateActiveServer(ServerEntry? server)

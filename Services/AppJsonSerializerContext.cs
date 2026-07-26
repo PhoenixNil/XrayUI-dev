@@ -18,6 +18,8 @@ namespace XrayUI.Services;
 [JsonSerializable(typeof(CustomRoutingRule))]
 [JsonSerializable(typeof(List<SubscriptionEntry>))]
 [JsonSerializable(typeof(SubscriptionEntry))]
+[JsonSerializable(typeof(List<SubscriptionPresetEntry>))]
+[JsonSerializable(typeof(SubscriptionPresetEntry))]
 [JsonSerializable(typeof(PresetSettings))]
 [JsonSerializable(typeof(GhRelease))]
 [JsonSerializable(typeof(GhAsset))]

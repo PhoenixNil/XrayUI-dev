@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using XrayUI.Helpers;
 using XrayUI.Models;
@@ -12,11 +11,7 @@ namespace XrayUI.ViewModels
 {
     public partial class ManageSubscriptionsViewModel : ObservableObject
     {
-        // Bulk-refresh fan-out. Each subscription costs two requests plus a settings write and a list
-        // rebuild, so this stays low enough to avoid tripping provider rate limits.
-        private const int MaxConcurrentRefresh = 3;
-
-        private readonly Func<SubscriptionEntry, Task> _onRefresh;
+        private readonly Func<IReadOnlyList<SubscriptionEntry>, Action<int, int>?, Task> _onRefreshMany;
         private readonly Func<SubscriptionEntry, Task<bool>> _onDelete;
         private readonly Func<SubscriptionEntry, Task> _onEdit;
 
@@ -24,13 +19,13 @@ namespace XrayUI.ViewModels
 
         public ManageSubscriptionsViewModel(
             IEnumerable<SubscriptionEntry> source,
-            Func<SubscriptionEntry, Task> onRefresh,
+            Func<IReadOnlyList<SubscriptionEntry>, Action<int, int>?, Task> onRefreshMany,
             Func<SubscriptionEntry, Task<bool>> onDelete,
             Func<SubscriptionEntry, Task> onEdit)
         {
-            _onRefresh = onRefresh;
-            _onDelete  = onDelete;
-            _onEdit    = onEdit;
+            _onRefreshMany = onRefreshMany;
+            _onDelete      = onDelete;
+            _onEdit        = onEdit;
 
             Subscriptions = new ObservableCollection<SubscriptionEntry>(source);
             Subscriptions.CollectionChanged += OnCollectionChanged;
@@ -108,14 +103,12 @@ namespace XrayUI.ViewModels
         }
 
         [RelayCommand]
-        private Task RefreshSubscription(SubscriptionEntry sub) => _onRefresh(sub);
+        private Task RefreshSubscription(SubscriptionEntry sub) =>
+            _onRefreshMany([sub], null);
 
         /// <summary>
-        /// Refreshes every subscription, at most <see cref="MaxConcurrentRefresh"/> at a time. Capped
-        /// rather than fully parallel: each refresh issues two requests and ends in a settings/server
-        /// write plus a list rebuild, so an unbounded sweep would spike request count and pile up
-        /// concurrent rebuilds. Individual failures land in that entry's LastError (handled inside the
-        /// refresh callback), so the sweep never aborts early.
+        /// Uses the same bounded batch runner as scheduled refreshes. Individual failures land in
+        /// that entry's LastError, so the sweep never aborts early.
         /// </summary>
         [RelayCommand]
         private async Task RefreshAll()
@@ -126,24 +119,9 @@ namespace XrayUI.ViewModels
             RefreshAllDone  = 0;
             try
             {
-                using var gate = new SemaphoreSlim(MaxConcurrentRefresh);
-                var tasks = Subscriptions.ToList().Select(async sub =>
-                {
-                    await gate.WaitAsync();
-                    try
-                    {
-                        await _onRefresh(sub);
-                    }
-                    finally
-                    {
-                        gate.Release();
-                        // Continuations resume on the UI thread (no ConfigureAwait above), so the
-                        // tally needs no synchronization of its own.
-                        RefreshAllDone++;
-                    }
-                });
-
-                await Task.WhenAll(tasks);
+                await _onRefreshMany(
+                    Subscriptions.ToList(),
+                    (completed, _) => RefreshAllDone = completed);
             }
             finally
             {
@@ -151,16 +129,34 @@ namespace XrayUI.ViewModels
             }
         }
 
-        public async Task CommitEditAsync(SubscriptionEntry sub, string url, string name)
+        public async Task CommitEditAsync(
+            SubscriptionEntry sub,
+            string url,
+            string name,
+            int autoRefreshIntervalMinutes)
         {
-            var oldUrl   = sub.Url;
-            var oldName  = sub.Name;
-            var oldUsage = sub.Usage;
+            var oldUrl                    = sub.Url;
+            var oldName                   = sub.Name;
+            var oldUsage                  = sub.Usage;
+            var oldAutoRefreshInterval    = sub.AutoRefreshIntervalMinutes;
+            var oldLastRefreshAttempt     = sub.LastRefreshAttempt;
+            var normalizedRefreshInterval =
+                SubscriptionRefreshSchedule.NormalizeInterval(autoRefreshIntervalMinutes);
             var urlChanged = !string.Equals(sub.Url, url, StringComparison.Ordinal);
+            var scheduleChanged = oldAutoRefreshInterval != normalizedRefreshInterval;
             var editSaved = false;
 
             sub.Url  = url;
             sub.Name = ResolveName(name, url);
+            if (scheduleChanged)
+            {
+                sub.AutoRefreshIntervalMinutes = normalizedRefreshInterval;
+                // Saving a new schedule starts a fresh interval instead of unexpectedly fetching
+                // immediately. Disabling clears the anchor because there is no next due time.
+                sub.LastRefreshAttempt = normalizedRefreshInterval > 0
+                    ? DateTimeOffset.UtcNow
+                    : null;
+            }
             if (urlChanged)
             {
                 // A different link is a different account, so the old quota/expiry no longer describes it.
@@ -172,7 +168,7 @@ namespace XrayUI.ViewModels
             {
                 await _onEdit(sub);
                 editSaved = true;
-                if (urlChanged) await _onRefresh(sub);
+                if (urlChanged) await _onRefreshMany([sub], null);
             }
             catch (Exception ex)
             {
@@ -181,6 +177,8 @@ namespace XrayUI.ViewModels
                     sub.Url   = oldUrl;
                     sub.Name  = oldName;
                     sub.Usage = oldUsage;
+                    sub.AutoRefreshIntervalMinutes = oldAutoRefreshInterval;
+                    sub.LastRefreshAttempt = oldLastRefreshAttempt;
                 }
 
                 // Fetch failures are handled inside the refresh callback and land in

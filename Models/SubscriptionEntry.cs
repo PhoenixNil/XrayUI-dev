@@ -26,6 +26,8 @@ namespace XrayUI.Models
         private long? _download;
         private long? _total;
         private DateTimeOffset? _expire;
+        private int _autoRefreshIntervalMinutes;
+        private DateTimeOffset? _lastRefreshAttempt;
 
         public string Id
         {
@@ -53,6 +55,7 @@ namespace XrayUI.Models
                 _lastUpdated = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(LastUpdatedText));
+                OnPropertyChanged(nameof(UpdateStatusText));
             }
         }
 
@@ -87,6 +90,67 @@ namespace XrayUI.Models
 
         [JsonIgnore]
         public string LastErrorText => _lastError ?? string.Empty;
+
+        /// <summary>
+        /// Per-subscription automatic refresh interval. Zero disables scheduling; all other values
+        /// are normalized to the fixed choices in <see cref="SubscriptionRefreshSchedule"/>.
+        /// </summary>
+        public int AutoRefreshIntervalMinutes
+        {
+            get => _autoRefreshIntervalMinutes;
+            set
+            {
+                var normalized = SubscriptionRefreshSchedule.NormalizeInterval(value);
+                if (_autoRefreshIntervalMinutes == normalized) return;
+
+                _autoRefreshIntervalMinutes = normalized;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsAutoRefreshEnabled));
+                OnPropertyChanged(nameof(AutoRefreshSummaryText));
+                OnPropertyChanged(nameof(UpdateStatusText));
+            }
+        }
+
+        /// <summary>
+        /// Most recent manual, bulk or scheduled refresh attempt. Failures count so an unavailable
+        /// provider is not hammered every scheduler tick.
+        /// </summary>
+        public DateTimeOffset? LastRefreshAttempt
+        {
+            get => _lastRefreshAttempt;
+            set
+            {
+                if (_lastRefreshAttempt == value) return;
+                _lastRefreshAttempt = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(UpdateStatusText));
+            }
+        }
+
+        [JsonIgnore]
+        public bool IsAutoRefreshEnabled => _autoRefreshIntervalMinutes > 0;
+
+        [JsonIgnore]
+        public string AutoRefreshSummaryText => IsAutoRefreshEnabled
+            ? Loc.Format("Subscription_AutoRefreshSummary", _autoRefreshIntervalMinutes / 60)
+            : string.Empty;
+
+        /// <summary>
+        /// The card's third line. A subscription that refreshes itself shows its cadence instead of
+        /// a "last updated" stamp: with a schedule running and no error, the last success is bounded
+        /// by the interval anyway, so the cadence is the more useful of the two — and it makes the
+        /// scheduled ones scannable down the list without costing a row. An overdue schedule falls
+        /// back to the stamp, which is the one case where the two disagree (app closed for longer
+        /// than the interval); there the honest answer is how old the data actually is.
+        /// Reads the clock, so it is not notification-driven past the three setters that raise it —
+        /// same as <see cref="LastUpdatedText"/>, and fine for a modal that is open briefly.
+        /// </summary>
+        [JsonIgnore]
+        public string UpdateStatusText =>
+            IsAutoRefreshEnabled &&
+            !SubscriptionRefreshSchedule.IsDue(_autoRefreshIntervalMinutes, _lastRefreshAttempt, DateTimeOffset.UtcNow)
+                ? AutoRefreshSummaryText
+                : LastUpdatedText;
 
         // Traffic + expiry parsed from the provider's `subscription-userinfo` response header
         // (bytes / unix-seconds). Optional — many self-built or converter subscriptions omit it,

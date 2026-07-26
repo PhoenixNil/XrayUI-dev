@@ -1,11 +1,11 @@
-using Microsoft.UI.Xaml.Controls.Primitives;
+﻿using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using XrayUI.Helpers;
 using XrayUI.Models;
 
 namespace XrayUI.Views
 {
-    public sealed partial class ManageSubscriptionsDialog : UserControl
+    public sealed partial class ManageSubscriptionsDialog
     {
         public ManageSubscriptionsViewModel ViewModel { get; }
 
@@ -33,13 +33,18 @@ namespace XrayUI.Views
         // The edit flyout lives inside a DataTemplate, so x:Name would not generate
         // code-behind fields; the controls are located by position instead. This is the
         // single place that knows the StackPanel layout: [0] URL box, [1] name box,
-        // last child = save button.
-        private static (TextBox? UrlBox, TextBox? NameBox, Button? SaveButton) GetEditControls(StackPanel panel)
+        // [2] refresh schedule, last child = save button.
+        private static (
+            TextBox? UrlBox,
+            TextBox? NameBox,
+            ComboBox? ScheduleBox,
+            Button? SaveButton) GetEditControls(StackPanel panel)
         {
             var children = panel.Children;
             return (
                 children.Count > 0 ? children[0] as TextBox : null,
                 children.Count > 1 ? children[1] as TextBox : null,
+                children.Count > 2 ? children[2] as ComboBox : null,
                 children.Count > 0 ? children[children.Count - 1] as Button : null);
         }
 
@@ -51,16 +56,19 @@ namespace XrayUI.Views
 
             panel.Tag = flyout;
 
-            var (urlBox, nameBox, _) = GetEditControls(panel);
+            var (urlBox, nameBox, scheduleBox, _) = GetEditControls(panel);
             if (urlBox != null) urlBox.Text = sub.Url;
             if (nameBox != null) nameBox.Text = sub.Name;
+            if (scheduleBox != null)
+                scheduleBox.SelectedIndex =
+                    SubscriptionRefreshSchedule.GetIndex(sub.AutoRefreshIntervalMinutes);
         }
 
         private void EditUrlBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (sender is not TextBox { Parent: StackPanel panel } box) return;
 
-            var (_, _, saveBtn) = GetEditControls(panel);
+            var (_, _, _, saveBtn) = GetEditControls(panel);
             if (saveBtn != null)
                 saveBtn.IsEnabled = !string.IsNullOrWhiteSpace(box.Text);
         }
@@ -70,14 +78,18 @@ namespace XrayUI.Views
             if (sender is not Button { DataContext: SubscriptionEntry sub, Parent: StackPanel panel } btn)
                 return;
 
-            var (urlBox, nameBox, _) = GetEditControls(panel);
-            if (urlBox == null || nameBox == null) return;
+            var (urlBox, nameBox, scheduleBox, _) = GetEditControls(panel);
+            if (urlBox == null || nameBox == null || scheduleBox == null) return;
 
             var url = urlBox.Text.Trim();
             if (url.Length == 0) return;
 
             HideAncestorFlyout(btn);
-            await ViewModel.CommitEditAsync(sub, url, nameBox.Text);
+            await ViewModel.CommitEditAsync(
+                sub,
+                url,
+                nameBox.Text,
+                SubscriptionRefreshSchedule.GetIntervalAt(scheduleBox.SelectedIndex));
         }
 
         private void DeleteButton_Loaded(object sender, RoutedEventArgs e)

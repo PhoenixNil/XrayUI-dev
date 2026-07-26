@@ -27,7 +27,9 @@ namespace XrayUI.Services
             var preset = new PresetSettings
             {
                 Subscriptions = settings.Subscriptions is { Count: > 0 }
-                    ? settings.Subscriptions.ToList()
+                    ? settings.Subscriptions
+                        .Select(SubscriptionPresetEntry.FromSubscription)
+                        .ToList()
                     : null,
                 CustomRules = settings.CustomRules is { Count: > 0 }
                     ? settings.CustomRules.ToList()

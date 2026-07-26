@@ -135,7 +135,7 @@
                                     BorderThickness="1"
                                     Padding="12,10"
                                     Margin="0,0,0,8">
-                                <Grid ColumnDefinitions="*,Auto,Auto,Auto"
+                                <Grid ColumnDefinitions="*,Auto,Auto"
                                       ColumnSpacing="4">
                                     <StackPanel Grid.Column="0"
                                                 Spacing="2"
@@ -159,12 +159,54 @@
                                                    TextTrimming="CharacterEllipsis"
                                                    Visibility="{x:Bind HasTraffic, Mode=OneWay, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
 
-                                        <TextBlock Text="{x:Bind LastUpdatedText, Mode=OneWay}"
-                                                   FontSize="12"
-                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                                   Visibility="{x:Bind HasError, Mode=OneWay, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
-                                        <!-- Wraps rather than ellipsizes: a truncated error ("...status
-                                             code does n") tells the user nothing about what broke. -->
+                                        <!-- Third line: update status, with this subscription's own
+                                             refresh next to it — the action belongs to the freshness
+                                             it changes, unlike edit/delete which are card-scoped.
+                                             The status line stays put when a refresh fails, with the
+                                             error underneath rather than replacing it: retry has to
+                                             stay reachable exactly then, the button needs the text
+                                             beside it to sit against, and "the copy you have is 20
+                                             minutes old" is the other half of what a failure means. -->
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="4">
+                                            <TextBlock Text="{x:Bind UpdateStatusText, Mode=OneWay}"
+                                                       FontSize="12"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+
+                                            <!-- The glyph keeps the inherited (primary) foreground the
+                                                 other card buttons use — graying it down to tertiary is
+                                                 what made an earlier attempt read as washed out. -->
+                                            <Button Padding="4"
+                                                    VerticalAlignment="Center"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}"
+                                                    Loaded="RefreshButton_Loaded"
+                                                    Click="RefreshButton_Click">
+                                                <Grid>
+                                                    <FontIcon Glyph="&#xEDAB;"
+                                                              FontSize="12"
+                                                              Visibility="{x:Bind IsNotBusy, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                    <!-- MinWidth/MinHeight beat the default style's 16x16
+                                                         minimums, which would otherwise clamp the ring and
+                                                         make the button grow while busy. -->
+                                                    <ProgressRing Width="12"
+                                                                  Height="12"
+                                                                  MinWidth="12"
+                                                                  MinHeight="12"
+                                                                  IsActive="{x:Bind IsBusy, Mode=OneWay}"
+                                                                  Visibility="{x:Bind IsBusy, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                </Grid>
+                                            </Button>
+                                        </StackPanel>
+
+                                        <!-- A sibling of the status line rather than a cell beside it:
+                                             the enclosing vertical StackPanel hands its children the
+                                             real available width, which is what lets this wrap at all.
+                                             Wraps rather than ellipsizes because a truncated error
+                                             ("...status code does n") tells the user nothing about what
+                                             broke. -->
                                         <TextBlock Text="{x:Bind LastErrorText, Mode=OneWay}"
                                                    FontSize="12"
                                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
@@ -192,6 +234,21 @@
                                                     <TextBox x:Uid="Subscription_NameBox"
                                                              Header="备注名称（可选）"
                                                              PlaceholderText="留空则使用链接域名" />
+                                                    <ComboBox x:Uid="Subscription_AutoRefreshBox"
+                                                              Header="自动更新"
+                                                              SelectedIndex="0"
+                                                              HorizontalAlignment="Stretch">
+                                                        <ComboBoxItem x:Uid="Subscription_AutoRefreshOff"
+                                                                      Content="关闭" />
+                                                        <ComboBoxItem x:Uid="Subscription_AutoRefresh1Hour"
+                                                                      Content="每 1 小时" />
+                                                        <ComboBoxItem x:Uid="Subscription_AutoRefresh6Hours"
+                                                                      Content="每 6 小时" />
+                                                        <ComboBoxItem x:Uid="Subscription_AutoRefresh12Hours"
+                                                                      Content="每 12 小时" />
+                                                        <ComboBoxItem x:Uid="Subscription_AutoRefresh24Hours"
+                                                                      Content="每 24 小时" />
+                                                    </ComboBox>
                                                     <Button x:Uid="Subscription_SaveBtn"
                                                             Click="ConfirmEdit_Click"
                                                             Style="{StaticResource AccentButtonStyle}"
@@ -207,23 +264,6 @@
                                             Background="Transparent"
                                             BorderThickness="0"
                                             IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}"
-                                            Loaded="RefreshButton_Loaded"
-                                            Click="RefreshButton_Click">
-                                        <Grid Width="16" Height="16">
-                                            <FontIcon Glyph="&#xE895;"
-                                                      FontSize="14"
-                                                      Visibility="{x:Bind IsNotBusy, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                            <ProgressRing Width="16"
-                                                          Height="16"
-                                                          IsActive="{x:Bind IsBusy, Mode=OneWay}"
-                                                          Visibility="{x:Bind IsBusy, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                        </Grid>
-                                    </Button>
-
-                                    <Button Grid.Column="3"
-                                            Padding="6"
-                                            Background="Transparent"
-                                            BorderThickness="0"
                                             Loaded="DeleteButton_Loaded">
                                         <FontIcon Glyph="&#xE74D;" FontSize="14" />
                                         <Button.Flyout>

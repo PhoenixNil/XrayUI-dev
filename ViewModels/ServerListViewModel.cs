@@ -5,6 +5,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -58,9 +59,43 @@ namespace XrayUI.ViewModels
             // A subscription body is small enough that anything which will succeed lands well inside
             // this; past it we would only be delaying the same error, and Update all multiplies the
             // wait by ceil(count / MaxConcurrentRefresh).
-            var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var client = new HttpClient(new HttpClientHandler
+            {
+                Proxy = new RunningCoreOrSystemProxy(),
+                UseProxy = true,
+            })
+            { Timeout = TimeSpan.FromSeconds(10) };
             client.DefaultRequestHeaders.UserAgent.ParseAdd(SubscriptionUserAgent);
             return client;
+        }
+
+        /// <summary>Set by MainViewModel: the local SOCKS port while the core is running, null
+        /// otherwise. Static because the shared <see cref="Http"/> client is; wired once at
+        /// composition time.</summary>
+        internal static Func<int?>? GetLocalProxyPort { get; set; }
+
+        /// <summary>
+        /// Routes subscription fetches through the running core's local SOCKS inbound instead of
+        /// trusting the Windows proxy settings. IsProxyRunning only says the core is up: in manual
+        /// mode the system proxy stays untouched, so a default HttpClient would fetch DIRECT, fail
+        /// on proxy-only links, and — because a failed attempt advances the schedule anchor — burn
+        /// the whole interval silently. GetProxy is consulted per request, so start/stop and port
+        /// edits are picked up without rebuilding the client; with the core stopped this falls
+        /// back to the system default, which is what manual refresh always did. The SOCKS inbound
+        /// exists in every mode (TUN only adds its own inbound on top), so the port is always
+        /// live while the core is.
+        /// </summary>
+        private sealed class RunningCoreOrSystemProxy : IWebProxy
+        {
+            public ICredentials? Credentials { get; set; }
+
+            public Uri? GetProxy(Uri destination) =>
+                GetLocalProxyPort?.Invoke() is int port
+                    ? new Uri($"socks5://127.0.0.1:{port}")
+                    : HttpClient.DefaultProxy.GetProxy(destination);
+
+            public bool IsBypassed(Uri host) =>
+                GetLocalProxyPort?.Invoke() is not int && HttpClient.DefaultProxy.IsBypassed(host);
         }
 
         private readonly IDialogService     _dialogs;
@@ -69,6 +104,8 @@ namespace XrayUI.ViewModels
         private readonly RealLatencyProbeService _realLatencyProbe;
         private readonly SemaphoreSlim      _settingsWriteLock = new(1, 1);
         private readonly SemaphoreSlim      _serversWriteLock  = new(1, 1);
+        private readonly SubscriptionRefreshBatchRunner _subscriptionRefreshRunner = new();
+        private readonly HashSet<string> _refreshingSubscriptionIds = new(StringComparer.Ordinal);
         private const int MaxConcurrentProbes = 16;
         private readonly List<ServerEntry> _selectedServers = new();
         private bool _disposed;
@@ -82,6 +119,7 @@ namespace XrayUI.ViewModels
         // bounces SelectedServer, which cancels/restarts the detail pane's latency probe.
         private bool _rebuildAllInProgress;
         private List<SubscriptionEntry> _knownSubscriptions = new();
+        private bool _scheduledRefreshRunning;
 
         public ObservableCollection<ServerGroupChip> GroupChips { get; } = new();
         public ObservableCollection<ServerEntry>     VisibleServers { get; } = new();
@@ -117,6 +155,7 @@ namespace XrayUI.ViewModels
             }
             _settingsWriteLock.Dispose();
             _serversWriteLock.Dispose();
+            _subscriptionRefreshRunner.Dispose();
         }
 
         [ObservableProperty]
@@ -689,15 +728,6 @@ namespace XrayUI.ViewModels
         /// </summary>
         public event Action? GroupNamesChanged;
 
-        private async Task ReloadKnownSubscriptionsAsync()
-        {
-            var settings = await _settings.LoadSettingsAsync();
-            _knownSubscriptions = settings.Subscriptions != null
-                ? new List<SubscriptionEntry>(settings.Subscriptions)
-                : new List<SubscriptionEntry>();
-            GroupNamesChanged?.Invoke();
-        }
-
         private void OnSelectedItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName is nameof(ServerEntry.Protocol)
@@ -890,6 +920,171 @@ namespace XrayUI.ViewModels
 
         // ── Subscriptions ─────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Gives manually-triggered and scheduled batches one bounded fan-out and one error policy.
+        /// The entries are a snapshot so editing or deleting subscriptions while a batch is in
+        /// flight cannot invalidate its enumeration.
+        /// </summary>
+        private async Task RefreshSubscriptionsAsync(
+            IReadOnlyList<SubscriptionEntry> subscriptions,
+            Action<int, int>? progress = null)
+        {
+            var reserved = new List<SubscriptionEntry>(subscriptions.Count);
+            foreach (var sub in subscriptions)
+            {
+                if (_refreshingSubscriptionIds.Add(sub.Id))
+                    reserved.Add(sub);
+            }
+
+            var skipped = subscriptions.Count - reserved.Count;
+            if (skipped > 0)
+                progress?.Invoke(skipped, subscriptions.Count);
+
+            await _subscriptionRefreshRunner.RunAsync(
+                reserved,
+                async sub =>
+                {
+                    string? fetchedUrl = null;
+                    try
+                    {
+                        fetchedUrl = await RefreshSubscriptionAsync(sub);
+                    }
+                    catch (Exception ex)
+                    {
+                        sub.LastError = Loc.Format("Subscription_UpdateFailed", ex.Message);
+                        Debug.WriteLine($"[Subscriptions] Refresh failed for {sub.Id}: {ex}");
+                        if (!IsKnownSubscription(sub)) return;
+                        try
+                        {
+                            await UpsertSubscriptionAsync(sub);
+                        }
+                        catch (Exception persistEx)
+                        {
+                            Debug.WriteLine(
+                                $"[Subscriptions] Failed to persist refresh error for {sub.Id}: {persistEx}");
+                        }
+                    }
+                    finally
+                    {
+                        // Released when THIS entry finishes, not when the whole batch does. A
+                        // batch-wide release would leave an early-finished entry's refresh button
+                        // silently dead until the slowest entry completes — and could strip a
+                        // reservation a newer batch legitimately took for the same id meanwhile.
+                        _refreshingSubscriptionIds.Remove(sub.Id);
+                    }
+
+                    // A URL edit saved after the refetch loop's last look had its own refetch
+                    // swallowed by the reservation just released. Everything from the release
+                    // above to the reserve inside the carry runs synchronously on the UI thread,
+                    // so nothing can steal the id in between. Fire-and-forget: this lambda still
+                    // holds one of the runner's slots, and awaiting a nested batch from here
+                    // could exhaust them.
+                    if (fetchedUrl is not null &&
+                        !string.Equals(fetchedUrl, sub.Url, StringComparison.Ordinal) &&
+                        IsKnownSubscription(sub))
+                        _ = CarryMissedUrlEditAsync(sub);
+                },
+                (completed, _) => progress?.Invoke(skipped + completed, subscriptions.Count));
+        }
+
+        /// <summary>
+        /// Runs the refetch a tail-window URL edit was denied (see the carry comment above).
+        /// The old link's figures are dropped for the same reason CommitEditAsync drops them —
+        /// a different link is a different account.
+        /// </summary>
+        private async Task CarryMissedUrlEditAsync(SubscriptionEntry sub)
+        {
+            try
+            {
+                sub.Usage = default;
+                await RefreshSubscriptionsAsync([sub]);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Subscriptions] Carry-over refresh failed for {sub.Id}: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// Liveness check for an in-flight refresh: by reference, not id. Every live path shares
+        /// one instance (the dialog binds the entries in <see cref="_knownSubscriptions"/>), so a
+        /// same-id different-instance means the list was rebuilt underneath us — a mid-session
+        /// preset import, whose entries keep their exported ids. The stale object's result must
+        /// be discarded there just like after a delete, or its final upsert would overwrite the
+        /// freshly imported name, URL and cleared refresh schedule.
+        /// </summary>
+        private bool IsKnownSubscription(SubscriptionEntry sub) =>
+            _knownSubscriptions.Any(s => ReferenceEquals(s, sub));
+
+        /// <summary>
+        /// An enabled schedule without an anchor came from an external/hand-edited settings file.
+        /// Anchor it at startup so enabling never causes an unexpected immediate network request.
+        /// </summary>
+        public async Task InitializeSubscriptionRefreshSchedulesAsync(DateTimeOffset now)
+        {
+            // Anchor everything first, then persist: the sweep only ever reads the in-memory
+            // entries, so it must never observe a half-anchored list across the awaits below.
+            var anchored = new List<SubscriptionEntry>();
+            foreach (var sub in _knownSubscriptions)
+            {
+                if (sub.IsAutoRefreshEnabled && !sub.LastRefreshAttempt.HasValue)
+                {
+                    sub.LastRefreshAttempt = now;
+                    anchored.Add(sub);
+                }
+            }
+
+            foreach (var sub in anchored)
+            {
+                try
+                {
+                    await UpsertSubscriptionAsync(sub);
+                }
+                catch (Exception ex)
+                {
+                    // Keep the in-memory anchors so this process still waits a full interval.
+                    Debug.WriteLine($"[Subscriptions] Failed to persist schedule anchor for {sub.Id}: {ex}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Called from the UI dispatcher timer. Overlapping sweeps are excluded here; overlap
+        /// between a sweep and a manual refresh of the same entry is excluded one level down, by
+        /// the id reservation in <see cref="RefreshSubscriptionsAsync"/>.
+        /// </summary>
+        /// <remarks>
+        /// Sweeps are skipped while the proxy is down. The fetch goes out through the system proxy,
+        /// and subscription URLs are commonly unreachable without it, so an unproxied sweep mostly
+        /// buys a ten-second timeout — and because a failed attempt still moves the anchor, it would
+        /// spend a whole interval's retry budget on a request that was never going to land. Nothing
+        /// is lost by waiting: the timer keeps ticking, so a schedule that comes due while
+        /// disconnected runs within a minute of the proxy coming up. Manual refresh and Update all
+        /// are unaffected — those are the escape hatch for a subscription URL that resolves direct.
+        /// </remarks>
+        public async Task RefreshDueSubscriptionsAsync(DateTimeOffset now)
+        {
+            if (_disposed || _scheduledRefreshRunning || !IsProxyRunning) return;
+
+            var due = _knownSubscriptions
+                .Where(sub => SubscriptionRefreshSchedule.IsDue(
+                    sub.AutoRefreshIntervalMinutes,
+                    sub.LastRefreshAttempt,
+                    now))
+                .ToList();
+            if (due.Count == 0) return;
+
+            _scheduledRefreshRunning = true;
+            try
+            {
+                await RefreshSubscriptionsAsync(due);
+            }
+            finally
+            {
+                _scheduledRefreshRunning = false;
+            }
+        }
+
         [RelayCommand]
         private Task OpenSubscriptions() => ShowSubscriptionsDialogAsync(startOnManagePage: false);
 
@@ -901,10 +1096,9 @@ namespace XrayUI.ViewModels
 
         private async Task ShowSubscriptionsDialogAsync(bool startOnManagePage)
         {
-            var settings = await _settings.LoadSettingsAsync();
             var vm = new ManageSubscriptionsViewModel(
-                settings.Subscriptions ?? new List<SubscriptionEntry>(),
-                RefreshSubscriptionAsync,
+                _knownSubscriptions,
+                RefreshSubscriptionsAsync,
                 DeleteSubscriptionAsync,
                 EditSubscriptionAsync);
 
@@ -915,6 +1109,7 @@ namespace XrayUI.ViewModels
             if (sub == null) return;
 
             sub.Id = Guid.NewGuid().ToString("N");
+            sub.LastRefreshAttempt = DateTimeOffset.UtcNow;
 
             var (entries, error) = await FetchSubscriptionNodesAsync(sub);
 
@@ -933,7 +1128,8 @@ namespace XrayUI.ViewModels
             }
 
             await UpsertSubscriptionAsync(sub);
-            await ReloadKnownSubscriptionsAsync();
+            TrackKnownSubscription(sub);
+            GroupNamesChanged?.Invoke();
             RebuildAll();
 
             if (entries != null && SelectedServer == null && Servers.Count > 0)
@@ -1103,16 +1299,42 @@ namespace XrayUI.ViewModels
             return new SubscriptionUserInfo(up, down, total, expire);
         }
 
-        private async Task RefreshSubscriptionAsync(SubscriptionEntry sub)
+        /// <summary>Returns the URL whose fetch result this refresh recorded, so the caller can
+        /// detect an edit that landed after the refetch loop's last look — during the apply /
+        /// save / handover / upsert awaits — and schedule the fetch that edit was denied.</summary>
+        private async Task<string> RefreshSubscriptionAsync(SubscriptionEntry sub)
         {
             sub.IsBusy = true;
+            sub.LastRefreshAttempt = DateTimeOffset.UtcNow;
             try
             {
+                var urlAtFetch = sub.Url;
                 var (newEntries, error) = await FetchSubscriptionNodesAsync(sub);
+
+                // An edit can change the URL while the fetch is in flight — the edit's own
+                // refetch is skipped by the id reservation, so this refresh carries it:
+                // refetch until the result matches the URL the entry currently has, instead
+                // of recording the old link's nodes and quota as a fresh fetch of the new one.
+                while (!string.Equals(urlAtFetch, sub.Url, StringComparison.Ordinal))
+                {
+                    urlAtFetch = sub.Url;
+                    // Same policy as CommitEditAsync: a different link is a different account.
+                    // The superseded fetch may have written the old link's userinfo after the
+                    // edit cleared it, and a provider that omits the header must not inherit it.
+                    sub.Usage = default;
+                    (newEntries, error) = await FetchSubscriptionNodesAsync(sub);
+                }
+
+                // Deleted — or replaced wholesale by a mid-session preset import — while the
+                // fetch was in flight: applying the result would re-add the nodes as an orphan
+                // group, and the finally's upsert would re-create (or overwrite) the settings
+                // entry with pre-delete/pre-import state.
+                if (!IsKnownSubscription(sub)) return urlAtFetch;
+
                 if (newEntries == null)
                 {
                     sub.LastError = Loc.Format("Subscription_UpdateFailed", error);
-                    return;
+                    return urlAtFetch;
                 }
 
                 var removed = Servers.Where(s => s.SubscriptionId == sub.Id).ToList();
@@ -1201,11 +1423,23 @@ namespace XrayUI.ViewModels
                         await RequestSwitchToSelectedServer();
                     }
                 }
+
+                return urlAtFetch;
             }
             finally
             {
-                sub.IsBusy = false;
-                await UpsertSubscriptionAsync(sub);
+                try
+                {
+                    if (IsKnownSubscription(sub))
+                        await UpsertSubscriptionAsync(sub);
+                }
+                finally
+                {
+                    // Cleared only after the upsert: the caller releases the id reservation
+                    // synchronously right after this method returns, so the refresh button
+                    // never shows enabled while a click on it would still hit the reservation.
+                    sub.IsBusy = false;
+                }
             }
         }
 
@@ -1238,7 +1472,8 @@ namespace XrayUI.ViewModels
         private async Task EditSubscriptionAsync(SubscriptionEntry sub)
         {
             await UpsertSubscriptionAsync(sub);
-            await ReloadKnownSubscriptionsAsync();
+            TrackKnownSubscription(sub);
+            GroupNamesChanged?.Invoke();
             RebuildAll();
         }
 
@@ -1257,7 +1492,9 @@ namespace XrayUI.ViewModels
             }, rebuild: false);
 
             await RemoveSubscriptionAsync(sub.Id);
-            await ReloadKnownSubscriptionsAsync();
+            _knownSubscriptions.RemoveAll(item =>
+                string.Equals(item.Id, sub.Id, StringComparison.Ordinal));
+            GroupNamesChanged?.Invoke();
             RebuildAll();
 
             if (SelectedServer != null && !Servers.Contains(SelectedServer))
@@ -1312,6 +1549,16 @@ namespace XrayUI.ViewModels
             }
         }
 
+        private void TrackKnownSubscription(SubscriptionEntry sub)
+        {
+            var index = _knownSubscriptions.FindIndex(item =>
+                string.Equals(item.Id, sub.Id, StringComparison.Ordinal));
+            if (index >= 0)
+                _knownSubscriptions[index] = sub;
+            else
+                _knownSubscriptions.Add(sub);
+        }
+
         private static SubscriptionEntry CloneForPersistence(SubscriptionEntry sub) => new()
         {
             Id          = sub.Id,
@@ -1320,6 +1567,8 @@ namespace XrayUI.ViewModels
             LastUpdated = sub.LastUpdated,
             LastError   = sub.LastError,
             Usage       = sub.Usage,
+            AutoRefreshIntervalMinutes = sub.AutoRefreshIntervalMinutes,
+            LastRefreshAttempt = sub.LastRefreshAttempt,
         };
 
         // ── Add manual ────────────────────────────────────────────────────────
