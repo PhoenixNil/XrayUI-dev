@@ -128,7 +128,30 @@ namespace XrayUI.ViewModels
             {
                 if (IsRunning)
                 {
-                    await StopCurrentSessionAsync();
+                    // Serialize with SwitchToSelectedServerAsync and hold IsReapplying:
+                    // the netsh cleanup inside the stop path now runs off the UI thread,
+                    // so without these gates a switch (double-click / subscription
+                    // auto-switch) could interleave with the multi-second stop and
+                    // stomp the session state.
+                    await _reapplyLock.WaitAsync();
+                    try
+                    {
+                        if (!IsRunning) return;
+
+                        IsReapplying = true;
+                        try
+                        {
+                            await StopCurrentSessionAsync();
+                        }
+                        finally
+                        {
+                            IsReapplying = false;
+                        }
+                    }
+                    finally
+                    {
+                        _reapplyLock.Release();
+                    }
                     return;
                 }
 
@@ -200,15 +223,20 @@ namespace XrayUI.ViewModels
                 return false;
             }
 
+            // One consistent mode for the whole start sequence: the preflight/cleanup
+            // awaits below keep the UI interactive, so the live IsTunMode property can
+            // be toggled mid-start and must not drive the post-start bookkeeping.
+            var tunMode = IsTunMode;
+
             var appSettings = await _settings.LoadSettingsAsync();
             appSettings.LocalMixedPort      = LocalPort;
             appSettings.AllowLanConnections = AllowLanConnections;
             appSettings.RoutingMode         = RoutingMode;
-            appSettings.IsTunMode           = IsTunMode;
+            appSettings.IsTunMode           = tunMode;
             if (IsAutoConnect)
                 appSettings.LastAutoConnectServerId = server.Id;
 
-            if (IsTunMode)
+            if (tunMode)
             {
                 if (!await RunTunPreflightAsync()) return false;
                 await CleanupPersistedTunRoutesAsync(appSettings);
@@ -226,7 +254,7 @@ namespace XrayUI.ViewModels
                 return false;
             }
 
-            if (IsTunMode)
+            if (tunMode)
             {
                 // xray inherits admin from the parent process (HandleTunToggleAsync restarted
                 // the app as admin) and configures the TUN adapter + system routes itself via
@@ -377,11 +405,19 @@ namespace XrayUI.ViewModels
                 return false;
             }
 
-            _tunService.ResetTunDnsServers();
+            await Task.Run(_tunService.ResetTunDnsServers);
             SystemProxyService.ClearProxy();
             return true;
         }
 
+        /// <summary>
+        /// Synchronous on purpose: CleanupTunOnExit (Window.Closed / crash / the elevation
+        /// handoff racing its 800ms self-kill) runs it inline; the WM_ENDSESSION fast path
+        /// uses CleanupCurrentTunRoutesWithoutElevation instead and never reaches here.
+        /// Interactive callers wrap it in Task.Run because the netsh/route batch blocks in
+        /// WaitForExit (up to 5s when already elevated; the unelevated runas branch can
+        /// additionally block on the UAC prompt).
+        /// </summary>
         private void CleanupTunRoutesSafely()
         {
             var serverHost = ResolveTunServerHostForCleanup();
@@ -422,14 +458,14 @@ namespace XrayUI.ViewModels
             if (string.IsNullOrWhiteSpace(settings.LastTunServerHost))
                 return;
 
-            CleanupTunRoutesSafely();
+            await Task.Run(CleanupTunRoutesSafely);
             settings.LastTunServerHost = null;
             await TrySaveSettingsAsync(settings, "clear persisted TUN routes");
         }
 
         private async Task CleanupTunStateAsync()
         {
-            CleanupTunRoutesSafely();
+            await Task.Run(CleanupTunRoutesSafely);
 
             var settings = await _settings.LoadSettingsAsync();
             settings.IsTunMode = false;
@@ -809,7 +845,10 @@ namespace XrayUI.ViewModels
         {
             try
             {
-                await _settings.SaveSettingsAsync(settings);
+                // ConfigureAwait(false) is load-bearing: CleanupTunOnExit blocks the UI
+                // thread in GetResult() on this method (exit/crash paths), so resuming
+                // the continuation on the dispatcher would deadlock the process.
+                await _settings.SaveSettingsAsync(settings).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

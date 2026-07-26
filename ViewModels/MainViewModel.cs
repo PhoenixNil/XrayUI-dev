@@ -154,15 +154,13 @@ namespace XrayUI.ViewModels
             ServerDetail.ShowGroupInDetails = s.ShowGroupInDetails;
             ServerList.IsFilterPanelOpen = s.OpenServerFilterPanelOnStartup;
 
-            // Reconcile external state vs persisted setting (external is ground truth)
-            var externalEnabled = await Task.Run(_startupService.IsStartupEnabled);
-			if (s.IsStartupEnabled != externalEnabled)
-            {
-                s.IsStartupEnabled = externalEnabled;
-                await _settings.SaveSettingsAsync(s);
-            }
+            // Show the persisted autostart state immediately and reconcile against the
+            // Task Scheduler off the critical path: the ITaskService::Connect RPC can
+            // take hundreds of ms at logon, and nothing below needs its result — a boot
+            // launch proves the task exists (it started this process).
             ControlPanel.IsStartupEnabled = s.IsStartupEnabled;
             ControlPanel.IsAutoConnect    = s.IsAutoConnect;
+            _ = ReconcileStartupTaskAsync(s, isBootLaunch);
 
             // Translate the legacy name-based auto-connect setting to Id-based so users
             // don't lose their auto-connect target after upgrading.
@@ -178,7 +176,10 @@ namespace XrayUI.ViewModels
 
             // Only auto-connect when the app was actually launched by the boot task
             // (which passes --startup-minimized). Manual launches must not auto-connect.
-            if (isBootLaunch && s.IsStartupEnabled && s.IsAutoConnect)
+            // IsStartupEnabled is deliberately not consulted: the launch itself proves
+            // the task exists, and an external launcher passing our internal flag is
+            // opting into boot semantics.
+            if (isBootLaunch && s.IsAutoConnect)
                 await TryAutoConnectAsync(s);
 
             await ServerList.InitializeSubscriptionRefreshSchedulesAsync(DateTimeOffset.UtcNow);
@@ -188,6 +189,40 @@ namespace XrayUI.ViewModels
             // startup or surface as dialogs (per the auto-update failure policy).
             _ = Task.Run(() => _updateService.CleanupOldStagingDirs());
             QueueUpdateCheck(CurrentProxyUrl());
+        }
+
+        /// <summary>
+        /// Reconciles the persisted autostart flag against the actual Task Scheduler
+        /// task (external state is ground truth). Fire-and-forget from the UI thread:
+        /// the continuation resumes on the dispatcher, so the ControlPanel toggle
+        /// update is thread-safe.
+        /// </summary>
+        private async Task ReconcileStartupTaskAsync(AppSettings s, bool isBootLaunch)
+        {
+            try
+            {
+                var persistedAtStart = s.IsStartupEnabled;
+                var externalEnabled = await Task.Run(_startupService.IsStartupEnabled);
+
+                // A boot launch proves the task exists (it started this process), so a
+                // false read here is a transient Task Scheduler failure at logon —
+                // don't flip the toggle off or persist it.
+                if (isBootLaunch && !externalEnabled) return;
+
+                // The user changed the setting (startup dialog) while the RPC was in
+                // flight; their gesture is newer ground truth than our sample.
+                if (s.IsStartupEnabled != persistedAtStart) return;
+
+                if (s.IsStartupEnabled == externalEnabled) return;
+
+                s.IsStartupEnabled = externalEnabled;
+                ControlPanel.IsStartupEnabled = externalEnabled;
+                await _settings.SaveSettingsAsync(s);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MainViewModel] Autostart reconcile failed: {ex.Message}");
+            }
         }
 
         private void StartSubscriptionRefreshScheduler()
