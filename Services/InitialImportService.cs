@@ -77,7 +77,9 @@ namespace XrayUI.Services
 
             if (hasSubscriptions && (target.Subscriptions?.Count ?? 0) == 0)
             {
-                target.Subscriptions = preset.Subscriptions!.ToList();
+                target.Subscriptions = preset.Subscriptions!
+                    .Select(subscription => subscription.ToSubscription())
+                    .ToList();
                 changed = true;
             }
 

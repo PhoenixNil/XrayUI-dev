@@ -722,6 +722,9 @@
   <data name="Subscription_Count" xml:space="preserve">
     <value>{0} subscriptions</value>
   </data>
+  <data name="Subscription_AutoRefreshSummary" xml:space="preserve">
+    <value>Auto update: every {0}h</value>
+  </data>
   <data name="ControlPanel_EditPortItem.Text" xml:space="preserve">
     <value>Edit Port</value>
   </data>
@@ -1207,6 +1210,24 @@
   </data>
   <data name="Subscription_NameBox.PlaceholderText" xml:space="preserve">
     <value>Leave empty to use link domain</value>
+  </data>
+  <data name="Subscription_AutoRefreshBox.Header" xml:space="preserve">
+    <value>Auto update</value>
+  </data>
+  <data name="Subscription_AutoRefreshOff.Content" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="Subscription_AutoRefresh1Hour.Content" xml:space="preserve">
+    <value>Every 1 hour</value>
+  </data>
+  <data name="Subscription_AutoRefresh6Hours.Content" xml:space="preserve">
+    <value>Every 6 hours</value>
+  </data>
+  <data name="Subscription_AutoRefresh12Hours.Content" xml:space="preserve">
+    <value>Every 12 hours</value>
+  </data>
+  <data name="Subscription_AutoRefresh24Hours.Content" xml:space="preserve">
+    <value>Every 24 hours</value>
   </data>
   <data name="Subscription_AutoImportHintText.Text" xml:space="preserve">
     <value>Auto-parsing and importing subscription nodes.</value>

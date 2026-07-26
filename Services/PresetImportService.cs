@@ -60,7 +60,9 @@ namespace XrayUI.Services
             var target = await _settings.LoadSettingsAsync().ConfigureAwait(false);
 
             target.Subscriptions = preset.Subscriptions is { Count: > 0 }
-                ? preset.Subscriptions.ToList()
+                ? preset.Subscriptions
+                    .Select(subscription => subscription.ToSubscription())
+                    .ToList()
                 : null;
 
             target.CustomRules = preset.CustomRules is { Count: > 0 }

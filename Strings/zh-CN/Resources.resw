@@ -722,6 +722,9 @@
   <data name="Subscription_Count" xml:space="preserve">
     <value>{0} 个订阅</value>
   </data>
+  <data name="Subscription_AutoRefreshSummary" xml:space="preserve">
+    <value>自动更新：每 {0} 小时</value>
+  </data>
   <data name="ControlPanel_EditPortItem.Text" xml:space="preserve">
     <value>编辑本地端口</value>
   </data>
@@ -1210,6 +1213,24 @@
   </data>
   <data name="Subscription_NameBox.PlaceholderText" xml:space="preserve">
     <value>留空则使用链接域名</value>
+  </data>
+  <data name="Subscription_AutoRefreshBox.Header" xml:space="preserve">
+    <value>自动更新</value>
+  </data>
+  <data name="Subscription_AutoRefreshOff.Content" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Subscription_AutoRefresh1Hour.Content" xml:space="preserve">
+    <value>每 1 小时</value>
+  </data>
+  <data name="Subscription_AutoRefresh6Hours.Content" xml:space="preserve">
+    <value>每 6 小时</value>
+  </data>
+  <data name="Subscription_AutoRefresh12Hours.Content" xml:space="preserve">
+    <value>每 12 小时</value>
+  </data>
+  <data name="Subscription_AutoRefresh24Hours.Content" xml:space="preserve">
+    <value>每 24 小时</value>
   </data>
   <data name="Subscription_AutoImportHintText.Text" xml:space="preserve">
     <value>将自动解析并导入该订阅中的全部节点</value>

@@ -522,6 +522,7 @@ namespace XrayUI
 
         private void OnClosed(object sender, WindowEventArgs args)
         {
+            ViewModel.StopSubscriptionRefreshScheduler();
             ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _rootElement.ActualThemeChanged -= OnRootElementActualThemeChanged;
             _windowMessageMonitor.WindowMessageReceived -= OnWindowMessageReceived;
@@ -667,6 +668,7 @@ namespace XrayUI
 
         public void StopBackgroundServicesOnExit(bool fastShutdown = false)
         {
+            ViewModel.StopSubscriptionRefreshScheduler();
             ViewModel.ControlPanel.XrayService.StopForShutdown();
             ViewModel.ControlPanel.CleanupTunOnExit(fastShutdown);
         }

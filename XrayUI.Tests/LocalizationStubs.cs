@@ -7,6 +7,8 @@ namespace XrayUI.Helpers
     public static class L
     {
         public static string ServerDetail_Timeout => "Timeout";
+        public static string Subscription_NeverUpdated => "Never updated";
+        public static string Subscription_JustNow => "Just now";
     }
 
     public static class Loc

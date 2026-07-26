@@ -28,6 +28,9 @@
          LocalizationStubs.cs) or keep the new dependency out of parser-layer
          code. -->
     <Compile Include="..\Models\ServerEntry.cs" Link="Prod\Models\ServerEntry.cs" />
+    <Compile Include="..\Models\SubscriptionEntry.cs" Link="Prod\Models\SubscriptionEntry.cs" />
+    <Compile Include="..\Models\SubscriptionPresetEntry.cs" Link="Prod\Models\SubscriptionPresetEntry.cs" />
+    <Compile Include="..\Models\SubscriptionRefreshSchedule.cs" Link="Prod\Models\SubscriptionRefreshSchedule.cs" />
     <Compile Include="..\Services\NodeLinkParser.cs" Link="Prod\Services\NodeLinkParser.cs" />
     <Compile Include="..\Services\NodeLinkSerializer.cs" Link="Prod\Services\NodeLinkSerializer.cs" />
     <Compile Include="..\Services\ClashConfigParser.cs" Link="Prod\Services\ClashConfigParser.cs" />
@@ -36,6 +39,7 @@
     <Compile Include="..\Services\XhttpSettings.cs" Link="Prod\Services\XhttpSettings.cs" />
     <Compile Include="..\Services\EchSettings.cs" Link="Prod\Services\EchSettings.cs" />
     <Compile Include="..\Services\FinalmaskJson.cs" Link="Prod\Services\FinalmaskJson.cs" />
+    <Compile Include="..\Services\SubscriptionRefreshBatchRunner.cs" Link="Prod\Services\SubscriptionRefreshBatchRunner.cs" />
   </ItemGroup>
 
 </Project>
