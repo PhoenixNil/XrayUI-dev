@@ -112,7 +112,7 @@ namespace XrayUI.Services
                 var feed = await client.GetFromJsonAsync(
                     url, AppJsonSerializerContext.Default.ChangelogFeed, ct);
 
-                return ChangelogSelector.SelectLatest(feed, language);
+                return ChangelogSelector.SelectForVersion(feed, info.NewVersion, language);
             }
             // Only a real caller cancellation propagates. HttpClient.Timeout also raises
             // OperationCanceledException (as TaskCanceledException) with ct untouched, and
