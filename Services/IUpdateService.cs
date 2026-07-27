@@ -37,7 +37,7 @@ namespace XrayUI.Services
         /// returns an empty list instead of throwing, so the update flow never depends on it.
         /// </summary>
         /// <param name="language">UI language code, e.g. <c>"zh"</c> or <c>"en"</c>.</param>
-        Task<IReadOnlyList<ChangelogEntry>> FetchChangelogAsync(
+        Task<IReadOnlyList<string>> FetchChangelogAsync(
             UpdateInfo info, string? language, string? proxyUrl, CancellationToken ct);
 
         /// <summary>

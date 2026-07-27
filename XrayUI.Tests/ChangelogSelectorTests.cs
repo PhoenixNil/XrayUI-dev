@@ -16,114 +16,78 @@ public class ChangelogSelectorTests
             En = en is null ? null : [.. en],
         };
 
+    private static List<string> Select(ChangelogFeed? feed, string target, string? language) =>
+        ChangelogSelector.SelectForVersion(feed, Version.Parse(target), language);
+
     [Fact]
     public void PicksChineseWhenLanguageIsChinese()
     {
-        var result = ChangelogSelector.Select(
+        var result = Select(
             Feed(V("1.18", zh: ["中文条目"], en: ["English line"])),
-            new Version(1, 17), new Version(1, 18), "zh");
+            "1.18", "zh");
 
-        Assert.Single(result);
-        Assert.Equal(["中文条目"], result[0].Lines);
+        Assert.Equal(["中文条目"], result);
     }
 
     [Fact]
     public void PicksEnglishForNonChineseLanguage()
     {
-        var result = ChangelogSelector.Select(
+        var result = Select(
             Feed(V("1.18", zh: ["中文条目"], en: ["English line"])),
-            new Version(1, 17), new Version(1, 18), "en");
+            "1.18", "en");
 
-        Assert.Equal(["English line"], result[0].Lines);
+        Assert.Equal(["English line"], result);
     }
 
     [Fact]
     public void FallsBackToOtherLanguageWhenPreferredMissing()
     {
-        var zhOnly = ChangelogSelector.Select(
-            Feed(V("1.18", zh: ["只有中文"])),
-            new Version(1, 17), new Version(1, 18), "en");
-        Assert.Equal(["只有中文"], zhOnly[0].Lines);
+        var zhOnly = Select(Feed(V("1.18", zh: ["只有中文"])), "1.18", "en");
+        Assert.Equal(["只有中文"], zhOnly);
 
-        var enOnly = ChangelogSelector.Select(
-            Feed(V("1.18", en: ["English only"])),
-            new Version(1, 17), new Version(1, 18), "zh");
-        Assert.Equal(["English only"], enOnly[0].Lines);
+        var enOnly = Select(Feed(V("1.18", en: ["English only"])), "1.18", "zh");
+        Assert.Equal(["English only"], enOnly);
     }
 
     [Fact]
-    public void ExcludesVersionsAlreadyInstalled()
+    public void PicksTheTargetEntryRegardlessOfPosition()
     {
-        var result = ChangelogSelector.Select(
-            Feed(V("1.17", en: ["old"]), V("1.18", en: ["new"])),
-            new Version(1, 17), new Version(1, 18), "en");
+        var result = Select(
+            Feed(V("1.19", en: ["not out yet"]), V("1.18", en: ["being installed"])),
+            "1.18", "en");
 
-        Assert.Single(result);
-        Assert.Equal(new Version(1, 18), result[0].Version);
+        Assert.Equal(["being installed"], result);
+    }
+
+    /// <summary>
+    /// The release gate puts a version's notes on the site before its tag is pushed, so
+    /// between those two moments the newest entry is not the one clients are offered.
+    /// Showing it anyway would label the upcoming release's notes as the current one.
+    /// </summary>
+    [Fact]
+    public void ReturnsEmptyWhenTheTargetVersionIsAbsent()
+    {
+        var result = Select(
+            Feed(V("1.19", en: ["not out yet"]), V("1.17", en: ["already installed"])),
+            "1.18", "en");
+
+        Assert.Empty(result);
     }
 
     [Fact]
-    public void ExcludesVersionsBeyondTheTarget()
+    public void MatchesRegardlessOfVersionPrecision()
     {
-        // The feed can already list a release newer than the one being offered
-        // (e.g. notes pushed ahead of the GitHub release).
-        var result = ChangelogSelector.Select(
-            Feed(V("1.18", en: ["target"]), V("1.19", en: ["future"])),
-            new Version(1, 17), new Version(1, 18), "en");
+        var result = Select(Feed(V("1.19", en: ["notes"])), "1.19.0", "en");
 
-        Assert.Single(result);
-        Assert.Equal(new Version(1, 18), result[0].Version);
+        Assert.Equal(["notes"], result);
     }
 
     [Fact]
-    public void SpansEveryVersionInRangeNewestFirst()
+    public void DoesNotFallBackToAnotherVersionWhenTheTargetHasNoNotes()
     {
-        var result = ChangelogSelector.Select(
-            Feed(V("1.18", en: ["a"]), V("1.20", en: ["c"]), V("1.19", en: ["b"])),
-            new Version(1, 17), new Version(1, 20), "en");
-
-        Assert.Equal(
-            [new Version(1, 20), new Version(1, 19), new Version(1, 18)],
-            result.Select(e => e.Version));
-    }
-
-    [Fact]
-    public void CapsAtMaxVersionsKeepingTheNewest()
-    {
-        // Feed deliberately out of order so this also proves the cap runs after sorting.
-        var result = ChangelogSelector.Select(
-            Feed(
-                V("1.11", en: ["oldest"]),
-                V("1.15", en: ["e"]),
-                V("1.12", en: ["b"]),
-                V("1.14", en: ["d"]),
-                V("1.16", en: ["newest"]),
-                V("1.13", en: ["c"])),
-            new Version(1, 10), new Version(1, 16), "en");
-
-        Assert.Equal(ChangelogSelector.MaxVersions, result.Count);
-        Assert.Equal(
-            [new Version(1, 16), new Version(1, 15), new Version(1, 14), new Version(1, 13)],
-            result.Select(e => e.Version));
-    }
-
-    [Fact]
-    public void DoesNotPadWhenFewerVersionsThanTheCap()
-    {
-        var result = ChangelogSelector.Select(
-            Feed(V("1.18", en: ["only one"])),
-            new Version(1, 17), new Version(1, 18), "en");
-
-        Assert.Single(result);
-    }
-
-    [Fact]
-    public void TreatsMissingVersionComponentsAsZero()
-    {
-        // "1.18" from the feed must not read as newer than an installed 1.18.0.
-        var result = ChangelogSelector.Select(
-            Feed(V("1.18", en: ["same version"])),
-            new Version(1, 18, 0), new Version(1, 19), "en");
+        var result = Select(
+            Feed(V("1.18", en: [""]), V("1.17", en: ["older"])),
+            "1.18", "en");
 
         Assert.Empty(result);
     }
@@ -131,53 +95,38 @@ public class ChangelogSelectorTests
     [Fact]
     public void DropsBlankLinesAndTrims()
     {
-        var result = ChangelogSelector.Select(
+        var result = Select(
             Feed(V("1.18", en: ["  padded  ", "", "   "])),
-            new Version(1, 17), new Version(1, 18), "en");
+            "1.18", "en");
 
-        Assert.Equal(["padded"], result[0].Lines);
-    }
-
-    [Fact]
-    public void SkipsVersionsWithNoUsableLines()
-    {
-        var result = ChangelogSelector.Select(
-            Feed(V("1.18", zh: [""], en: []), V("1.19", en: ["real"])),
-            new Version(1, 17), new Version(1, 19), "zh");
-
-        Assert.Single(result);
-        Assert.Equal(new Version(1, 19), result[0].Version);
-    }
-
-    [Fact]
-    public void SkipsUnparseableVersionStrings()
-    {
-        var result = ChangelogSelector.Select(
-            Feed(V("not-a-version", en: ["junk"]), V("1.18", en: ["good"])),
-            new Version(1, 17), new Version(1, 18), "en");
-
-        Assert.Single(result);
-        Assert.Equal(["good"], result[0].Lines);
+        Assert.Equal(["padded"], result);
     }
 
     [Fact]
     public void ReturnsEmptyForMissingOrEmptyFeed()
     {
-        var current = new Version(1, 17);
-        var target = new Version(1, 18);
+        Assert.Empty(Select(null, "1.18", "en"));
+        Assert.Empty(Select(new ChangelogFeed(), "1.18", "en"));
+        Assert.Empty(Select(Feed(), "1.18", "en"));
+    }
 
-        Assert.Empty(ChangelogSelector.Select(null, current, target, "en"));
-        Assert.Empty(ChangelogSelector.Select(new ChangelogFeed(), current, target, "en"));
-        Assert.Empty(ChangelogSelector.Select(Feed(), current, target, "en"));
+    [Fact]
+    public void IgnoresEntriesWithAnUnparseableVersion()
+    {
+        var result = Select(
+            Feed(V("nightly", en: ["junk"]), V("1.18", en: ["real"])),
+            "1.18", "en");
+
+        Assert.Equal(["real"], result);
     }
 
     [Fact]
     public void TreatsNullLanguageAsEnglish()
     {
-        var result = ChangelogSelector.Select(
+        var result = Select(
             Feed(V("1.18", zh: ["中文"], en: ["English"])),
-            new Version(1, 17), new Version(1, 18), null);
+            "1.18", null);
 
-        Assert.Equal(["English"], result[0].Lines);
+        Assert.Equal(["English"], result);
     }
 }

@@ -18,7 +18,7 @@ namespace XrayUI.ViewModels
         private readonly StartupService _startupService;
         private readonly IUpdateService _update;
         private UpdateInfo? _availableUpdate;
-        private IReadOnlyList<ChangelogEntry> _availableUpdateNotes = Array.Empty<ChangelogEntry>();
+        private IReadOnlyList<string> _availableUpdateNotes = Array.Empty<string>();
         // Guards OnIsTunModeChanged from firing the dialog when we update internally
         private bool _isTunInternalUpdate;
 
@@ -872,7 +872,7 @@ namespace XrayUI.ViewModels
         /// Pass a null <paramref name="info"/> to clear (e.g. after a failed update
         /// attempt). <paramref name="notes"/> is the already-fetched release notes
         /// shown on the confirm dialog; empty means none.</summary>
-        public void SetAvailableUpdate(UpdateInfo? info, IReadOnlyList<ChangelogEntry> notes)
+        public void SetAvailableUpdate(UpdateInfo? info, IReadOnlyList<string> notes)
         {
             _availableUpdate = info;
             _availableUpdateNotes = notes;

@@ -1006,7 +1006,7 @@ namespace XrayUI.Services
         // ── App update confirm ────────────────────────────────────────────────
 
         public async Task<bool> ShowUpdateConfirmDialogAsync(
-            Version newVersion, IReadOnlyList<ChangelogEntry> notes)
+            Version newVersion, IReadOnlyList<string> notes)
         {
             var dialog = CreateDialog();
             dialog.Title = Loc.Format("Update_ConfirmTitle", newVersion);
@@ -1039,23 +1039,8 @@ namespace XrayUI.Services
                 root.Children.Add(notesHeader);
 
                 var list = new StackPanel { Spacing = 4 };
-                foreach (var entry in notes)
-                {
-                    // Only label versions when the upgrade spans more than one release —
-                    // for the common single-version case the dialog title already says it.
-                    if (notes.Count > 1)
-                    {
-                        list.Children.Add(new TextBlock
-                        {
-                            Text = entry.Version.ToString(),
-                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                            Margin = new Thickness(0, list.Children.Count == 0 ? 0 : 8, 0, 2),
-                        });
-                    }
-
-                    foreach (var line in entry.Lines)
-                        list.Children.Add(BuildNoteLine(line));
-                }
+                foreach (var line in notes)
+                    list.Children.Add(BuildNoteLine(line));
 
                 var scroller = new ScrollViewer
                 {
