@@ -10,8 +10,60 @@ permissions:
   contents: write
 
 jobs:
+  # Blocks the release before any build work when the website changelog does not
+  # already carry this tag's notes. Worth a hard gate because a stale feed does not
+  # degrade to an empty changelog: the in-app confirm dialog reads versions[0]
+  # without matching on the version (ChangelogSelector.SelectLatest), so users would
+  # see the *previous* release's notes presented as this one's.
+  #
+  # Order of operations: publish the website entry first, then push the tag. If this
+  # fails, fix the site and hit "Re-run failed jobs" — the tag does not need to be
+  # deleted and re-pushed.
+  changelog-gate:
+    name: changelog lists ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify changelog.json lists this version first
+        shell: bash
+        run: |
+          # workflow_dispatch runs carry a branch ref, not a version — nothing to check.
+          # This is a step-level early exit rather than a job-level `if:` on purpose:
+          # a skipped job would take the `publish` jobs that need it down with it.
+          case "$GITHUB_REF" in
+            refs/tags/*) ;;
+            *) echo "Not a tag ref ($GITHUB_REF) — skipping changelog check."; exit 0 ;;
+          esac
+
+          tag="${GITHUB_REF_NAME#v}"
+
+          # Cache-buster + no-cache: an edge node still holding the previous file would
+          # otherwise fake a pass (or a fail) here. Same reason UpdateService appends
+          # ?v={version} on the client side.
+          if ! json=$(curl -fsSL --retry 3 --retry-delay 5 -H 'Cache-Control: no-cache' \
+                        "https://www.xrayui.site/changelog.json?ci=$GITHUB_RUN_ID"); then
+            echo "::error::changelog.json could not be fetched — the site may be down."
+            exit 1
+          fi
+
+          # Must be versions[0], not "some entry matches": the dialog only ever reads
+          # the first entry, so a $tag block sitting further down still ships wrong notes.
+          latest=$(jq -r '.versions[0].version // ""' <<<"$json")
+          if [ "$latest" != "$tag" ]; then
+            echo "::error::changelog.json starts with '$latest', expected '$tag'. Put the $tag entry at the top of the feed, then re-run this job."
+            exit 1
+          fi
+
+          if ! jq -e '.versions[0] | (.zh | length > 0) and (.en | length > 0)' <<<"$json" >/dev/null; then
+            echo "::error::The $tag entry has no zh or no en lines — the dialog would silently fall back to the other language."
+            exit 1
+          fi
+
+          echo "OK: changelog.json lists $tag with both languages."
+
   publish:
     name: publish ${{ matrix.rid }}${{ matrix.wasdk_sc && '-wasdk' || '' }} (AOT)
+    needs: changelog-gate
     runs-on: windows-latest
     timeout-minutes: 30
     strategy:

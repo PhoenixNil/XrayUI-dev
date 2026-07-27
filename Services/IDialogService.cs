@@ -33,7 +33,7 @@ namespace XrayUI.Services
         /// compact title + buttons confirm.
         /// </param>
         Task<bool> ShowUpdateConfirmDialogAsync(
-            Version newVersion, IReadOnlyList<ChangelogEntry> notes);
+            Version newVersion, IReadOnlyList<string> notes);
 
         /// <summary>
         /// Shows a modal dialog with a progress bar + status text while <paramref name="work"/> runs.

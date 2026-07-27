@@ -98,7 +98,7 @@ namespace XrayUI.Services
             return new UpdateInfo(remoteVersion, release.TagName!, zipUrl, shaUrl, zipName);
         }
 
-        public async Task<IReadOnlyList<ChangelogEntry>> FetchChangelogAsync(
+        public async Task<IReadOnlyList<string>> FetchChangelogAsync(
             UpdateInfo info, string? language, string? proxyUrl, CancellationToken ct)
         {
             try
@@ -112,7 +112,7 @@ namespace XrayUI.Services
                 var feed = await client.GetFromJsonAsync(
                     url, AppJsonSerializerContext.Default.ChangelogFeed, ct);
 
-                return ChangelogSelector.Select(feed, AppVersion.Current, info.NewVersion, language);
+                return ChangelogSelector.SelectLatest(feed, language);
             }
             // Only a real caller cancellation propagates. HttpClient.Timeout also raises
             // OperationCanceledException (as TaskCanceledException) with ct untouched, and
@@ -122,7 +122,7 @@ namespace XrayUI.Services
             catch (Exception ex)
             {
                 Debug.WriteLine($"[Update] Changelog fetch failed: {ex.Message}");
-                return Array.Empty<ChangelogEntry>();
+                return Array.Empty<string>();
             }
         }
 

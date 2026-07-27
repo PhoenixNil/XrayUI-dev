@@ -19,111 +19,53 @@ public class ChangelogSelectorTests
     [Fact]
     public void PicksChineseWhenLanguageIsChinese()
     {
-        var result = ChangelogSelector.Select(
+        var result = ChangelogSelector.SelectLatest(
             Feed(V("1.18", zh: ["中文条目"], en: ["English line"])),
-            new Version(1, 17), new Version(1, 18), "zh");
+            "zh");
 
-        Assert.Single(result);
-        Assert.Equal(["中文条目"], result[0].Lines);
+        Assert.Equal(["中文条目"], result);
     }
 
     [Fact]
     public void PicksEnglishForNonChineseLanguage()
     {
-        var result = ChangelogSelector.Select(
+        var result = ChangelogSelector.SelectLatest(
             Feed(V("1.18", zh: ["中文条目"], en: ["English line"])),
-            new Version(1, 17), new Version(1, 18), "en");
+            "en");
 
-        Assert.Equal(["English line"], result[0].Lines);
+        Assert.Equal(["English line"], result);
     }
 
     [Fact]
     public void FallsBackToOtherLanguageWhenPreferredMissing()
     {
-        var zhOnly = ChangelogSelector.Select(
+        var zhOnly = ChangelogSelector.SelectLatest(
             Feed(V("1.18", zh: ["只有中文"])),
-            new Version(1, 17), new Version(1, 18), "en");
-        Assert.Equal(["只有中文"], zhOnly[0].Lines);
+            "en");
+        Assert.Equal(["只有中文"], zhOnly);
 
-        var enOnly = ChangelogSelector.Select(
+        var enOnly = ChangelogSelector.SelectLatest(
             Feed(V("1.18", en: ["English only"])),
-            new Version(1, 17), new Version(1, 18), "zh");
-        Assert.Equal(["English only"], enOnly[0].Lines);
+            "zh");
+        Assert.Equal(["English only"], enOnly);
     }
 
     [Fact]
-    public void ExcludesVersionsAlreadyInstalled()
+    public void ReadsOnlyTheFirstVersion()
     {
-        var result = ChangelogSelector.Select(
-            Feed(V("1.17", en: ["old"]), V("1.18", en: ["new"])),
-            new Version(1, 17), new Version(1, 18), "en");
+        var result = ChangelogSelector.SelectLatest(
+            Feed(V("1.18", en: ["latest"]), V("1.17", en: ["older"])),
+            "en");
 
-        Assert.Single(result);
-        Assert.Equal(new Version(1, 18), result[0].Version);
+        Assert.Equal(["latest"], result);
     }
 
     [Fact]
-    public void ExcludesVersionsBeyondTheTarget()
+    public void DoesNotFallBackToAnOlderVersionWhenLatestHasNoNotes()
     {
-        // The feed can already list a release newer than the one being offered
-        // (e.g. notes pushed ahead of the GitHub release).
-        var result = ChangelogSelector.Select(
-            Feed(V("1.18", en: ["target"]), V("1.19", en: ["future"])),
-            new Version(1, 17), new Version(1, 18), "en");
-
-        Assert.Single(result);
-        Assert.Equal(new Version(1, 18), result[0].Version);
-    }
-
-    [Fact]
-    public void SpansEveryVersionInRangeNewestFirst()
-    {
-        var result = ChangelogSelector.Select(
-            Feed(V("1.18", en: ["a"]), V("1.20", en: ["c"]), V("1.19", en: ["b"])),
-            new Version(1, 17), new Version(1, 20), "en");
-
-        Assert.Equal(
-            [new Version(1, 20), new Version(1, 19), new Version(1, 18)],
-            result.Select(e => e.Version));
-    }
-
-    [Fact]
-    public void CapsAtMaxVersionsKeepingTheNewest()
-    {
-        // Feed deliberately out of order so this also proves the cap runs after sorting.
-        var result = ChangelogSelector.Select(
-            Feed(
-                V("1.11", en: ["oldest"]),
-                V("1.15", en: ["e"]),
-                V("1.12", en: ["b"]),
-                V("1.14", en: ["d"]),
-                V("1.16", en: ["newest"]),
-                V("1.13", en: ["c"])),
-            new Version(1, 10), new Version(1, 16), "en");
-
-        Assert.Equal(ChangelogSelector.MaxVersions, result.Count);
-        Assert.Equal(
-            [new Version(1, 16), new Version(1, 15), new Version(1, 14), new Version(1, 13)],
-            result.Select(e => e.Version));
-    }
-
-    [Fact]
-    public void DoesNotPadWhenFewerVersionsThanTheCap()
-    {
-        var result = ChangelogSelector.Select(
-            Feed(V("1.18", en: ["only one"])),
-            new Version(1, 17), new Version(1, 18), "en");
-
-        Assert.Single(result);
-    }
-
-    [Fact]
-    public void TreatsMissingVersionComponentsAsZero()
-    {
-        // "1.18" from the feed must not read as newer than an installed 1.18.0.
-        var result = ChangelogSelector.Select(
-            Feed(V("1.18", en: ["same version"])),
-            new Version(1, 18, 0), new Version(1, 19), "en");
+        var result = ChangelogSelector.SelectLatest(
+            Feed(V("1.18", en: [""]), V("1.17", en: ["older"])),
+            "en");
 
         Assert.Empty(result);
     }
@@ -131,53 +73,28 @@ public class ChangelogSelectorTests
     [Fact]
     public void DropsBlankLinesAndTrims()
     {
-        var result = ChangelogSelector.Select(
+        var result = ChangelogSelector.SelectLatest(
             Feed(V("1.18", en: ["  padded  ", "", "   "])),
-            new Version(1, 17), new Version(1, 18), "en");
+            "en");
 
-        Assert.Equal(["padded"], result[0].Lines);
-    }
-
-    [Fact]
-    public void SkipsVersionsWithNoUsableLines()
-    {
-        var result = ChangelogSelector.Select(
-            Feed(V("1.18", zh: [""], en: []), V("1.19", en: ["real"])),
-            new Version(1, 17), new Version(1, 19), "zh");
-
-        Assert.Single(result);
-        Assert.Equal(new Version(1, 19), result[0].Version);
-    }
-
-    [Fact]
-    public void SkipsUnparseableVersionStrings()
-    {
-        var result = ChangelogSelector.Select(
-            Feed(V("not-a-version", en: ["junk"]), V("1.18", en: ["good"])),
-            new Version(1, 17), new Version(1, 18), "en");
-
-        Assert.Single(result);
-        Assert.Equal(["good"], result[0].Lines);
+        Assert.Equal(["padded"], result);
     }
 
     [Fact]
     public void ReturnsEmptyForMissingOrEmptyFeed()
     {
-        var current = new Version(1, 17);
-        var target = new Version(1, 18);
-
-        Assert.Empty(ChangelogSelector.Select(null, current, target, "en"));
-        Assert.Empty(ChangelogSelector.Select(new ChangelogFeed(), current, target, "en"));
-        Assert.Empty(ChangelogSelector.Select(Feed(), current, target, "en"));
+        Assert.Empty(ChangelogSelector.SelectLatest(null, "en"));
+        Assert.Empty(ChangelogSelector.SelectLatest(new ChangelogFeed(), "en"));
+        Assert.Empty(ChangelogSelector.SelectLatest(Feed(), "en"));
     }
 
     [Fact]
     public void TreatsNullLanguageAsEnglish()
     {
-        var result = ChangelogSelector.Select(
+        var result = ChangelogSelector.SelectLatest(
             Feed(V("1.18", zh: ["中文"], en: ["English"])),
-            new Version(1, 17), new Version(1, 18), null);
+            null);
 
-        Assert.Equal(["English"], result[0].Lines);
+        Assert.Equal(["English"], result);
     }
 }
