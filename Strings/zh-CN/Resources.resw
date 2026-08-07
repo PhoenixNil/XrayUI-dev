@@ -428,6 +428,12 @@
   <data name="EditServer_Password" xml:space="preserve">
     <value>密码</value>
   </data>
+  <data name="EditServer_ShowPassword" xml:space="preserve">
+    <value>显示密码</value>
+  </data>
+  <data name="EditServer_HidePassword" xml:space="preserve">
+    <value>隐藏密码</value>
+  </data>
   <data name="EditServer_Transport" xml:space="preserve">
     <value>传输协议</value>
   </data>

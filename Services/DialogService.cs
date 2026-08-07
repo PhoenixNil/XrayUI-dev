@@ -136,7 +136,7 @@ namespace XrayUI.Services
                 cmbEncryption.Items.Add(existingEnc);
             cmbEncryption.SelectedItem = existing?.Encryption ?? "aes-128-gcm";
             var txtUsername = new TextBox { Header = L.EditServer_SocksUsername, Text = existing?.Username ?? string.Empty };
-            var txtPassword = new PasswordBox { Header = L.EditServer_Password, Password = existing?.Password ?? string.Empty };
+            var txtPassword = CreateRevealablePasswordBox(L.EditServer_Password, existing?.Password);
             var txtUuid = new TextBox { Header = "UUID (VMess / VLESS)", Text = existing?.Uuid ?? string.Empty };
             var numAlterId = new NumberBox
                 { Header = "AlterId (VMess)", Value = existing?.AlterId ?? 0, Minimum = 0, Maximum = 65535 };
@@ -1287,6 +1287,51 @@ namespace XrayUI.Services
 
         private static Border Wrap(FrameworkElement child) =>
             new Border { Child = child };
+
+
+        private const string RevealGlyph = "\uE7B3";   // RedEye
+        private const string ConcealGlyph = "\uED1A";  // Hide
+
+        /// <summary>
+        /// A PasswordBox whose header carries a reveal toggle on the right.
+        /// <para>
+        /// PasswordRevealMode is forced to Hidden rather than left at the default Peek: the
+        /// built-in peek button only shows up once the box has focus <em>and the user has typed
+        /// a character</em>. An existing server's password is assigned here in code, so peek is
+        /// dead on arrival and the value can never be read back (issue #124).
+        /// </para>
+        /// </summary>
+        private static PasswordBox CreateRevealablePasswordBox(string header, string? value)
+        {
+            var box = new PasswordBox { Password = value ?? string.Empty };
+
+            var icon = new FontIcon { FontSize = 14 };
+            var toggle = new Button
+            {
+                Content = icon,
+                Padding = new Thickness(6, 0, 6, 0),
+                Height = 22,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            if (Application.Current.Resources.TryGetValue("SubtleButtonStyle", out var subtleStyle))
+                toggle.Style = (Style)subtleStyle;
+
+            void SetRevealed(bool revealed)
+            {
+                box.PasswordRevealMode = revealed ? PasswordRevealMode.Visible : PasswordRevealMode.Hidden;
+                icon.Glyph = revealed ? ConcealGlyph : RevealGlyph;
+
+                var label = revealed ? L.EditServer_HidePassword : L.EditServer_ShowPassword;
+                ToolTipService.SetToolTip(toggle, label);
+                AutomationProperties.SetName(toggle, label);
+            }
+
+            SetRevealed(false);
+            toggle.Click += (_, _) => SetRevealed(box.PasswordRevealMode != PasswordRevealMode.Visible);
+
+            box.Header = CreateLabelRow(header, toggle);
+            return box;
+        }
 
         /// <summary>Multi-line raw-JSON editor box (Finalmask / XHTTP extra).</summary>
         private static TextBox CreateJsonTextBox(string header, string? value) => new()

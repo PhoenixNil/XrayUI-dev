@@ -42,6 +42,8 @@ public static class L
     public static string EditServer_Protocol         => Loc.GetString("EditServer_Protocol");
     public static string EditServer_Encryption       => Loc.GetString("EditServer_Encryption");
     public static string EditServer_Password         => Loc.GetString("EditServer_Password");
+    public static string EditServer_ShowPassword     => Loc.GetString("EditServer_ShowPassword");
+    public static string EditServer_HidePassword     => Loc.GetString("EditServer_HidePassword");
     public static string EditServer_Transport        => Loc.GetString("EditServer_Transport");
     public static string EditServer_Path             => Loc.GetString("EditServer_Path");
     public static string EditServer_WsHost           => Loc.GetString("EditServer_WsHost");
