@@ -428,6 +428,12 @@
   <data name="EditServer_Password" xml:space="preserve">
     <value>Password</value>
   </data>
+  <data name="EditServer_ShowPassword" xml:space="preserve">
+    <value>Show password</value>
+  </data>
+  <data name="EditServer_HidePassword" xml:space="preserve">
+    <value>Hide password</value>
+  </data>
   <data name="EditServer_Transport" xml:space="preserve">
     <value>Transport Protocol</value>
   </data>
