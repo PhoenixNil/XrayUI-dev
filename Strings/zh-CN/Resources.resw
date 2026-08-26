@@ -497,15 +497,6 @@
   <data name="Share_NotSupportedMsg" xml:space="preserve">
     <value>该节点协议暂不支持生成分享链接。</value>
   </data>
-  <data name="Startup_Title" xml:space="preserve">
-    <value>开机启动</value>
-  </data>
-  <data name="Startup_AutoStart" xml:space="preserve">
-    <value>开机自动启动</value>
-  </data>
-  <data name="Startup_AutoConnect" xml:space="preserve">
-    <value>自动连接上次节点</value>
-  </data>
   <data name="Startup_SetFailed" xml:space="preserve">
     <value>开机启动设置失败</value>
   </data>
@@ -736,9 +727,6 @@
   </data>
   <data name="ControlPanel_NoProxyItem.Text" xml:space="preserve">
     <value>不接管代理</value>
-  </data>
-  <data name="ControlPanel_StartupItem.Text" xml:space="preserve">
-    <value>开机启动</value>
   </data>
   <data name="ControlPanel_RoutingSettingsItem.Text" xml:space="preserve">
     <value>路由设置</value>
@@ -1018,6 +1006,21 @@
   </data>
   <data name="Personalize_DetailGroupDesc.Text" xml:space="preserve">
     <value>节点卡片上展示所属订阅分组</value>
+  </data>
+  <data name="Personalize_Startup.Text" xml:space="preserve">
+    <value>启动</value>
+  </data>
+  <data name="Personalize_StartupTitle.Text" xml:space="preserve">
+    <value>开机自启动</value>
+  </data>
+  <data name="Personalize_StartupDesc.Text" xml:space="preserve">
+    <value>登录 Windows 后自动启动 XrayUI</value>
+  </data>
+  <data name="Personalize_AutoConnectTitle.Text" xml:space="preserve">
+    <value>启动后自动连接</value>
+  </data>
+  <data name="Personalize_AutoConnectDesc.Text" xml:space="preserve">
+    <value>开机启动时连接上次使用的节点</value>
   </data>
   <data name="Personalize_OpenFilterPanelOnStartup.Text" xml:space="preserve">
     <value>启动时展开筛选栏</value>
