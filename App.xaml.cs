@@ -172,11 +172,26 @@ namespace XrayUI
 
             _cleanupStarted = true;
 
+            DeleteConfigPreview();
             SystemProxyService.ClearProxy();
 
             if (_window is MainWindow mainWindow)
             {
                 mainWindow.StopBackgroundServicesOnExit(fastShutdown);
+            }
+        }
+
+        private static void DeleteConfigPreview()
+        {
+            try
+            {
+                // File.Delete is a no-op when no preview has been generated. Keep cleanup
+                // best-effort so a JSON editor temporarily locking the file cannot block exit.
+                File.Delete(AppPaths.XrayConfigPreviewPath);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Shutdown] Failed to delete config preview: {ex.Message}");
             }
         }
 

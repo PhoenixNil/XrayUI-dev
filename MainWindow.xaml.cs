@@ -268,6 +268,7 @@ namespace XrayUI
             _isHiddenToTray = true;
             ControlPanel?.CloseLogWindow();
             ControlPanel?.CloseCustomRulesWindow();
+            ControlPanel?.CloseConfigProfileWindow();
 
             AppWindow.IsShownInSwitchers = false;
             AppWindow.Hide();

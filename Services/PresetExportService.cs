@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -46,6 +46,10 @@ namespace XrayUI.Services
                 preset,
                 AppJsonSerializerContext.Readable<PresetSettings>());
             await File.WriteAllTextAsync(PresetPaths.SettingsFile, settingsJson).ConfigureAwait(false);
+
+            // The two enable switches stay behind: a bundle that silently starts the recipient on
+            // a config they have never read is a worse default than one they opt into.
+            await ConfigProfileStore.CopyToAsync(PresetPaths.ProfilesDir).ConfigureAwait(false);
 
             return PresetPaths.Dir;
         }
