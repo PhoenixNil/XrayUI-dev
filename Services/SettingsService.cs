@@ -67,7 +67,12 @@ namespace XrayUI.Services
                 }
 
                 var json = await File.ReadAllTextAsync(SettingsFile).ConfigureAwait(false);
-                _cachedSettings = JsonSerializer.Deserialize(json, AppJsonSerializerContext.Default.AppSettings) ?? new AppSettings();
+                // A literal "null" body deserializes to null without throwing. Treat it as a
+                // failed load rather than an empty one, or the next save writes defaults over it.
+                var loaded = JsonSerializer.Deserialize(json, AppJsonSerializerContext.Default.AppSettings)
+                             ?? throw new JsonException("settings.json deserialized to null.");
+
+                _cachedSettings = loaded;
 
                 // One-time migration: settings.json written before XrayLogLevel existed only has
                 // the legacy VerboseXrayLog bool. Populate the new field so every other reader
@@ -78,7 +83,10 @@ namespace XrayUI.Services
             catch (Exception ex)
             {
                 Debug.WriteLine($"[SettingsService] Failed to load settings: {ex.Message}");
-                return new AppSettings();
+                // Deliberately not cached: the next call retries the file, so a hand-repair takes
+                // effect without a restart. The instance is stamped so SaveSettingsAsync refuses
+                // it no matter how much later the caller gets around to saving.
+                return new AppSettings { IsFailedLoadFallback = true };
             }
         }
 
@@ -103,11 +111,27 @@ namespace XrayUI.Services
             return "cn";
         }
 
-        public async Task SaveSettingsAsync(AppSettings settings)
+        /// <summary>
+        /// Persists <paramref name="settings"/>. Returns false — without writing — when the
+        /// instance came from a failed load (see <see cref="AppSettings.IsFailedLoadFallback"/>);
+        /// callers that report success to the user, or act on the save having happened, must check
+        /// it. Throws on I/O failure, as before.
+        /// </summary>
+        public async Task<bool> SaveSettingsAsync(AppSettings settings)
         {
+            if (settings.IsFailedLoadFallback)
+            {
+                // Defaults handed out for an unreadable settings.json: writing them back is the
+                // data loss, not the fix. Why the check rides the instance rather than a flag on
+                // this service is argued in full on AppSettings.IsFailedLoadFallback.
+                Debug.WriteLine("[SettingsService] Save refused: settings came from a failed load.");
+                return false;
+            }
+
             _cachedSettings = settings;
             var json = JsonSerializer.Serialize(settings, AppJsonSerializerContext.Readable<AppSettings>());
             await AtomicFile.WriteAllTextAsync(SettingsFile, json).ConfigureAwait(false);
+            return true;
         }
 
         // ── Server list ───────────────────────────────────────────────────────

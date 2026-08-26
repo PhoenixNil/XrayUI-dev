@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Windows.UI;
 using XrayUI.Helpers;
@@ -163,14 +163,23 @@ namespace XrayUI.ViewModels
             ShowRestartHint = langDiverged || regionDiverged;
         }
 
-        /// <summary>Persist the currently-selected language and routing region. Call right before
-        /// <see cref="App.Restart"/> — both only take effect on the next process start.</summary>
-        public async Task ApplyPendingChangesAsync()
+        /// <summary>
+        /// Persists the restart-gated settings — language and routing region, which only take
+        /// effect on the next process start. Returns false when nothing was written, so the caller
+        /// does not restart into a process that comes back showing the old values.
+        /// </summary>
+        public async Task<bool> ApplyPendingChangesAsync()
         {
             var s = await _settings.LoadSettingsAsync();
+            if (s.IsFailedLoadFallback)
+            {
+                await _dialogs.ShowErrorAsync(L.Settings_InvalidTitle, L.Settings_InvalidMsg);
+                return false;
+            }
+
             s.Language = LanguageHelper.TagAt(SelectedLanguageIndex);
             s.RoutingRegion = SelectedRegionCode;
-            await _settings.SaveSettingsAsync(s);
+            return await _settings.SaveSettingsAsync(s);
         }
 
         [ObservableProperty]
@@ -275,6 +284,25 @@ namespace XrayUI.ViewModels
         public Task<string> ExportPresetAsync() =>
             new PresetExportService(_settings).ExportAsync();
 
+        /// <summary>
+        /// Drops the cache so hand-edits made while this panel was open are picked up, then
+        /// reports whether settings.json is usable. <see cref="SettingsService"/> already refuses
+        /// to save over a failed load, so this is not what prevents the data loss — it is what
+        /// tells the user why their change went nowhere, at the one moment they can act on it.
+        /// </summary>
+        public async Task<bool> ValidateSettingsFileAsync()
+        {
+            var s = await _settings.ReloadAsync();
+
+            if (s.IsFailedLoadFallback)
+            {
+                await _dialogs.ShowErrorAsync(L.Settings_InvalidTitle, L.Settings_InvalidMsg);
+                return false;
+            }
+
+            return true;
+        }
+
         public static bool PresetExists() => PresetImportService.PresetExists();
 
         /// <summary>
@@ -319,6 +347,12 @@ namespace XrayUI.ViewModels
         [RelayCommand]
         private async Task Done()
         {
+            // On a settings.json the user has left unparseable the save below is refused, so
+            // bail here where there is still somewhere to say why. Doubles as the cache drop
+            // that makes the load pick up hand-edits made while this panel was open, so Done
+            // cannot write stale values back over freshly hand-edited ones.
+            if (!await ValidateSettingsFileAsync()) return;
+
             var s = await _settings.LoadSettingsAsync();
             ProtocolColorStore.SaveTo(s);
             GlobalHotkeyStore.SaveTo(s);

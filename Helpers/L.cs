@@ -105,6 +105,10 @@ public static class L
     public static string Error_UpdateFailed        => Loc.GetString("Error_UpdateFailed");
     public static string Error_UpdaterLaunchFailed => Loc.GetString("Error_UpdaterLaunchFailed");
 
+    // settings.json failed to parse. Not profile-specific: Personalize shows it too.
+    public static string Settings_InvalidTitle => Loc.GetString("Settings_InvalidTitle");
+    public static string Settings_InvalidMsg   => Loc.GetString("Settings_InvalidMsg");
+
     // ── Startup / Update / TUN ─────────────────────────────────────────────
     public static string Startup_SetFailed => Loc.GetString("Startup_SetFailed");
     public static string Update_Updating   => Loc.GetString("Update_Updating");

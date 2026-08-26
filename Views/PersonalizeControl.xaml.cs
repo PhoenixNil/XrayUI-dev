@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.UI.Xaml.Automation;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -137,7 +137,9 @@ namespace XrayUI.Views
 
         private async void LanguageRestartButton_Click(object sender, RoutedEventArgs e)
         {
-            await ViewModel.ApplyPendingChangesAsync();
+            // Restarting after a refused save would bring the app back on the old language and
+            // region with no explanation. ApplyPendingChangesAsync has already said why.
+            if (!await ViewModel.ApplyPendingChangesAsync()) return;
             App.Restart();
         }
 

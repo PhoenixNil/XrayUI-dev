@@ -1,11 +1,28 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using XrayUI.Services;
 
 namespace XrayUI.Models
 {
     public class AppSettings
     {
+        /// <summary>
+        /// Marks the throwaway defaults <see cref="XrayUI.Services.SettingsService.LoadSettingsAsync"/>
+        /// hands back when settings.json cannot be read or parsed. SaveSettingsAsync refuses to
+        /// persist an instance carrying it, because writing these defaults is the data loss.
+        ///
+        /// Provenance has to travel on the instance, not on the service: a caller can hold one of
+        /// these across seconds of awaits (the start sequence spans the wintun preflight and the
+        /// xray launch), and a service-level flag would already have been cleared by any
+        /// successful load in that window — including the one that follows the user repairing the
+        /// file by hand. The stale defaults would then overwrite the repair.
+        ///
+        /// Never serialized, so it cannot survive a round-trip and mislabel good data.
+        /// </summary>
+        [JsonIgnore]
+        internal bool IsFailedLoadFallback { get; init; }
+
         public int LocalMixedPort { get; set; } = 16890;
         /// <summary>When true, the local socks/http inbound listens on 0.0.0.0 instead of
         /// 127.0.0.1 so other devices on the LAN can use this machine as a proxy.</summary>
