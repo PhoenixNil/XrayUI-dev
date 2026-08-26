@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using XrayUI.Helpers;
@@ -15,6 +16,7 @@ namespace XrayUI.ViewModels
         private readonly SettingsService _settings;
         private readonly XrayService _xray;
         private readonly TunService _tunService;
+        private readonly ConfigProfileStore _profiles;
         private readonly IUpdateService _update;
         private UpdateInfo? _availableUpdate;
         private IReadOnlyList<string> _availableUpdateNotes = Array.Empty<string>();
@@ -23,6 +25,16 @@ namespace XrayUI.ViewModels
 
         // Tracks the server host of the currently active TUN session (for cleanup)
         private string? _currentTunServerHost;
+
+        // The local socks/http port the running config actually exposes, captured at start and
+        // on every reapply. The proxy-mode toggle re-points the WinInet registry without
+        // rebuilding the config, so it cannot read the port back out of a fresh build the way
+        // start and reapply do.
+        private int? _activeLocalProxyPort;
+
+        // Mirrors AppSettings.Use*ConfigProfile so the gear menu can gate on it synchronously.
+        private bool _useTunConfigProfile;
+        private bool _useProxyConfigProfile;
 
         public XrayService XrayService => _xray;
         public SettingsService SettingsService => _settings;
@@ -43,6 +55,15 @@ namespace XrayUI.ViewModels
         /// target is the node actually in use rather than whatever the list has selected.</summary>
         public string? ActiveServerId => IsRunning ? _activeServer?.Id : null;
 
+        /// <summary>The local socks/http port the running config actually exposes, or null when
+        /// xray is stopped or the active config profile publishes no socks/http inbound on a
+        /// fixed port. Everything that dials the core in-process reads this — subscription
+        /// fetches, the update check and download, the AI-unlock probes — so a profile that
+        /// moves or drops the inbound cannot leave them on a dead port. <see cref="LocalPort"/>
+        /// stays the *configured* value the port editor edits; this is the *running* one, and
+        /// the two only differ under a config profile.</summary>
+        public int? ActiveLocalProxyPort => IsRunning ? _activeLocalProxyPort : null;
+
         // Serializes concurrent reapply calls (custom-rules save, routing-mode toggle,
         // proxy-mode toggle can all race) and blocks re-entry.
         private readonly SemaphoreSlim _reapplyLock = new(1, 1);
@@ -51,6 +72,7 @@ namespace XrayUI.ViewModels
         /// disable related menu items and show the applying state.</summary>
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(IsModeToggleEnabled))]
+        [NotifyPropertyChangedFor(nameof(IsBuiltInConfigEnabled))]
         [NotifyPropertyChangedFor(nameof(IsTunToggleEnabled))]
         [NotifyPropertyChangedFor(nameof(IsNotReapplying))]
         [NotifyPropertyChangedFor(nameof(StatusText))]
@@ -73,19 +95,26 @@ namespace XrayUI.ViewModels
         public event EventHandler? ShowLogsRequested;
         public event EventHandler? ShowPersonalizeRequested;
         public event EventHandler<CustomRulesViewModel>? ShowCustomRulesRequested;
+        /// <summary>Carries the slot to open on alongside the VM: the window has to seed it
+        /// before InitializeComponent, so it cannot read the mode off the VM afterwards.</summary>
+        public readonly record struct ConfigProfileRequest(ConfigProfileViewModel ViewModel, bool TunSlot);
+
+        public event EventHandler<ConfigProfileRequest>? ShowConfigProfilesRequested;
 
         public ControlPanelViewModel(
             IDialogService dialogs,
             SettingsService settings,
             XrayService xray,
             TunService tunService,
-            IUpdateService update)
+            IUpdateService update,
+            ConfigProfileStore profiles)
         {
             _dialogs        = dialogs;
             _settings       = settings;
             _xray           = xray;
             _tunService     = tunService;
             _update         = update;
+            _profiles       = profiles;
 
             StartStopButtonContent = L.ControlPanel_Start;
             LocalPort              = 16890;
@@ -115,6 +144,7 @@ namespace XrayUI.ViewModels
             StartStopButtonChecked = value;
             OnPropertyChanged(nameof(StatusText));
             OnPropertyChanged(nameof(IsModeToggleEnabled));
+            OnPropertyChanged(nameof(IsBuiltInConfigEnabled));
             OnPropertyChanged(nameof(IsTunToggleEnabled));
             NotifyStartStopStateChanged();
         }
@@ -211,8 +241,9 @@ namespace XrayUI.ViewModels
             await _xray.StopAsync();
             if (IsSystemProxyEnabled && !IsTunMode)
                 SystemProxyService.ClearProxy();
-            _activeServer     = null;
-            _activeServerName = string.Empty;
+            _activeServer          = null;
+            _activeServerName      = string.Empty;
+            _activeLocalProxyPort = null;
             IsRunning = false;
         }
 
@@ -231,10 +262,7 @@ namespace XrayUI.ViewModels
             var tunMode = IsTunMode;
 
             var appSettings = await _settings.LoadSettingsAsync();
-            appSettings.LocalMixedPort      = LocalPort;
-            appSettings.AllowLanConnections = AllowLanConnections;
-            appSettings.RoutingMode         = RoutingMode;
-            appSettings.IsTunMode           = tunMode;
+            ApplyLiveSessionState(appSettings, tunMode);
             // Auto-connect lives in Personalize now; settings are the shared truth and this
             // load is already on the path, so read the flag from there instead of mirroring
             // it onto a second property here.
@@ -247,8 +275,8 @@ namespace XrayUI.ViewModels
                 await CleanupPersistedTunRoutesAsync(appSettings);
             }
 
-            var configJson = XrayConfigBuilder.Build(server, appSettings, GetAllServers());
-            var ok = await _xray.StartAsync(configJson);
+            var built = await BuildForNextStartAsync(server, appSettings, tunMode);
+            var ok = await _xray.StartAsync(built.Json);
 
             if (!ok)
             {
@@ -272,17 +300,95 @@ namespace XrayUI.ViewModels
             {
                 appSettings.LastTunServerHost    = null;
                 appSettings.IsSystemProxyEnabled = IsSystemProxyEnabled;
-                if (IsSystemProxyEnabled)
-                    SystemProxyService.SetProxy("127.0.0.1", appSettings.LocalMixedPort);
+                ApplySystemProxy(built.SystemProxyPort);
                 await TrySaveSettingsAsync(appSettings, "persist system proxy settings");
             }
 
-            _activeServer     = server;
-            _activeServerName = server.Name;
+            _activeServer            = server;
+            _activeServerName        = server.Name;
+            _activeLocalProxyPort   = built.SystemProxyPort;
             IsRunning = true;
 
 
             return true;
+        }
+
+        /// <summary>
+        /// Builds the config the currently selected node would use on its next start without
+        /// starting xray or changing any proxy/TUN state. A serialized clone prevents the live
+        /// UI values overlaid for the preview from mutating SettingsService's cached instance.
+        /// </summary>
+        public async Task<string?> BuildSelectedConfigPreviewAsync(string? routingRegion = null)
+        {
+            var server = GetSelectedServer();
+            if (server is null || !CanStartSelectedServer()) return null;
+
+            var previewSettings = (await _settings.LoadSettingsAsync()).Clone();
+
+            ApplyLiveSessionState(previewSettings);
+            previewSettings.IsSystemProxyEnabled = IsSystemProxyEnabled;
+            // Routing region belongs to Personalize, not this toolbar. Callers that have a
+            // not-yet-saved selection pass it; the rest get the persisted value.
+            if (routingRegion is not null)
+                previewSettings.RoutingRegion = routingRegion;
+
+            return (await BuildForNextStartAsync(server, previewSettings, previewSettings.IsTunMode)).Json;
+        }
+
+        /// <summary>
+        /// Overlays the toolbar state that is authoritative for the next xray start onto
+        /// <paramref name="settings"/>. These controls are the effective next-start values even
+        /// when their persisted counterparts have not caught up yet, so starting, reapplying and
+        /// previewing all have to agree on them — a preview that silently diverges from what
+        /// start actually builds is the failure the preview exists to prevent.
+        ///
+        /// IsSystemProxyEnabled is deliberately not here: StartSelectedServerAsync only commits it
+        /// on the non-TUN branch, after the build.
+        /// </summary>
+        /// <param name="tunMode">Pins TUN mode for callers that captured one value for a whole
+        /// sequence, rather than reading the live property that the user can toggle mid-start.</param>
+        private void ApplyLiveSessionState(AppSettings settings, bool? tunMode = null)
+        {
+            settings.LocalMixedPort      = LocalPort;
+            settings.AllowLanConnections = AllowLanConnections;
+            settings.RoutingMode         = RoutingMode;
+            settings.IsTunMode           = tunMode ?? IsTunMode;
+        }
+
+        /// <summary>
+        /// Points the WinInet proxy at the port the built config actually listens on. A config
+        /// profile is free to move the mixed inbound or drop it entirely, so the port comes from
+        /// the build rather than from AppSettings.LocalMixedPort. A null port means the config
+        /// exposes no socks/http inbound to point at: leave the registry alone rather than
+        /// advertise a port nothing is listening on.
+        /// </summary>
+        private void ApplySystemProxy(int? port)
+        {
+            if (!IsSystemProxyEnabled) return;
+
+            if (port is null)
+            {
+                Debug.WriteLine(
+                    "[ControlPanel] System proxy not set: the config exposes no socks/http inbound on a fixed port.");
+                return;
+            }
+
+            SystemProxyService.SetProxy("127.0.0.1", port.Value);
+        }
+
+        /// <summary>
+        /// Builds the config for the next start, honouring whichever config profile governs the
+        /// given mode. Start, reapply and preview all go through here so the profile lookup can
+        /// never be omitted at one of them — skipping it would quietly build the generated config
+        /// while the UI still reported "custom".
+        /// </summary>
+        /// <param name="tunMode">Pinned by callers that captured one value for a whole sequence,
+        /// rather than read from the live toggle mid-start.</param>
+        private async Task<BuiltXrayConfig> BuildForNextStartAsync(
+            ServerEntry server, AppSettings settings, bool tunMode)
+        {
+            var profileJson = await _profiles.LoadActiveAsync(settings, tunMode);
+            return XrayConfigBuilder.Build(server, settings, GetAllServers(), profileJson);
         }
 
         private async Task HandleStartStopFailureAsync(Exception ex)
@@ -295,8 +401,9 @@ namespace XrayUI.ViewModels
             }
 
             SystemProxyService.ClearProxy();
-            _activeServer     = null;
-            _activeServerName = string.Empty;
+            _activeServer          = null;
+            _activeServerName      = string.Empty;
+            _activeLocalProxyPort = null;
             IsRunning = false;
             await _dialogs.ShowErrorAsync(L.Error_StartFailed, ex.Message);
         }
@@ -323,15 +430,12 @@ namespace XrayUI.ViewModels
                 try
                 {
                     var settings = await _settings.LoadSettingsAsync();
-                    settings.LocalMixedPort        = LocalPort;
-                    settings.AllowLanConnections   = AllowLanConnections;
-                    settings.RoutingMode           = RoutingMode;
-                    settings.IsTunMode             = IsTunMode;
-                    settings.IsSystemProxyEnabled  = IsSystemProxyEnabled;
+                    ApplyLiveSessionState(settings);
+                    settings.IsSystemProxyEnabled = IsSystemProxyEnabled;
 
-                    var cfg = XrayConfigBuilder.Build(activeServer, settings, availableServers: GetAllServers());
+                    var built = await BuildForNextStartAsync(activeServer, settings, settings.IsTunMode);
 
-                    var ok = await _xray.StartAsync(cfg);
+                    var ok = await _xray.StartAsync(built.Json);
                     if (!ok)
                     {
                         var detail = string.IsNullOrEmpty(_xray.LastError)
@@ -341,10 +445,8 @@ namespace XrayUI.ViewModels
                         return;
                     }
 
-                    if (IsSystemProxyEnabled)
-                    {
-                        SystemProxyService.SetProxy("127.0.0.1", settings.LocalMixedPort);
-                    }
+                    _activeLocalProxyPort = built.SystemProxyPort;
+                    ApplySystemProxy(built.SystemProxyPort);
                     // IsRunning is managed manually by this VM (no subscription to
                     // _xray.RunningChanged), and the guard at the top of this method
                     // already proves it's true here — so no reassignment is needed.
@@ -388,8 +490,9 @@ namespace XrayUI.ViewModels
                 SystemProxyService.ClearProxy();
             }
 
-            _activeServer     = null;
-            _activeServerName = string.Empty;
+            _activeServer          = null;
+            _activeServerName      = string.Empty;
+            _activeLocalProxyPort = null;
             IsRunning = false;
 
             await _dialogs.ShowErrorAsync(L.Error_ReapplyFailed, detail);
@@ -544,9 +647,37 @@ namespace XrayUI.ViewModels
         /// restarting xray and updating the network stack. It is also disabled during reapply.</summary>
         public bool IsTunToggleEnabled => !IsRunning && !IsReapplying;
 
+        /// <summary>
+        /// True when the next start in the current mode runs a hand-written config profile
+        /// instead of the generated config. Which slot applies follows the TUN toggle, so this
+        /// flips as the user switches modes.
+        /// </summary>
+        private bool IsCustomConfigActive => IsTunMode ? _useTunConfigProfile : _useProxyConfigProfile;
+
+        /// <summary>Gate for the gear-menu items a config profile takes ownership of: local
+        /// port, routing mode, custom rules and DNS all live in the profile once it is on, so
+        /// leaving them clickable would let the UI report settings xray never sees.</summary>
+        public bool IsBuiltInConfigEnabled => IsModeToggleEnabled && !IsCustomConfigActive;
+
+        /// <summary>Pushed in at startup and whenever the profile editor saves.</summary>
+        public void ApplyConfigProfileState(bool useTunProfile, bool useProxyProfile)
+        {
+            _useTunConfigProfile   = useTunProfile;
+            _useProxyConfigProfile = useProxyProfile;
+            NotifyConfigProfileStateChanged();
+        }
+
+        private void NotifyConfigProfileStateChanged()
+        {
+            OnPropertyChanged(nameof(IsBuiltInConfigEnabled));
+            OnPropertyChanged(nameof(RoutingModeText));
+        }
+
         partial void OnIsTunModeChanged(bool value)
         {
             OnPropertyChanged(nameof(TunModeText));
+            // The active slot follows the mode, so the custom-config gates move with it.
+            NotifyConfigProfileStateChanged();
             OnPropertyChanged(nameof(IsModeToggleEnabled));
             if (!_isTunInternalUpdate)
                 _ = HandleTunToggleAsync(value);
@@ -692,6 +823,20 @@ namespace XrayUI.ViewModels
         }
 
         [RelayCommand]
+        private void ShowConfigProfiles()
+        {
+            // The preview has to agree with what start would build, and start reads the toolbar
+            // state — so it goes through the same method start uses.
+            var vm = new ConfigProfileViewModel(
+                _settings, _profiles, _dialogs, () => BuildSelectedConfigPreviewAsync());
+
+            vm.ProfileStateChanged += (_, state) =>
+                ApplyConfigProfileState(state.UseTunProfile, state.UseProxyProfile);
+
+            ShowConfigProfilesRequested?.Invoke(this, new ConfigProfileRequest(vm, IsTunMode));
+        }
+
+        [RelayCommand]
         private async Task ShowDnsSettings()
         {
             var s = await _settings.LoadSettingsAsync();
@@ -718,8 +863,12 @@ namespace XrayUI.ViewModels
         [NotifyPropertyChangedFor(nameof(RoutingModeText))]
         public partial string RoutingMode { get; set; }
 
-        /// <summary>Localized display string for the status bar / mini view.</summary>
-        public string RoutingModeText => RoutingMode == "global" ? L.ControlPanel_RoutingGlobal : L.ControlPanel_RoutingSmart;
+        /// <summary>Localized display string for the status bar / mini view. A config profile
+        /// owns routing outright, so neither built-in mode describes what is running.</summary>
+        public string RoutingModeText =>
+            IsCustomConfigActive     ? L.ControlPanel_RoutingCustom :
+            RoutingMode == "global"  ? L.ControlPanel_RoutingGlobal :
+                                       L.ControlPanel_RoutingSmart;
 
         [RelayCommand]
         private async Task SetRoutingMode(string mode)
@@ -773,7 +922,7 @@ namespace XrayUI.ViewModels
             if (IsRunning && !IsTunMode)
             {
                 if (IsSystemProxyEnabled)
-                    SystemProxyService.SetProxy("127.0.0.1", s.LocalMixedPort);
+                    ApplySystemProxy(_activeLocalProxyPort);
                 else
                     SystemProxyService.ClearProxy();
             }
@@ -848,7 +997,7 @@ namespace XrayUI.ViewModels
 
             // Route the download through xray when it's running so users behind GFW
             // can still reach github.com / objects.githubusercontent.com.
-            var proxy = IsRunning ? $"socks5://127.0.0.1:{LocalPort}" : null;
+            var proxy = ActiveLocalProxyPort is { } port ? $"socks5://127.0.0.1:{port}" : null;
 
             UpdateStaging? staging = null;
             try

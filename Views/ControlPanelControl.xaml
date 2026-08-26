@@ -53,10 +53,12 @@
                             <MenuFlyoutSeparator Visibility="{x:Bind ViewModel.UpdateBadgeVisibility, Mode=OneWay}" />
                             <MenuFlyoutItem x:Uid="ControlPanel_EditPortItem"
                                             Text="编辑本地端口"
+                                            IsEnabled="{x:Bind ViewModel.IsBuiltInConfigEnabled, Mode=OneWay}"
                                             Command="{x:Bind ViewModel.EditLocalPortCommand}" />
                             <MenuFlyoutItem x:Uid="ControlPanel_ViewLogItem"
                                             Text="查看日志"
                                             Command="{x:Bind ViewModel.ShowLogsCommand}" />
+                            
                             <MenuFlyoutSubItem x:Uid="ControlPanel_ProxySettingsItem"
                                                Text="代理设置">
                                 <RadioMenuFlyoutItem x:Uid="ControlPanel_GlobalProxyItem"
@@ -75,26 +77,26 @@
                                                      CommandParameter="manual" />
                             </MenuFlyoutSubItem>
                             <MenuFlyoutSeparator />
+                            <MenuFlyoutItem x:Uid="ControlPanel_ConfigProfilesItem"
+                                            Text="配置文件..."
+                                            Command="{x:Bind ViewModel.ShowConfigProfilesCommand}" />
                             <MenuFlyoutSubItem x:Uid="ControlPanel_RoutingSettingsItem"
-                                               Text="路由设置">
+                                               Text="路由设置"
+                                               IsEnabled="{x:Bind ViewModel.IsBuiltInConfigEnabled, Mode=OneWay}">
                                 <MenuFlyoutItem x:Uid="ControlPanel_RoutingGlobalItem"
                                                 Text="全局路由"
-                                                IsEnabled="{x:Bind ViewModel.IsModeToggleEnabled, Mode=OneWay}"
                                                 Command="{x:Bind ViewModel.SetRoutingModeCommand}"
                                                 CommandParameter="global" />
                                 <MenuFlyoutItem x:Uid="ControlPanel_RoutingSmartItem"
                                                 Text="智能分流"
-                                                IsEnabled="{x:Bind ViewModel.IsModeToggleEnabled, Mode=OneWay}"
                                                 Command="{x:Bind ViewModel.SetRoutingModeCommand}"
                                                 CommandParameter="smart" />
                                 <MenuFlyoutSeparator />
                                 <MenuFlyoutItem x:Uid="ControlPanel_CustomRulesItem"
                                                 Text="自定义规则..."
-                                                IsEnabled="{x:Bind ViewModel.IsModeToggleEnabled, Mode=OneWay}"
                                                 Command="{x:Bind ViewModel.ShowCustomRulesCommand}" />
                                 <MenuFlyoutItem x:Uid="ControlPanel_DnsItem"
                                                 Text="DNS设置"
-                                                IsEnabled="{x:Bind ViewModel.IsModeToggleEnabled, Mode=OneWay}"
                                                 Command="{x:Bind ViewModel.ShowDnsSettingsCommand}" />
                             </MenuFlyoutSubItem>
                         </MenuFlyout>

@@ -8,6 +8,7 @@ namespace XrayUI.Views
     {
         private LogWindow? _logWindow;
         private CustomRulesWindow? _customRulesWindow;
+        private ConfigProfileWindow? _configProfileWindow;
 
         public ControlPanelViewModel ViewModel { get; set; } = null!;
 
@@ -23,12 +24,14 @@ namespace XrayUI.Views
         {
             ViewModel.ShowLogsRequested         += OnShowLogsRequested;
             ViewModel.ShowCustomRulesRequested  += OnShowCustomRulesRequested;
+            ViewModel.ShowConfigProfilesRequested += OnShowConfigProfilesRequested;
         }
 
         private void UserControl_Unloaded(object sender, RoutedEventArgs e)
         {
             ViewModel.ShowLogsRequested         -= OnShowLogsRequested;
             ViewModel.ShowCustomRulesRequested  -= OnShowCustomRulesRequested;
+            ViewModel.ShowConfigProfilesRequested -= OnShowConfigProfilesRequested;
         }
 
         private async void GitHubButton_Click(object sender, RoutedEventArgs e)
@@ -71,6 +74,37 @@ namespace XrayUI.Views
                 _logWindow.Closed += (_, _) => _logWindow = null;
             }
             _logWindow.Activate();
+        }
+
+        public void CloseConfigProfileWindow()
+        {
+            var w = _configProfileWindow;
+            if (w is null)
+            {
+                return;
+            }
+
+            _configProfileWindow = null;
+            w.ForceClose();
+        }
+
+        private void OnShowConfigProfilesRequested(
+            object? sender, ControlPanelViewModel.ConfigProfileRequest request)
+        {
+            // Single instance: a second window would hold a stale copy of the profile text and
+            // let the two saves overwrite each other.
+            if (_configProfileWindow is not null)
+            {
+                _configProfileWindow.Activate();
+                return;
+            }
+
+            if ((Application.Current as App)?.Window is not { } mainWindow)
+                return;
+
+            _configProfileWindow = new ConfigProfileWindow(mainWindow, request.ViewModel, request.TunSlot);
+            _configProfileWindow.Closed += (_, _) => _configProfileWindow = null;
+            _configProfileWindow.Activate();
         }
 
         private void OnShowCustomRulesRequested(object? sender, CustomRulesViewModel vm)

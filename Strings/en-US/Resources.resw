@@ -262,11 +262,131 @@
   <data name="Personalize_DataManagement.Text" xml:space="preserve">
     <value>Import &amp; Export</value>
   </data>
+  <data name="ConfigProfile_Header.Text" xml:space="preserve">
+    <value>Config Profiles</value>
+  </data>
+  <data name="ConfigProfile_SlotTun.Content" xml:space="preserve">
+    <value>TUN Mode</value>
+  </data>
+  <data name="ConfigProfile_SlotProxy.Content" xml:space="preserve">
+    <value>System Proxy</value>
+  </data>
+  <data name="ConfigProfile_Subtitle.Text" xml:space="preserve">
+    <value>Do not write outbounds: they are generated from the node selected in the server list.</value>
+  </data>
+  <data name="ConfigProfile_EnableTitle.Text" xml:space="preserve">
+    <value>Use a custom config</value>
+  </data>
+  <data name="ConfigProfile_ResetBtn.Content" xml:space="preserve">
+    <value>Reset to default</value>
+  </data>
+  <data name="ConfigProfile_SaveBtn.Content" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="ConfigProfile_CloseBtn.Content" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="ConfigProfile_Title" xml:space="preserve">
+    <value>Config Profiles</value>
+  </data>
+  <data name="ConfigProfile_ExternalChangeWarning" xml:space="preserve">
+    <value>Unsaved changes in the editor, so it was not reloaded. Saving will overwrite the file on disk.</value>
+  </data>
+  <data name="ConfigProfile_LoadFailed" xml:space="preserve">
+    <value>Could not read the profile. Check the file under the profiles folder.</value>
+  </data>
+  <data name="ConfigProfile_SaveFailedTitle" xml:space="preserve">
+    <value>Could not save the profile</value>
+  </data>
+  <data name="ConfigProfile_SettingsUnwritable" xml:space="preserve">
+    <value>settings.json could not be parsed, so saving is paused to avoid overwriting it. Fix the file and try again.</value>
+  </data>
+  <data name="ConfigProfile_SavedInactive" xml:space="preserve">
+    <value>Saved.</value>
+  </data>
+  <data name="ConfigProfile_Saved" xml:space="preserve">
+    <value>Saved. It takes effect on the next connect.</value>
+  </data>
+  <data name="ConfigProfile_ResetTitle" xml:space="preserve">
+    <value>Reset to the default config?</value>
+  </data>
+  <data name="ConfigProfile_ResetMsg" xml:space="preserve">
+    <value>Replaces your current text. Nothing is written to disk until you save.</value>
+  </data>
+  <data name="ConfigProfile_PreviewStaleTitle" xml:space="preserve">
+    <value>Save first</value>
+  </data>
+  <data name="ConfigProfile_PreviewStaleMsg" xml:space="preserve">
+    <value>The preview is built from the saved profile, so unsaved edits would not appear in it.</value>
+  </data>
+  <data name="ConfigProfile_PreviewTitle" xml:space="preserve">
+    <value>Config preview</value>
+  </data>
+  <data name="ConfigProfile_PreviewNoServer" xml:space="preserve">
+    <value>Select an available node before previewing the next-start config.</value>
+  </data>
+  <data name="ConfigProfile_DiscardTitle" xml:space="preserve">
+    <value>Discard unsaved changes?</value>
+  </data>
+  <data name="ConfigProfile_DiscardMsg" xml:space="preserve">
+    <value>The edits in the editor have not been saved and will be lost.</value>
+  </data>
+  <data name="ConfigProfile_OpenFolderTooltip" xml:space="preserve">
+    <value>Open the profiles folder</value>
+  </data>
+  <data name="ConfigProfile_PreviewTooltip" xml:space="preserve">
+    <value>Preview the next-start config</value>
+  </data>
+  <data name="ConfigProfile_EditorAutomationName" xml:space="preserve">
+    <value>Config profile JSON editor</value>
+  </data>
+  <data name="ConfigProfile_ErrEmpty" xml:space="preserve">
+    <value>A profile has to be a complete config. Use Reset to default for a working starting point.</value>
+  </data>
+  <data name="ConfigProfile_ErrRootMustBeObject" xml:space="preserve">
+    <value>The profile must have a JSON object at its root, for example { "log": { "loglevel": "warning" }, "inbounds": [ ... ] }.</value>
+  </data>
+  <data name="ConfigProfile_ErrOutboundsNotAllowed" xml:space="preserve">
+    <value>A profile must not declare outbounds. They are generated from the node selected in the server list and injected on every start.</value>
+  </data>
+  <data name="ConfigProfile_ErrInboundsMissing" xml:space="preserve">
+    <value>The profile needs a non-empty inbounds array, otherwise xray accepts no traffic.</value>
+  </data>
+  <data name="ConfigProfile_ErrTunInboundMissing" xml:space="preserve">
+    <value>The TUN profile needs an inbound with "protocol": "tun".</value>
+  </data>
+  <data name="ConfigProfile_ErrTunInboundNotAllowed" xml:space="preserve">
+    <value>The system-proxy profile must not contain a tun inbound. TUN is selected with the TUN mode switch, which is what elevates the app and cleans up routes.</value>
+  </data>
+  <data name="ConfigProfile_ErrTunNameMismatch" xml:space="preserve">
+    <value>The tun inbound's settings.name must be "{0}". XrayUI removes the adapter's routes by that name on disconnect, so a different one leaves them behind.</value>
+  </data>
+  <data name="ConfigProfile_WarnNoSystemProxyInbound" xml:space="preserve">
+    <value>No socks/http inbound with a fixed port, so the system proxy will not be set.</value>
+  </data>
+  <data name="ConfigProfile_WarnNoAutoSystemRouting" xml:space="preserve">
+    <value>The tun inbound has no autoSystemRoutingTable, so xray will not take over the default route.</value>
+  </data>
+  <data name="ConfigProfile_WarnUnknownOutboundTag" xml:space="preserve">
+    <value>routing references an outbound tag that is neither injected ({0}) nor declared as a balancer.</value>
+  </data>
   <data name="Settings_InvalidTitle" xml:space="preserve">
     <value>settings.json could not be parsed</value>
   </data>
   <data name="Settings_InvalidMsg" xml:space="preserve">
     <value>Changes did not take effect. Saving is paused until the file parses again, so nothing will be overwritten. Fix the JSON, then reopen this panel.</value>
+  </data>
+  <data name="ControlPanel_ConfigProfilesItem.Text" xml:space="preserve">
+    <value>Config Profiles...</value>
+  </data>
+  <data name="ControlPanel_RoutingCustom" xml:space="preserve">
+    <value>custom</value>
+  </data>
+  <data name="Error_ConfigProfileMissingMsg" xml:space="preserve">
+    <value>The config profile at {0} is enabled but the file is missing. Re-create it in Config Profiles, or turn the profile off.</value>
+  </data>
+  <data name="Error_ConfigProfileFailedMsg" xml:space="preserve">
+    <value>The config profile at {0} could not be used: {1}</value>
   </data>
   <data name="Personalize_Done.Content" xml:space="preserve">
     <value>Done</value>
@@ -609,10 +729,10 @@
     <value>Updating XrayUI</value>
   </data>
   <data name="Update_ConfirmTitle" xml:space="preserve">
-    <value>XrayUI {0} is available</value>
+    <value>XrayUI {0} is now available</value>
   </data>
   <data name="Update_ConfirmNotesHeader" xml:space="preserve">
-    <value>What's new</value>
+    <value>What's New</value>
   </data>
   <data name="Update_ChangelogLanguage" xml:space="preserve">
     <value>en</value>
@@ -1136,14 +1256,17 @@
   <data name="Personalize_ImportSuccessMsg" xml:space="preserve">
     <value>Imported {0} nodes, {1} subscriptions, {2} rules{3}.</value>
   </data>
+  <data name="Personalize_ImportProfilesSuffix" xml:space="preserve">
+    <value>, config profiles</value>
+  </data>
   <data name="Personalize_ImportAdvancedSuffix" xml:space="preserve">
     <value>, including advanced routing</value>
   </data>
   <data name="Personalize_PresetMissingTitle" xml:space="preserve">
-    <value>Preset files not found</value>
+    <value>No backup to restore</value>
   </data>
   <data name="Personalize_PresetMissingMsg" xml:space="preserve">
-    <value>Please prepare servers.json / settings.json under the Import folder first.</value>
+    <value>Put an exported backup in the Import folder next to the app first.</value>
   </data>
   <data name="ChainProxy_NameLabel.Text" xml:space="preserve">
     <value>Name</value>

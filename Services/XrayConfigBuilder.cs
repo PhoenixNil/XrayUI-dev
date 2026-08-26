@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -9,32 +9,64 @@ using XrayUI.Models;
 namespace XrayUI.Services
 {
     /// <summary>
+    /// A built config plus the runtime facts the C# side needs from it.
+    /// </summary>
+    /// <param name="Json">The config text handed to xray.exe.</param>
+    /// <param name="SystemProxyPort">The port SystemProxyService should advertise, read back out
+    /// of the built config so a profile that moves the port cannot desync the two. Null when the
+    /// config exposes no socks/http inbound on a plain integer port.</param>
+    public readonly record struct BuiltXrayConfig(string Json, int? SystemProxyPort);
+
+    /// <summary>
     /// Builds an xray-core JSON configuration string for the given server and app settings.
     /// Uses JsonObject/JsonArray so Native AOT does not need reflection-based serialization.
     /// </summary>
     public static class XrayConfigBuilder
     {
-        private const string ProxyOutboundTag = "proxy";
-        private const string DirectOutboundTag = "direct";
-        private const string BlockOutboundTag = "block";
-        private const string ChainEntryOutboundTag = "chain-entry";
+        private const string ProxyOutboundTag      = XrayConfigConstants.ProxyOutboundTag;
+        private const string DirectOutboundTag     = XrayConfigConstants.DirectOutboundTag;
+        private const string BlockOutboundTag      = XrayConfigConstants.BlockOutboundTag;
+        private const string ChainEntryOutboundTag = XrayConfigConstants.ChainEntryOutboundTag;
 
         private static readonly JsonSerializerOptions JsonOpts = new()
         {
             WriteIndented = true
         };
 
-        public static string Build(
+        public static BuiltXrayConfig Build(
             ServerEntry server,
             AppSettings settings,
-            IEnumerable<ServerEntry>? availableServers = null)
+            IEnumerable<ServerEntry>? availableServers = null,
+            string? profileJson = null)
+        {
+            var config = profileJson is null
+                ? BuildGenerated(settings)
+                : ParseProfileOrThrow(profileJson, settings.IsTunMode);
+
+            // outbounds are never the profile's to write: they are the selected node. Injecting
+            // them last means the same code path serves both, and a profile cannot desync the
+            // config from the server list.
+            config["outbounds"] = BuildOutbounds(
+                server, settings, availableServers, profileMode: profileJson is not null);
+
+            return new BuiltXrayConfig(
+                config.ToJsonString(JsonOpts),
+                ResolveSystemProxyPort(config));
+        }
+
+        /// <summary>
+        /// Everything XrayUI generates itself. outbounds is an empty placeholder that Build
+        /// overwrites: assigning to a key JsonObject already holds keeps its position, which is
+        /// what preserves the historical log/dns/inbounds/outbounds/routing order in the file.
+        /// </summary>
+        private static JsonObject BuildGenerated(AppSettings settings)
         {
             var config = new JsonObject
             {
                 ["log"] = BuildLog(settings),
                 ["dns"] = BuildDns(settings),
                 ["inbounds"] = BuildInbounds(settings),
-                ["outbounds"] = BuildOutbounds(server, settings, availableServers),
+                ["outbounds"] = new JsonArray(),
                 ["routing"] = BuildRouting(settings)
             };
 
@@ -54,8 +86,52 @@ namespace XrayUI.Services
                 config["fakedns"] = pools;
             }
 
-            return config.ToJsonString(JsonOpts);
+            return config;
         }
+
+        /// <summary>
+        /// The starting point the profile editor offers for a new profile: the generated config
+        /// for the given mode, minus outbounds. Takes no ServerEntry, so a profile can be
+        /// written before any node is selected.
+        /// </summary>
+        public static string BuildProfileTemplate(AppSettings settings, bool tunMode)
+        {
+            // The slot, not the live toggle, decides which shape the template has. Clone rather
+            // than flip the flag in place: settings is SettingsService's cached instance.
+            var scoped = settings.Clone();
+            scoped.IsTunMode = tunMode;
+
+            var template = BuildGenerated(scoped);
+            template.Remove("outbounds");
+
+            return template.ToJsonString(JsonOpts);
+        }
+
+        /// <summary>
+        /// Re-validates a profile on the way into a start. The editor already checked it, but
+        /// nothing stops a user from hand-editing the file afterwards, and xray's own parse
+        /// error would point at the generated config with no hint that a profile caused it.
+        /// </summary>
+        private static JsonObject ParseProfileOrThrow(string profileJson, bool tunMode)
+        {
+            var result = ConfigProfileJson.Validate(profileJson, tunMode);
+            if (result.Config is not null) return result.Config;
+
+            var detail = result.Detail ?? result.Error.ToString();
+            throw new InvalidOperationException(
+                Loc.Format("Error_ConfigProfileFailedMsg", ConfigProfileStore.PathFor(tunMode), detail));
+        }
+
+        /// <summary>
+        /// The port SystemProxyService should write into the WinInet registry, read back out of
+        /// the config that was actually built. Reading it here rather than from
+        /// <see cref="AppSettings.LocalMixedPort"/> is what keeps a profile that moves the port
+        /// from pointing the system proxy at a port nothing listens on.
+        /// </summary>
+        private static int? ResolveSystemProxyPort(JsonObject config) =>
+            config["inbounds"] is JsonArray inbounds
+                ? ConfigProfileJson.FindSystemProxyPort(inbounds)
+                : null;
 
         /// <summary>True when xray will be built with a fakedns pool wired to the TUN inbound.</summary>
         private static bool IsFakeDnsActive(AppSettings settings) =>
@@ -93,21 +169,23 @@ namespace XrayUI.Services
                 AddNode(list, BuildTunInbound(settings));
             }
 
-            AddNode(list, new JsonObject
-            {
-                ["tag"] = XrayConfigConstants.MixedInboundTag,
-                ["protocol"] = "socks",
-                ["listen"] = settings.AllowLanConnections ? "0.0.0.0" : "127.0.0.1",
-                ["port"] = settings.LocalMixedPort,
-                ["settings"] = new JsonObject
-                {
-                    ["auth"] = "noauth",
-                    ["udp"] = true
-                }
-            });
+            AddNode(list, BuildMixedInbound(settings));
 
             return list;
         }
+
+        private static JsonObject BuildMixedInbound(AppSettings settings) => new()
+        {
+            ["tag"] = XrayConfigConstants.MixedInboundTag,
+            ["protocol"] = "socks",
+            ["listen"] = settings.AllowLanConnections ? "0.0.0.0" : "127.0.0.1",
+            ["port"] = settings.LocalMixedPort,
+            ["settings"] = new JsonObject
+            {
+                ["auth"] = "noauth",
+                ["udp"] = true
+            }
+        };
 
         private static JsonObject BuildTunInbound(AppSettings settings)
         {
@@ -150,10 +228,19 @@ namespace XrayUI.Services
             };
         }
 
+        /// <param name="profileMode">Set when the config came from a hand-written profile, which
+        /// makes block and dns-out unconditional. Deriving the set from the tags the routing
+        /// rules name would look tighter and fail badly: tags are also referenced from
+        /// routing.balancers[].selector and an outbound's own proxySettings.tag, and a set that
+        /// misses one leaves xray refusing to start on an unknown tag. The superset fails safe
+        /// instead — both outbounds are inert when nothing routes to them. Kept in agreement with
+        /// <see cref="ConfigProfileJson.InjectedOutboundTags"/>, which declares the same tags as
+        /// legal to reference.</param>
         private static JsonArray BuildOutbounds(
             ServerEntry server,
             AppSettings settings,
-            IEnumerable<ServerEntry>? availableServers)
+            IEnumerable<ServerEntry>? availableServers,
+            bool profileMode = false)
         {
             var list = new JsonArray();
 
@@ -190,7 +277,7 @@ namespace XrayUI.Services
                                   && r.MatchValues.Count > 0
                                   && r.OutboundTag == BlockOutboundTag);
 
-            if (settings.IsTunMode || customRulesUseBlock)
+            if (profileMode || settings.IsTunMode || customRulesUseBlock)
             {
                 AddNode(list, new JsonObject
                 {
@@ -200,7 +287,7 @@ namespace XrayUI.Services
                 });
             }
 
-            if (IsFakeDnsActive(settings))
+            if (profileMode || IsFakeDnsActive(settings))
             {
                 AddNode(list, new JsonObject
                 {
@@ -858,16 +945,15 @@ namespace XrayUI.Services
             }
 
             // Smart mode: AdvancedRouting (if set) replaces the default routing template.
-            // TUN prefix rules and CustomRules are merged on top, so the user cannot lock
+            // TUN lead rules and CustomRules are merged on top, so the user cannot lock
             // themselves out of TUN-required system traffic by writing a bad advanced JSON.
             var hasAdvancedRouting = settings.AdvancedRouting is not null;
             var baseRouting = hasAdvancedRouting
                 ? (JsonObject)settings.AdvancedRouting!.DeepClone()
                 : BuildDefaultRoutingTemplate(settings, includeFallback: false);
 
-            // baseRouting is exclusively owned (fresh clone or fresh build). Build a fresh
-            // rules array so TUN process bypass rules can sit before the UDP/443 quench rule,
-            // while ordinary domain/IP rules still remain behind it.
+            // baseRouting is exclusively owned (fresh clone or fresh build). Build a fresh rules
+            // array so the TUN lead rules can be put in front of the user's own.
             var baseRules = baseRouting["rules"] as JsonArray ?? new JsonArray();
             var rules = BuildSmartRules(settings, baseRules);
             baseRouting["rules"] = rules;
@@ -889,6 +975,7 @@ namespace XrayUI.Services
         {
             var rules = new JsonArray();
             AppendTunLeadRules(rules, settings);
+
             AppendTunUdp443BlockRule(rules, settings);
 
             AddNode(rules, new JsonObject
@@ -1077,14 +1164,22 @@ namespace XrayUI.Services
 
         /// <summary>
         /// Default "direct" DNS resolver for the selected region, used only when the user hasn't set
-        /// <see cref="AppSettings.DirectDnsServer"/>. CN keeps the existing fast domestic resolvers;
-        /// RU/IR use well-known in-country public resolvers (Yandex / Shecan).
+        /// <see cref="AppSettings.DirectDnsServer"/>. CN uses AliDNS; RU/IR use well-known
+        /// in-country public resolvers (Yandex / Shecan).
+        ///
+        /// Deliberately not split by TUN mode. It used to be (223.5.5.5 under TUN, 114.114.114.114
+        /// otherwise), which was residue from the original two hardcoded server lists rather than a
+        /// decision: DNS here is split-horizon either way — domestic domains to this resolver,
+        /// everything else to the proxy resolver — so leak prevention comes from that structure,
+        /// not from which domestic resolver answers. The RU and IR arms never made the distinction
+        /// either. AliDNS is the better single default: anycast, and it supports EDNS Client Subnet,
+        /// which 114DNS does not, so CDN answers land geographically closer.
         /// </summary>
-        private static string DefaultDirectDns(string? region, bool tunMode) => region switch
+        private static string DefaultDirectDns(string? region) => region switch
         {
             "ru" => "77.88.8.8",
             "ir" => "178.22.122.100",
-            _    => tunMode ? "223.5.5.5" : "114.114.114.114",
+            _    => "223.5.5.5",
         };
 
         private static JsonObject CustomRuleToJsonObject(CustomRoutingRule rule)
@@ -1106,8 +1201,7 @@ namespace XrayUI.Services
         private static JsonObject BuildDns(AppSettings settings)
         {
             var (geositeDomestic, _) = RegionGeoTokens(settings.RoutingRegion);
-            var directDns = settings.DirectDnsServer
-                ?? DefaultDirectDns(settings.RoutingRegion, settings.IsTunMode);
+            var directDns = settings.DirectDnsServer ?? DefaultDirectDns(settings.RoutingRegion);
             var proxyDns = settings.ProxyDnsServer ?? "8.8.8.8";
 
             var directEntry = new JsonObject
