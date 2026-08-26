@@ -67,11 +67,6 @@ public static class L
     public static string Share_Title    => Loc.GetString("Share_Title");
     public static string Share_CopyLink => Loc.GetString("Share_CopyLink");
 
-    // ── Startup dialog ─────────────────────────────────────────────────────
-    public static string Startup_Title       => Loc.GetString("Startup_Title");
-    public static string Startup_AutoStart   => Loc.GetString("Startup_AutoStart");
-    public static string Startup_AutoConnect => Loc.GetString("Startup_AutoConnect");
-
     // ── Edit server dialog (extras not in stash) ───────────────────────────
     public static string EditServer_SocksUsername        => Loc.GetString("EditServer_SocksUsername");
     public static string EditServer_EchPlaceholder       => Loc.GetString("EditServer_EchPlaceholder");
