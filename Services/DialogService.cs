@@ -19,6 +19,13 @@ namespace XrayUI.Services
     {
         private readonly Func<XamlRoot?> _xamlRootFactory;
 
+        /// <summary>
+        /// Caps the wrapped message text of the plain notice dialogs. Handing ContentDialog a raw
+        /// string instead lets it measure out to its 548px maximum even for a one-liner, so every
+        /// short notice opens as wide as the longest one.
+        /// </summary>
+        private const double MessageMaxWidth = 280;
+
         public DialogService(Func<XamlRoot?> xamlRootFactory)
         {
             _xamlRootFactory = xamlRootFactory;
@@ -661,7 +668,7 @@ namespace XrayUI.Services
             {
                 Text = message,
                 TextWrapping = TextWrapping.Wrap,
-                MaxWidth = 280
+                MaxWidth = MessageMaxWidth,
             };
 
             var dialog = CreateDialog();
@@ -728,7 +735,12 @@ namespace XrayUI.Services
         {
             var dialog = CreateDialog(xamlRoot);
             dialog.Title = title;
-            dialog.Content = message;
+            dialog.Content = new TextBlock
+            {
+                Text = message,
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = MessageMaxWidth,
+            };
             dialog.CloseButtonText = L.Dialog_OK;
             await dialog.ShowAsync();
         }
@@ -1005,6 +1017,19 @@ namespace XrayUI.Services
 
         // ── App update confirm ────────────────────────────────────────────────
 
+        /// <summary>
+        /// Content width of the update dialog's notes list, inside ContentDialog's own padding.
+        /// Sized so a typical changelog line still fits on one row; longer ones wrap onto the
+        /// hanging indent that <see cref="BuildNoteLine"/> sets up, which is why it can stay
+        /// well below what the longest line would need. It also has to cover the bullet column
+        /// and <see cref="ScrollBarGutter"/>, neither of which holds text, so trimming it back
+        /// toward the bare text width costs a good dozen characters a line.
+        /// </summary>
+        private const double UpdateContentWidth = 392;
+
+        /// <summary>Right gutter kept clear inside the notes list for the overlay scrollbar.</summary>
+        private const double ScrollBarGutter = 14;
+
         public async Task<bool> ShowUpdateConfirmDialogAsync(
             Version newVersion, IReadOnlyList<string> notes)
         {
@@ -1021,7 +1046,7 @@ namespace XrayUI.Services
                 // ContentDialog clips tall content instead of letting the notes list scroll.
                 // Fixed width keeps the dialog compact — without it the longest note line
                 // stretches it toward ContentDialog's max width.
-                var root = new Grid { Width = 380 };
+                var root = new Grid { Width = UpdateContentWidth };
                 root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // notes header
                 root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // notes list
 
@@ -1038,17 +1063,25 @@ namespace XrayUI.Services
                 Grid.SetRow(notesHeader, 0);
                 root.Children.Add(notesHeader);
 
-                var list = new StackPanel { Spacing = 4 };
+                var list = new StackPanel { Spacing = 6 };
                 foreach (var line in notes)
                     list.Children.Add(BuildNoteLine(line));
 
                 var scroller = new ScrollViewer
                 {
                     Content = list,
-                    MaxHeight = 220,
+                    MaxHeight = 240,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                     HorizontalScrollMode = ScrollMode.Disabled,
                     HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    // WinUI scrollbars are overlays: they paint on top of the content rather
+                    // than taking layout space, so without this gutter the expanded mouse
+                    // scrollbar covers the last dozen pixels of every note line. Whether it
+                    // overlays at all depends on the "always show scrollbars" accessibility
+                    // setting, so reserving the space is the only way to get the same result
+                    // under both. The gutter is unconditional because whether the list will
+                    // overflow is not known until after layout.
+                    Padding = new Thickness(0, 0, ScrollBarGutter, 0),
                 };
                 Grid.SetRow(scroller, 1);
                 root.Children.Add(scroller);
@@ -1072,7 +1105,8 @@ namespace XrayUI.Services
             var bullet = new TextBlock
             {
                 Text = "•",
-                FontSize = 13,
+                FontSize = 14,
+                LineHeight = 20,
                 Opacity = 0.65,
                 VerticalAlignment = VerticalAlignment.Top,
             };
@@ -1080,7 +1114,10 @@ namespace XrayUI.Services
             var body = new TextBlock
             {
                 Text = text,
-                FontSize = 13,
+                FontSize = 14,
+                // Default leading is tight for CJK once a line wraps; 20 keeps a wrapped note
+                // readable without spacing the list out.
+                LineHeight = 20,
                 TextWrapping = TextWrapping.Wrap,
             };
             Grid.SetColumn(body, 1);
