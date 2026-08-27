@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using System.ComponentModel;
@@ -1052,6 +1052,13 @@ namespace XrayUI.Services
             // CommandSpace entirely. That is the only way to escape the command area's two
             // equal star columns, which stretch each button across half the dialog — the
             // buttons below are ordinary right-aligned ones laid out in the content instead.
+            //
+            // Dropping Title costs the dialog its accessible name: ContentDialog's automation
+            // peer takes the name from Title, and the heading TextBlock below is content, so it
+            // names nothing. Narrator would announce an unnamed dialog. Set it explicitly.
+            var title = Loc.Format("Update_ConfirmTitle", newVersion);
+            AutomationProperties.SetName(dialog, title);
+
             var pad = ContentDialogPadding();
 
             // Grid root, not StackPanel: a StackPanel root breaks the measure chain and
@@ -1077,7 +1084,7 @@ namespace XrayUI.Services
             {
                 // 20 is what ContentDialog's own Title uses; going larger made the dialog read
                 // top-heavy and, with it, bigger than it is.
-                Text = Loc.Format("Update_ConfirmTitle", newVersion),
+                Text = title,
                 FontSize = 20,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 TextWrapping = TextWrapping.Wrap,
