@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Threading;
@@ -15,7 +15,6 @@ namespace XrayUI.ViewModels
         private readonly SettingsService _settings;
         private readonly XrayService _xray;
         private readonly TunService _tunService;
-        private readonly StartupService _startupService;
         private readonly IUpdateService _update;
         private UpdateInfo? _availableUpdate;
         private IReadOnlyList<string> _availableUpdateNotes = Array.Empty<string>();
@@ -38,6 +37,11 @@ namespace XrayUI.ViewModels
         // against the live session rather than whatever is now selected in the list.
         private ServerEntry? _activeServer;
         private string _activeServerName = string.Empty;
+
+        /// <summary>Id of the node xray is running right now, or null when stopped. Read by
+        /// PersonalizeViewModel when auto-connect is switched on mid-session, so the boot
+        /// target is the node actually in use rather than whatever the list has selected.</summary>
+        public string? ActiveServerId => IsRunning ? _activeServer?.Id : null;
 
         // Serializes concurrent reapply calls (custom-rules save, routing-mode toggle,
         // proxy-mode toggle can all race) and blocks re-entry.
@@ -75,14 +79,12 @@ namespace XrayUI.ViewModels
             SettingsService settings,
             XrayService xray,
             TunService tunService,
-            StartupService startupService,
             IUpdateService update)
         {
             _dialogs        = dialogs;
             _settings       = settings;
             _xray           = xray;
             _tunService     = tunService;
-            _startupService = startupService;
             _update         = update;
 
             StartStopButtonContent = L.ControlPanel_Start;
@@ -233,7 +235,10 @@ namespace XrayUI.ViewModels
             appSettings.AllowLanConnections = AllowLanConnections;
             appSettings.RoutingMode         = RoutingMode;
             appSettings.IsTunMode           = tunMode;
-            if (IsAutoConnect)
+            // Auto-connect lives in Personalize now; settings are the shared truth and this
+            // load is already on the path, so read the flag from there instead of mirroring
+            // it onto a second property here.
+            if (appSettings.IsAutoConnect)
                 appSettings.LastAutoConnectServerId = server.Id;
 
             if (tunMode)
@@ -774,54 +779,6 @@ namespace XrayUI.ViewModels
             }
         }
 
-        // ── Startup ───────────────────────────────────────────────────────────
-
-        [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(StartupMenuIcon))]
-        public partial bool IsStartupEnabled { get; set; }
-
-        [ObservableProperty]
-        public partial bool IsAutoConnect { get; set; }
-
-        /// <summary>
-        /// Returns a checkmark icon when auto-start is enabled, null otherwise.
-        /// Bound to MenuFlyoutItem.Icon so the item reflects current state without
-        /// using ToggleMenuFlyoutItem (which has timing issues with Command).
-        /// </summary>
-        private static readonly FontIcon _startupIcon = new() { Glyph = "\uE73E" };
-        public IconElement? StartupMenuIcon => IsStartupEnabled ? _startupIcon : null;
-
-        [RelayCommand]
-        private async Task OpenStartupSettings()
-        {
-            // When startup is off, always show auto-connect as unchecked to avoid confusion.
-            var result = await _dialogs.ShowStartupDialogAsync(IsStartupEnabled, IsStartupEnabled && IsAutoConnect);
-            if (result is null) return;   // user cancelled — leave state unchanged
-
-            var (newEnabled, newAutoConnect) = result.Value;
-
-            var s = await _settings.LoadSettingsAsync();
-            try
-            {
-                _startupService.SetStartupEnabled(newEnabled);
-            }
-            catch (Exception ex)
-            {
-                await _dialogs.ShowErrorAsync(L.Startup_SetFailed, ex.Message);
-                return;
-            }
-
-            s.IsStartupEnabled = newEnabled;
-            s.IsAutoConnect    = newAutoConnect;
-            if (!newAutoConnect)
-                s.LastAutoConnectServerId = null;
-            else if (IsRunning && _activeServer is not null)
-                s.LastAutoConnectServerId = _activeServer.Id;
-            await TrySaveSettingsAsync(s, "persist startup settings");
-
-            IsStartupEnabled = newEnabled;
-            IsAutoConnect    = newAutoConnect;
-        }
 
         // ── Theme ─────────────────────────────────────────────────────────────
 

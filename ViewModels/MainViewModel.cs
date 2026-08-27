@@ -88,8 +88,8 @@ namespace XrayUI.ViewModels
 
             ServerList   = new ServerListViewModel(dialogs, settings, latencyProbe, realLatencyProbe);
             ServerDetail = new ServerDetailViewModel(latencyProbe, aiUnlockCheck);
-            ControlPanel = new ControlPanelViewModel(dialogs, settings, xray, tunService, startupService, updateService);
-            Personalize  = new PersonalizeViewModel(dialogs, settings);
+            ControlPanel = new ControlPanelViewModel(dialogs, settings, xray, tunService, updateService);
+            Personalize  = new PersonalizeViewModel(dialogs, settings, startupService);
 
             // Wire ControlPanel so it knows the current selected server
             ControlPanel.GetSelectedServer = () => ServerList.SelectedServer;
@@ -103,6 +103,7 @@ namespace XrayUI.ViewModels
             ServerList.GroupNamesChanged += ServerDetail.RefreshGroupName;
             ServerList.RequestSwitchToSelectedServer = ControlPanel.SwitchToSelectedServerAsync;
             Personalize.IsProxyRunning = () => ControlPanel.IsRunning;
+            Personalize.GetActiveServerId = () => ControlPanel.ActiveServerId;
             // Live TUN state for the speed test's egress pin — settings.IsTunMode alone lags
             // the UI toggle and can survive a crash as a stale true (see IDialogService remarks).
             realLatencyProbe.IsTunActive = () => ControlPanel.IsRunning && ControlPanel.IsTunMode;
@@ -158,8 +159,7 @@ namespace XrayUI.ViewModels
             // Task Scheduler off the critical path: the ITaskService::Connect RPC can
             // take hundreds of ms at logon, and nothing below needs its result — a boot
             // launch proves the task exists (it started this process).
-            ControlPanel.IsStartupEnabled = s.IsStartupEnabled;
-            ControlPanel.IsAutoConnect    = s.IsAutoConnect;
+            Personalize.LoadStartup(s);
             _ = ReconcileStartupTaskAsync(s, isBootLaunch);
 
             // Translate the legacy name-based auto-connect setting to Id-based so users
@@ -209,14 +209,14 @@ namespace XrayUI.ViewModels
                 // don't flip the toggle off or persist it.
                 if (isBootLaunch && !externalEnabled) return;
 
-                // The user changed the setting (startup dialog) while the RPC was in
+                // The user changed the setting (Personalize toggle) while the RPC was in
                 // flight; their gesture is newer ground truth than our sample.
                 if (s.IsStartupEnabled != persistedAtStart) return;
 
                 if (s.IsStartupEnabled == externalEnabled) return;
 
                 s.IsStartupEnabled = externalEnabled;
-                ControlPanel.IsStartupEnabled = externalEnabled;
+                Personalize.ApplyExternalStartupState(externalEnabled);
                 await _settings.SaveSettingsAsync(s);
             }
             catch (Exception ex)
