@@ -262,11 +262,131 @@
   <data name="Personalize_DataManagement.Text" xml:space="preserve">
     <value>数据管理</value>
   </data>
+  <data name="ConfigProfile_Header.Text" xml:space="preserve">
+    <value>配置文件</value>
+  </data>
+  <data name="ConfigProfile_SlotTun.Content" xml:space="preserve">
+    <value>TUN 模式</value>
+  </data>
+  <data name="ConfigProfile_SlotProxy.Content" xml:space="preserve">
+    <value>系统代理</value>
+  </data>
+  <data name="ConfigProfile_Subtitle.Text" xml:space="preserve">
+    <value>不要写 outbounds：出站由服务器列表中选中的节点生成。</value>
+  </data>
+  <data name="ConfigProfile_EnableTitle.Text" xml:space="preserve">
+    <value>使用自定义配置</value>
+  </data>
+  <data name="ConfigProfile_ResetBtn.Content" xml:space="preserve">
+    <value>重置为默认</value>
+  </data>
+  <data name="ConfigProfile_SaveBtn.Content" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="ConfigProfile_CloseBtn.Content" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="ConfigProfile_Title" xml:space="preserve">
+    <value>配置文件</value>
+  </data>
+  <data name="ConfigProfile_ExternalChangeWarning" xml:space="preserve">
+    <value>编辑器里有未保存的修改，已跳过重新加载；保存会覆盖磁盘上的内容。</value>
+  </data>
+  <data name="ConfigProfile_LoadFailed" xml:space="preserve">
+    <value>无法读取配置文件，请检查 profiles 文件夹里的文件。</value>
+  </data>
+  <data name="ConfigProfile_SaveFailedTitle" xml:space="preserve">
+    <value>配置文件保存失败</value>
+  </data>
+  <data name="ConfigProfile_SettingsUnwritable" xml:space="preserve">
+    <value>settings.json 无法解析，已暂停保存以免覆盖它。请先修好该文件再试。</value>
+  </data>
+  <data name="ConfigProfile_SavedInactive" xml:space="preserve">
+    <value>已保存。</value>
+  </data>
+  <data name="ConfigProfile_Saved" xml:space="preserve">
+    <value>已保存，下次连接时生效。</value>
+  </data>
+  <data name="ConfigProfile_ResetTitle" xml:space="preserve">
+    <value>重置为默认配置？</value>
+  </data>
+  <data name="ConfigProfile_ResetMsg" xml:space="preserve">
+    <value>现有内容会被替换，保存前不会写入磁盘。</value>
+  </data>
+  <data name="ConfigProfile_PreviewStaleTitle" xml:space="preserve">
+    <value>请先保存</value>
+  </data>
+  <data name="ConfigProfile_PreviewStaleMsg" xml:space="preserve">
+    <value>预览基于已保存的配置文件生成，未保存的修改不会出现在里面。</value>
+  </data>
+  <data name="ConfigProfile_PreviewTitle" xml:space="preserve">
+    <value>配置预览</value>
+  </data>
+  <data name="ConfigProfile_PreviewNoServer" xml:space="preserve">
+    <value>请先选中一个可用节点，再预览下次启动的配置。</value>
+  </data>
+  <data name="ConfigProfile_DiscardTitle" xml:space="preserve">
+    <value>放弃未保存的修改？</value>
+  </data>
+  <data name="ConfigProfile_DiscardMsg" xml:space="preserve">
+    <value>编辑器里的修改尚未保存，将会丢失。</value>
+  </data>
+  <data name="ConfigProfile_OpenFolderTooltip" xml:space="preserve">
+    <value>打开配置文件夹</value>
+  </data>
+  <data name="ConfigProfile_PreviewTooltip" xml:space="preserve">
+    <value>预览下次启动的配置</value>
+  </data>
+  <data name="ConfigProfile_EditorAutomationName" xml:space="preserve">
+    <value>配置文件 JSON 编辑器</value>
+  </data>
+  <data name="ConfigProfile_ErrEmpty" xml:space="preserve">
+    <value>配置文件必须是一份完整配置。可以用「重置为默认」得到一个可用的起点。</value>
+  </data>
+  <data name="ConfigProfile_ErrRootMustBeObject" xml:space="preserve">
+    <value>配置文件的根必须是 JSON 对象，例如 { "log": { "loglevel": "warning" }, "inbounds": [ ... ] }。</value>
+  </data>
+  <data name="ConfigProfile_ErrOutboundsNotAllowed" xml:space="preserve">
+    <value>配置文件不能写 outbounds。出站由服务器列表中选中的节点生成，每次启动时注入。</value>
+  </data>
+  <data name="ConfigProfile_ErrInboundsMissing" xml:space="preserve">
+    <value>配置文件需要一个非空的 inbounds 数组，否则 xray 不会接收任何流量。</value>
+  </data>
+  <data name="ConfigProfile_ErrTunInboundMissing" xml:space="preserve">
+    <value>TUN 配置需要一个 "protocol": "tun" 的入站。</value>
+  </data>
+  <data name="ConfigProfile_ErrTunInboundNotAllowed" xml:space="preserve">
+    <value>系统代理配置不能包含 tun 入站。TUN 由 TUN 模式开关决定，提权和路由清理都跟着它走。</value>
+  </data>
+  <data name="ConfigProfile_ErrTunNameMismatch" xml:space="preserve">
+    <value>tun 入站的 settings.name 必须是 "{0}"。断开时 XrayUI 按这个名字删除适配器路由，名字不符会留下残留路由。</value>
+  </data>
+  <data name="ConfigProfile_WarnNoSystemProxyInbound" xml:space="preserve">
+    <value>没有固定端口的 socks/http 入站，系统代理将不会被设置。</value>
+  </data>
+  <data name="ConfigProfile_WarnNoAutoSystemRouting" xml:space="preserve">
+    <value>tun 入站没有 autoSystemRoutingTable，xray 不会接管默认路由。</value>
+  </data>
+  <data name="ConfigProfile_WarnUnknownOutboundTag" xml:space="preserve">
+    <value>routing 引用了既不是注入 tag（{0}）也不是 balancer 的出站标签。</value>
+  </data>
   <data name="Settings_InvalidTitle" xml:space="preserve">
     <value>settings.json 无法解析</value>
   </data>
   <data name="Settings_InvalidMsg" xml:space="preserve">
     <value>改动没有生效。在该文件恢复可解析之前保存已暂停，不会覆盖任何内容。请修好 JSON 后重新打开此面板。</value>
+  </data>
+  <data name="ControlPanel_ConfigProfilesItem.Text" xml:space="preserve">
+    <value>配置文件...</value>
+  </data>
+  <data name="ControlPanel_RoutingCustom" xml:space="preserve">
+    <value>custom</value>
+  </data>
+  <data name="Error_ConfigProfileMissingMsg" xml:space="preserve">
+    <value>配置文件 {0} 已启用，但文件不存在。请在「配置文件」里重新创建，或关闭该配置。</value>
+  </data>
+  <data name="Error_ConfigProfileFailedMsg" xml:space="preserve">
+    <value>无法使用配置文件 {0}：{1}</value>
   </data>
   <data name="Personalize_Done.Content" xml:space="preserve">
     <value>完成</value>
@@ -1139,14 +1259,17 @@
   <data name="Personalize_ImportSuccessMsg" xml:space="preserve">
     <value>已导入 {0} 个节点、{1} 条订阅、{2} 条规则{3}。</value>
   </data>
+  <data name="Personalize_ImportProfilesSuffix" xml:space="preserve">
+    <value>、含配置文件</value>
+  </data>
   <data name="Personalize_ImportAdvancedSuffix" xml:space="preserve">
     <value>、含高级路由</value>
   </data>
   <data name="Personalize_PresetMissingTitle" xml:space="preserve">
-    <value>未找到预置文件</value>
+    <value>找不到可还原的备份</value>
   </data>
   <data name="Personalize_PresetMissingMsg" xml:space="preserve">
-    <value>请先准备 Import 文件夹下的 servers.json / settings.json。</value>
+    <value>请先把导出的备份放进程序目录下的 Import 文件夹。</value>
   </data>
   <data name="ChainProxy_NameLabel.Text" xml:space="preserve">
     <value>名称</value>

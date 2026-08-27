@@ -20,9 +20,7 @@ namespace XrayUI.Services
         public static readonly string RulesDir = Path.Combine(
             AppContext.BaseDirectory, "Assets", "rules");
 
-        private static readonly string ConfigPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XrayUI", "xray_config.json");
+        private static readonly string ConfigPath = AppPaths.XrayConfigPath;
 
         private const int LogBufferMax = 500;
 

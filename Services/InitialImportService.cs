@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -27,11 +27,27 @@ namespace XrayUI.Services
             {
                 await TryImportServersAsync().ConfigureAwait(false);
                 await TryImportSettingsAsync().ConfigureAwait(false);
+                await TryImportProfilesAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[InitialImport] Import failed: {ex}");
             }
+        }
+
+        /// <summary>
+        /// Fills only the slots with no profile yet, matching how servers and settings are
+        /// treated here. The enable switches are not part of the preset, so the files land
+        /// inert and the user turns them on after reading them.
+        /// </summary>
+        private static async Task TryImportProfilesAsync()
+        {
+            var copied = await ConfigProfileStore
+                .CopyFromAsync(PresetPaths.ProfilesDir, overwrite: false)
+                .ConfigureAwait(false);
+
+            if (copied > 0)
+                Debug.WriteLine($"[InitialImport] Imported {copied} config profiles.");
         }
 
         private async Task TryImportServersAsync()

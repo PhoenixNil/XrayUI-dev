@@ -78,6 +78,7 @@ namespace XrayUI.Services
                 // the legacy VerboseXrayLog bool. Populate the new field so every other reader
                 // can trust it's non-null instead of re-deriving the fallback on every read.
                 _cachedSettings.XrayLogLevel ??= _cachedSettings.VerboseXrayLog ? XrayLogLevel.Info : XrayLogLevel.Warning;
+
                 return _cachedSettings;
             }
             catch (Exception ex)

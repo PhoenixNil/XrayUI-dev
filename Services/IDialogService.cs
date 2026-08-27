@@ -14,7 +14,9 @@ namespace XrayUI.Services
         Task<ServerEntry?> ShowChainProxyDialogAsync(IEnumerable<ServerEntry> servers, ServerEntry? existing = null);
         Task<(int port, bool allowLan)?> ShowEditPortDialogAsync(int currentPort, bool currentAllowLan);
         Task ShowErrorAsync(string title, string message, XamlRoot? xamlRoot = null);
-        Task<bool> ShowConfirmationAsync(string title, string message, string? confirmText = null, string? cancelText = null, bool isDanger = false);
+        /// <param name="xamlRoot">Override which window the dialog is rooted in. Null = MainWindow.
+        /// A secondary window must pass its own root, or the dialog renders behind it.</param>
+        Task<bool> ShowConfirmationAsync(string title, string message, string? confirmText = null, string? cancelText = null, bool isDanger = false, XamlRoot? xamlRoot = null);
         /// <summary>
         /// Shows the TUN confirmation dialog. Mutates <paramref name="settings"/>.TunMtu,
         /// <paramref name="settings"/>.TunOutboundInterface, and <paramref name="settings"/>.TunIpv6Enabled

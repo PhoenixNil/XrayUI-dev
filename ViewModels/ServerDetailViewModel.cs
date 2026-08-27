@@ -440,7 +440,7 @@ namespace XrayUI.ViewModels
         /// <summary>
         /// Called by the view / MainViewModel when the proxy starts or stops.
         /// </summary>
-        public void OnProxyRunningChanged(bool isRunning, int httpProxyPort)
+        public void OnProxyRunningChanged(bool isRunning, int? httpProxyPort)
         {
             CancelPendingAiCheck();
             IsProxyRunning = isRunning;
@@ -454,7 +454,13 @@ namespace XrayUI.ViewModels
 
             ClearAiUnlockResults();
             UpdateAiUnlockDisplay();
-            _ = RunAiUnlockChecksAsync(httpProxyPort);
+
+            // No local port means a config profile publishes no socks/http inbound, so there is
+            // nothing to probe through. Leave the dots neutral instead of running the checks:
+            // every failure path in AiUnlockCheckService reports Blocked, which would paint a
+            // red "this node is blocked" for what is really "we never reached the core".
+            if (httpProxyPort is { } port)
+                _ = RunAiUnlockChecksAsync(port);
         }
 
         private async Task RunAiUnlockChecksAsync(int httpProxyPort)
