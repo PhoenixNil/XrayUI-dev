@@ -1,13 +1,10 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using System.ComponentModel;
 using System.Collections.Generic;
 using Windows.ApplicationModel.DataTransfer;
-using Windows.Foundation;
-using Windows.UI;
 using Microsoft.UI.Xaml.Automation;
-using Microsoft.UI.Xaml.Media;
 using XrayUI.Controls;
 using XrayUI.Helpers;
 using XrayUI.Models;
@@ -1021,80 +1018,38 @@ namespace XrayUI.Services
         // ── App update confirm ────────────────────────────────────────────────
 
         /// <summary>
-        /// Content width of the update dialog, inside ContentDialog's own padding. Sized so a
-        /// typical changelog line still fits on one row; longer ones wrap onto the hanging
-        /// indent that <see cref="BuildNoteLine"/> sets up, which is why this can be tightened
-        /// well below what the longest line would need.
+        /// Content width of the update dialog's notes list, inside ContentDialog's own padding.
+        /// Sized so a typical changelog line still fits on one row; longer ones wrap onto the
+        /// hanging indent that <see cref="BuildNoteLine"/> sets up, which is why it can stay
+        /// well below what the longest line would need. It also has to cover the bullet column
+        /// and <see cref="ScrollBarGutter"/>, neither of which holds text, so trimming it back
+        /// toward the bare text width costs a good dozen characters a line.
         /// </summary>
-        private const double UpdateContentWidth = 352;
+        private const double UpdateContentWidth = 392;
 
         /// <summary>Right gutter kept clear inside the notes list for the overlay scrollbar.</summary>
         private const double ScrollBarGutter = 14;
-
-        /// <summary>
-        /// How far down the dialog the gradient reaches, in DIPs. Pinned in absolute units
-        /// rather than a fraction of the surface so a three-note release and a ten-note one
-        /// get the same header wash instead of the gradient stretching with the note count.
-        /// Deliberately deeper than the coloured area looks: low amplitude over a large area
-        /// reads as atmosphere, while the same colour packed into a shallower band reads as a
-        /// stripe across the top.
-        /// </summary>
-        private const double UpdateGradientDepth = 260;
 
         public async Task<bool> ShowUpdateConfirmDialogAsync(
             Version newVersion, IReadOnlyList<string> notes)
         {
             var dialog = CreateDialog();
-            // Neither dialog.Title nor the Primary/Close button text is set, and both omissions
-            // are load-bearing. The template puts Title inside the padded content Grid, so a
-            // real Title would sit above the gradient instead of on it; and leaving all three
-            // button texts empty drives the template's NoneVisible state, which collapses
-            // CommandSpace entirely. That is the only way to escape the command area's two
-            // equal star columns, which stretch each button across half the dialog — the
-            // buttons below are ordinary right-aligned ones laid out in the content instead.
-            //
-            // Dropping Title costs the dialog its accessible name: ContentDialog's automation
-            // peer takes the name from Title, and the heading TextBlock below is content, so it
-            // names nothing. Narrator would announce an unnamed dialog. Set it explicitly.
-            var title = Loc.Format("Update_ConfirmTitle", newVersion);
-            AutomationProperties.SetName(dialog, title);
+            dialog.Title = Loc.Format("Update_ConfirmTitle", newVersion);
+            dialog.PrimaryButtonText = L.Update_ConfirmNow;
+            dialog.CloseButtonText = L.Update_ConfirmLater;
+            dialog.DefaultButton = ContentDialogButton.Primary;
 
-            var pad = ContentDialogPadding();
-
-            // Grid root, not StackPanel: a StackPanel root breaks the measure chain and
-            // ContentDialog clips tall content instead of letting the notes list scroll.
-            // Fixed width keeps the dialog compact — without it the longest note line
-            // stretches it toward ContentDialog's max width.
-            var root = new Grid { Width = UpdateContentWidth };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // heading
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // notes header
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // notes list
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // buttons
-
-            // Added first so everything else draws over it, and spanning every row so its own
-            // height decides how far the colour reaches instead of the heading row clipping it.
-            // The negative margin cancels the dialog's padding, so it bleeds to the left, right
-            // and top edges — the rounded DialogSpace clips its corners.
-            var wash = BuildGradientWash();
-            Grid.SetRowSpan(wash, root.RowDefinitions.Count);
-            wash.Margin = new Thickness(-pad.Left, -pad.Top, -pad.Right, 0);
-            root.Children.Add(wash);
-
-            var heading = new TextBlock
-            {
-                // 20 is what ContentDialog's own Title uses; going larger made the dialog read
-                // top-heavy and, with it, bigger than it is.
-                Text = title,
-                FontSize = 20,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 2, 0, 18),
-            };
-            Grid.SetRow(heading, 0);
-            root.Children.Add(heading);
-
+            // No notes → no Content at all: the dialog stays a compact title + buttons.
             if (notes.Count > 0)
             {
+                // Grid root, not StackPanel: a StackPanel root breaks the measure chain and
+                // ContentDialog clips tall content instead of letting the notes list scroll.
+                // Fixed width keeps the dialog compact — without it the longest note line
+                // stretches it toward ContentDialog's max width.
+                var root = new Grid { Width = UpdateContentWidth };
+                root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // notes header
+                root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // notes list
+
                 // Opacity instead of TextFillColorSecondaryBrush: Application.Current.Resources
                 // resolves theme brushes against the app-level theme (never set here), which goes
                 // stale under the Personalize theme override — see Views/LogWindow.xaml.
@@ -1105,7 +1060,7 @@ namespace XrayUI.Services
                     Opacity = 0.65,
                     Margin = new Thickness(0, 0, 0, 6),
                 };
-                Grid.SetRow(notesHeader, 1);
+                Grid.SetRow(notesHeader, 0);
                 root.Children.Add(notesHeader);
 
                 var list = new StackPanel { Spacing = 6 };
@@ -1128,128 +1083,14 @@ namespace XrayUI.Services
                     // overflow is not known until after layout.
                     Padding = new Thickness(0, 0, ScrollBarGutter, 0),
                 };
-                Grid.SetRow(scroller, 2);
+                Grid.SetRow(scroller, 1);
                 root.Children.Add(scroller);
+
+                dialog.Content = root;
             }
 
-            var confirmed = false;
-
-            var updateNow = new Button
-            {
-                Content = L.Update_ConfirmNow,
-                MinWidth = 104,
-                Style = Application.Current.Resources["AccentButtonStyle"] as Style,
-            };
-            updateNow.Click += (_, _) => { confirmed = true; dialog.Hide(); };
-
-            var later = new Button { Content = L.Update_ConfirmLater, MinWidth = 88 };
-            later.Click += (_, _) => dialog.Hide();
-
-            var buttons = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Spacing = 8,
-                Margin = new Thickness(0, 20, 0, 0),
-                Children = { updateNow, later },
-            };
-            Grid.SetRow(buttons, 3);
-            root.Children.Add(buttons);
-
-            // ContentDialog.DefaultButton only drives the template's own buttons, so Enter has
-            // nothing to activate here without this. Escape still dismisses the dialog on its
-            // own and leaves confirmed false, which is the right answer for a cancel.
-            // Pointer rather than Programmatic focus: both make Enter work, but Programmatic
-            // draws the keyboard focus ring, which reads as a heavy double border around the
-            // accent button. Tabbing brings the ring back, as it should.
-            dialog.Opened += (_, _) => updateNow.Focus(FocusState.Pointer);
-
-            dialog.Content = root;
-            await dialog.ShowAsync();
-            return confirmed;
+            return await dialog.ShowAsync() == ContentDialogResult.Primary;
         }
-
-        /// <summary>
-        /// The soft mesh gradient behind the whole dialog. Three stacked
-        /// <see cref="RadialGradientBrush"/> layers are what make it read as a mesh — one brush
-        /// can only paint one blob, and Background takes exactly one. Every layer is centred on
-        /// the top edge and falls off to zero alpha within <see cref="UpdateGradientDepth"/>,
-        /// so the plain dialog background takes over well above the buttons with no seam.
-        /// </summary>
-        private static Grid BuildGradientWash()
-        {
-            var wash = new Grid { VerticalAlignment = VerticalAlignment.Top, Height = UpdateGradientDepth };
-            var width = UpdateContentWidth + ContentDialogPadding().Left * 2;
-
-            // Amber and rose are neighbours on the wheel, so together they read as one colour
-            // family rather than as competing hues; the lilac is held down to a whisper as the
-            // single accent. An earlier pass used violet, blue and mint at equal weight and it
-            // looked like a rainbow stripe — hue count, not gradient quality, was the problem.
-            // Warm was picked over cool on purpose: the primary button follows the user's
-            // Windows accent colour, which is blue for most people, and a warm field is what
-            // keeps that button reading as the one thing to click.
-            // Centres are staggered rather than all sitting on the top edge, which is what
-            // leaves a pale valley in the middle instead of one continuous band of colour.
-            //
-            // Dark is not the light set at lower alpha: a saturated warm composited over a dark
-            // grey surface goes to brown mud (verified by rendering it). The dark hues are the
-            // same colours already lifted toward pale, which keeps them reading as warm light.
-            var dark = ThemeHelper.ActualTheme == ElementTheme.Dark;
-            var (amber, amberAlpha) = dark ? (0xF7D9A6u, 0.26) : (0xF0B860u, 0.34);
-            var (rose, roseAlpha)   = dark ? (0xF5C0B8u, 0.24) : (0xEE9B92u, 0.32);
-            var (lilac, lilacAlpha) = dark ? (0xD8CBEEu, 0.08) : (0xC0A8E0u, 0.10);
-
-            wash.Children.Add(GradientBlob(amber, amberAlpha,
-                centerX: 0.08 * width, centerY: -40, radiusX: 300, radiusY: 260));
-            wash.Children.Add(GradientBlob(rose, roseAlpha,
-                centerX: 1.02 * width, centerY: 0, radiusX: 290, radiusY: 250));
-            wash.Children.Add(GradientBlob(lilac, lilacAlpha,
-                centerX: 1.00 * width, centerY: 170, radiusX: 240, radiusY: 210));
-            return wash;
-        }
-
-        /// <summary>
-        /// One colour blob of the mesh: an empty Border stretched over the wash, painted with a
-        /// radial gradient that falls off to the same colour at zero alpha (fading to a named
-        /// transparent would drift through grey on the way out). Absolute mapping mode, so the
-        /// blob keeps its shape no matter how tall the dialog grows.
-        /// </summary>
-        private static Border GradientBlob(
-            uint rgb, double alpha,
-            double centerX, double centerY, double radiusX, double radiusY)
-        {
-            byte r = (byte)(rgb >> 16), g = (byte)(rgb >> 8), b = (byte)rgb;
-            return new Border
-            {
-                Background = new RadialGradientBrush
-                {
-                    MappingMode = BrushMappingMode.Absolute,
-                    Center = new Point(centerX, centerY),
-                    GradientOrigin = new Point(centerX, centerY),
-                    RadiusX = radiusX,
-                    RadiusY = radiusY,
-                    GradientStops =
-                    {
-                        // Slightly faster than linear, so the colour stays gathered around its
-                        // centre and releases cleanly instead of holding a flat plateau.
-                        new GradientStop { Color = Color.FromArgb((byte)(alpha * 255), r, g, b), Offset = 0 },
-                        new GradientStop { Color = Color.FromArgb((byte)(alpha * 0.42 * 255), r, g, b), Offset = 0.5 },
-                        new GradientStop { Color = Color.FromArgb(0, r, g, b), Offset = 1 },
-                    },
-                },
-            };
-        }
-
-        /// <summary>
-        /// ContentDialog's content padding, read from the theme resource so the banner's bleed
-        /// margin follows if WinUI retunes it. A Thickness is theme-invariant, so this app-level
-        /// lookup is safe in a way the brush lookups called out above are not.
-        /// </summary>
-        private static Thickness ContentDialogPadding() =>
-            Application.Current.Resources.TryGetValue("ContentDialogPadding", out var value)
-            && value is Thickness padding
-                ? padding
-                : new Thickness(24);
 
         /// <summary>
         /// One bullet as a two-column Grid rather than a "• "-prefixed string, so wrapped
