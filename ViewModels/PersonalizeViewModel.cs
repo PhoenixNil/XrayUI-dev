@@ -455,6 +455,25 @@ namespace XrayUI.ViewModels
         [RelayCommand]
         private async Task Done()
         {
+            // The two startup writers persist on change under this lock, and one of them can
+            // still be in flight here. Hold it across the whole read-modify-write below, or
+            // LoadWritableSettingsAsync's reload reads the pre-flip file back off disk and the
+            // save below puts it there for good. Re-stating the two flags is not enough on its
+            // own: LastAutoConnectServerId is written by those paths too and has no counterpart
+            // here to restore it.
+            await _startupWriteLock.WaitAsync();
+            try
+            {
+                await SaveAndCloseAsync();
+            }
+            finally
+            {
+                _startupWriteLock.Release();
+            }
+        }
+
+        private async Task SaveAndCloseAsync()
+        {
             var s = await LoadWritableSettingsAsync(reload: true);
             if (s is null) return;
 
@@ -467,9 +486,8 @@ namespace XrayUI.ViewModels
                 _                    => "Default"
             };
             s.BackdropSetting = ThemeHelper.CurrentBackdrop;
-            // Startup already wrote itself to disk when it was toggled, but a flip made
-            // moments ago can still be in flight — re-stating it here keeps Done from
-            // overwriting it with the value ValidateSettingsFileAsync's reload just read.
+            // Redundant while Done holds the startup writers' lock, but kept: these are the
+            // authoritative UI values regardless of what the reload above returned.
             s.IsStartupEnabled = IsStartupEnabled;
             s.IsAutoConnect = IsAutoConnect;
             s.ShowLatencyInDetails = ShowLatencyInDetails;
