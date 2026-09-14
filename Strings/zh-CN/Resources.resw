@@ -262,6 +262,12 @@
   <data name="Personalize_DataManagement.Text" xml:space="preserve">
     <value>数据管理</value>
   </data>
+  <data name="Settings_InvalidTitle" xml:space="preserve">
+    <value>settings.json 无法解析</value>
+  </data>
+  <data name="Settings_InvalidMsg" xml:space="preserve">
+    <value>改动没有生效。在该文件恢复可解析之前保存已暂停，不会覆盖任何内容。请修好 JSON 后重新打开此面板。</value>
+  </data>
   <data name="Personalize_Done.Content" xml:space="preserve">
     <value>完成</value>
   </data>

@@ -848,7 +848,8 @@ namespace XrayUI.ViewModels
                 // ConfigureAwait(false) is load-bearing: CleanupTunOnExit blocks the UI
                 // thread in GetResult() on this method (exit/crash paths), so resuming
                 // the continuation on the dispatcher would deadlock the process.
-                await _settings.SaveSettingsAsync(settings).ConfigureAwait(false);
+                if (!await _settings.SaveSettingsAsync(settings).ConfigureAwait(false))
+                    Debug.WriteLine($"[Settings] Refused to {scenario}: settings.json did not parse.");
             }
             catch (Exception ex)
             {

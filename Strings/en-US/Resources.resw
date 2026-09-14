@@ -262,6 +262,12 @@
   <data name="Personalize_DataManagement.Text" xml:space="preserve">
     <value>Import &amp; Export</value>
   </data>
+  <data name="Settings_InvalidTitle" xml:space="preserve">
+    <value>settings.json could not be parsed</value>
+  </data>
+  <data name="Settings_InvalidMsg" xml:space="preserve">
+    <value>Changes did not take effect. Saving is paused until the file parses again, so nothing will be overwritten. Fix the JSON, then reopen this panel.</value>
+  </data>
   <data name="Personalize_Done.Content" xml:space="preserve">
     <value>Done</value>
   </data>

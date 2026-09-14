@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -58,6 +58,17 @@ namespace XrayUI.Services
                 "PresetImport").ConfigureAwait(false);
 
             var target = await _settings.LoadSettingsAsync().ConfigureAwait(false);
+
+            if (target.IsFailedLoadFallback)
+            {
+                // Restoring a preset means "reset to the distributed state", and an unreadable
+                // settings.json is precisely the situation it is meant to rescue — so this is the
+                // one path that must stay able to write. The instance handed back by a failed load
+                // is refused by SaveSettingsAsync, so rebuild on clean defaults instead: whatever
+                // the broken file held could not be read back anyway, and silently reporting a
+                // successful import that wrote nothing is the worse outcome.
+                target = new AppSettings();
+            }
 
             target.Subscriptions = preset.Subscriptions is { Count: > 0 }
                 ? preset.Subscriptions

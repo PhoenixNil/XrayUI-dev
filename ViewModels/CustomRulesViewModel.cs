@@ -121,7 +121,19 @@ namespace XrayUI.ViewModels
 
             try
             {
-                await _settings.SaveSettingsAsync(s);
+                if (!await _settings.SaveSettingsAsync(s))
+                {
+                    // Refused rather than thrown: settings.json did not parse, so the reload
+                    // above built on defaults and everything not re-stated here would be lost
+                    // if it were written back. Stop before reapplying routing — running rules
+                    // the disk does not have is the silent half of this failure — and leave the
+                    // window open, so the edits are still there when the file is repaired.
+                    await _dialogs.ShowErrorAsync(
+                        L.Settings_InvalidTitle,
+                        L.Settings_InvalidMsg,
+                        GetXamlRoot?.Invoke());
+                    return;
+                }
             }
             catch (Exception ex)
             {
