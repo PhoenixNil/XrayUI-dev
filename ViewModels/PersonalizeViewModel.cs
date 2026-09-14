@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.UI;
@@ -254,69 +252,54 @@ namespace XrayUI.ViewModels
             _ = PersistAutoConnectAsync(value);
         }
 
-        /// <summary>Serializes the two fire-and-forget writers below. Flipping a switch twice
-        /// in quick succession otherwise lets a slow task registration finish after the newer
-        /// gesture's save, leaving settings.json disagreeing with the Task Scheduler.</summary>
+        // Startup gestures and Done share one read-modify-write boundary. Done must wait for
+        // task registration and its save before reloading settings, including the boot target.
         private readonly SemaphoreSlim _startupWriteLock = new(1, 1);
 
-        private async Task ApplyStartupAsync(bool enabled)
+        private async Task WithStartupWriteLockAsync(Func<Task> operation)
         {
             await _startupWriteLock.WaitAsync();
-            try
-            {
-                try
-                {
-                    // Task registration is a COM RPC that can take hundreds of ms — the same
-                    // reason MainViewModel reconciles off the critical path. Keep it off the
-                    // UI thread so the toggle doesn't freeze mid-flip.
-                    await Task.Run(() => _startup.SetStartupEnabled(enabled));
-                }
-                catch (Exception ex)
-                {
-                    await _dialogs.ShowErrorAsync(L.Startup_SetFailed, ex.Message);
-                    // Put the switch back where the Task Scheduler actually left it.
-                    SetStartupInternal(() => IsStartupEnabled = !enabled);
-                    return;
-                }
-
-                var s = await _settings.LoadSettingsAsync();
-                s.IsStartupEnabled = enabled;
-                // Auto-connect without the boot task is dead state, and leaving it set would
-                // make it silently come back on the next time autostart is enabled.
-                if (!enabled)
-                {
-                    SetStartupInternal(() => IsAutoConnect = false);
-                    s.IsAutoConnect = false;
-                    s.LastAutoConnectServerId = null;
-                }
-                await _settings.SaveSettingsAsync(s);
-            }
-            finally
-            {
-                _startupWriteLock.Release();
-            }
+            try { await operation(); }
+            finally { _startupWriteLock.Release(); }
         }
 
-        private async Task PersistAutoConnectAsync(bool enabled)
+        private Task ApplyStartupAsync(bool enabled) => WithStartupWriteLockAsync(async () =>
         {
-            await _startupWriteLock.WaitAsync();
             try
             {
-                var s = await _settings.LoadSettingsAsync();
-                s.IsAutoConnect = enabled;
-                if (!enabled)
-                    s.LastAutoConnectServerId = null;
-                else if (GetActiveServerId?.Invoke() is { } activeId)
-                    s.LastAutoConnectServerId = activeId;
-                // Enabling while stopped deliberately leaves the recorded target alone: the
-                // next successful connect overwrites it anyway (ControlPanelViewModel).
-                await _settings.SaveSettingsAsync(s);
+                // Task registration is a slow COM RPC; keep it off the UI thread.
+                await Task.Run(() => _startup.SetStartupEnabled(enabled));
             }
-            finally
+            catch (Exception ex)
             {
-                _startupWriteLock.Release();
+                await _dialogs.ShowErrorAsync(L.Startup_SetFailed, ex.Message);
+                SetStartupInternal(() => IsStartupEnabled = !enabled);
+                return;
             }
-        }
+
+            var s = await _settings.LoadSettingsAsync();
+            s.IsStartupEnabled = enabled;
+            // Clear auto-connect with the boot task so re-enabling startup cannot revive it.
+            if (!enabled)
+            {
+                SetStartupInternal(() => IsAutoConnect = false);
+                s.IsAutoConnect = false;
+                s.LastAutoConnectServerId = null;
+            }
+            await _settings.SaveSettingsAsync(s);
+        });
+
+        private Task PersistAutoConnectAsync(bool enabled) => WithStartupWriteLockAsync(async () =>
+        {
+            var s = await _settings.LoadSettingsAsync();
+            s.IsAutoConnect = enabled;
+            if (!enabled)
+                s.LastAutoConnectServerId = null;
+            else if (GetActiveServerId?.Invoke() is { } activeId)
+                s.LastAutoConnectServerId = activeId;
+            // Enabling while stopped keeps the recorded target; the next connect replaces it.
+            await _settings.SaveSettingsAsync(s);
+        });
 
         /// <summary>Adopts the Task Scheduler's own answer (external state is ground truth,
         /// see MainViewModel.ReconcileStartupTaskAsync). Internal write — the task already
@@ -453,24 +436,7 @@ namespace XrayUI.ViewModels
         }
 
         [RelayCommand]
-        private async Task Done()
-        {
-            // The two startup writers persist on change under this lock, and one of them can
-            // still be in flight here. Hold it across the whole read-modify-write below, or
-            // LoadWritableSettingsAsync's reload reads the pre-flip file back off disk and the
-            // save below puts it there for good. Re-stating the two flags is not enough on its
-            // own: LastAutoConnectServerId is written by those paths too and has no counterpart
-            // here to restore it.
-            await _startupWriteLock.WaitAsync();
-            try
-            {
-                await SaveAndCloseAsync();
-            }
-            finally
-            {
-                _startupWriteLock.Release();
-            }
-        }
+        private Task Done() => WithStartupWriteLockAsync(SaveAndCloseAsync);
 
         private async Task SaveAndCloseAsync()
         {
