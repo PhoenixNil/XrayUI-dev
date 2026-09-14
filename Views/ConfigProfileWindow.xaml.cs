@@ -12,7 +12,7 @@ namespace XrayUI.Views
     {
         private readonly Window _owner;
 
-        // Set while the VM's own Close command is closing us, so the Closed handler does not
+        // Set while the VM's own Close command is closing us, so the Closing handler does not
         // ask about unsaved changes a second time.
         private bool _closeConfirmed;
         private bool _isInitialized;
@@ -95,8 +95,7 @@ namespace XrayUI.Views
 
             if (!await ViewModel.ConfirmCloseAsync()) return;
 
-            _closeConfirmed = true;
-            Close();
+            ForceClose();
         }
 
         /// <summary>
@@ -143,8 +142,7 @@ namespace XrayUI.Views
         private void OnCloseRequested(object? sender, EventArgs e)
         {
             // The VM already confirmed; skip the Closing prompt.
-            _closeConfirmed = true;
-            Close();
+            ForceClose();
         }
 
         private void OnClosed(object sender, WindowEventArgs args)

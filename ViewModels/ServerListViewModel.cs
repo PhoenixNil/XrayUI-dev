@@ -69,10 +69,10 @@ namespace XrayUI.ViewModels
             return client;
         }
 
-        /// <summary>Set by MainViewModel: the local proxy port while the core is running, null
+        /// <summary>Set by MainViewModel: the local proxy URL while the core is running, null
         /// otherwise. Static because the shared <see cref="Http"/> client is; wired once at
         /// composition time.</summary>
-        internal static Func<int?>? GetLocalProxyPort { get; set; }
+        internal static Func<string?>? GetLocalProxyUrl { get; set; }
 
         /// <summary>
         /// Routes subscription fetches through the running core's local proxy inbound instead of
@@ -81,20 +81,19 @@ namespace XrayUI.ViewModels
         /// on proxy-only links, and — because a failed attempt advances the schedule anchor — burn
         /// the whole interval silently. GetProxy is consulted per request, so start/stop and port
         /// edits are picked up without rebuilding the client. With the core stopped or no local
-        /// proxy inbound, this falls back to the system default. Use HTTP for both HTTP-only
-        /// profiles and Xray's socks/mixed inbounds, which also accept HTTP proxy requests.
+        /// proxy inbound, this falls back to the system default.
         /// </summary>
         private sealed class RunningCoreOrSystemProxy : IWebProxy
         {
             public ICredentials? Credentials { get; set; }
 
             public Uri? GetProxy(Uri destination) =>
-                GetLocalProxyPort?.Invoke() is int port
-                    ? new Uri($"http://127.0.0.1:{port}")
+                GetLocalProxyUrl?.Invoke() is { } proxyUrl
+                    ? new Uri(proxyUrl)
                     : HttpClient.DefaultProxy.GetProxy(destination);
 
             public bool IsBypassed(Uri host) =>
-                GetLocalProxyPort?.Invoke() is not int && HttpClient.DefaultProxy.IsBypassed(host);
+                GetLocalProxyUrl?.Invoke() is null && HttpClient.DefaultProxy.IsBypassed(host);
         }
 
         private readonly IDialogService     _dialogs;

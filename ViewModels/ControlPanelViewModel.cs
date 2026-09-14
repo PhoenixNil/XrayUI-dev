@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Collections.Generic;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using XrayUI.Helpers;
@@ -63,6 +62,10 @@ namespace XrayUI.ViewModels
         /// stays the *configured* value the port editor edits; this is the *running* one, and
         /// the two only differ under a config profile.</summary>
         public int? ActiveLocalProxyPort => IsRunning ? _activeLocalProxyPort : null;
+
+        // HTTP supports both HTTP-only profiles and Xray's socks/mixed inbounds.
+        public string? ActiveLocalProxyUrl =>
+            ActiveLocalProxyPort is { } port ? $"http://127.0.0.1:{port}" : null;
 
         // Serializes concurrent reapply calls (custom-rules save, routing-mode toggle,
         // proxy-mode toggle can all race) and blocks re-entry.
@@ -241,8 +244,13 @@ namespace XrayUI.ViewModels
             await _xray.StopAsync();
             if (IsSystemProxyEnabled && !IsTunMode)
                 SystemProxyService.ClearProxy();
-            _activeServer          = null;
-            _activeServerName      = string.Empty;
+            ClearActiveSession();
+        }
+
+        private void ClearActiveSession()
+        {
+            _activeServer = null;
+            _activeServerName = string.Empty;
             _activeLocalProxyPort = null;
             IsRunning = false;
         }
@@ -401,10 +409,7 @@ namespace XrayUI.ViewModels
             }
 
             SystemProxyService.ClearProxy();
-            _activeServer          = null;
-            _activeServerName      = string.Empty;
-            _activeLocalProxyPort = null;
-            IsRunning = false;
+            ClearActiveSession();
             await _dialogs.ShowErrorAsync(L.Error_StartFailed, ex.Message);
         }
 
@@ -490,10 +495,7 @@ namespace XrayUI.ViewModels
                 SystemProxyService.ClearProxy();
             }
 
-            _activeServer          = null;
-            _activeServerName      = string.Empty;
-            _activeLocalProxyPort = null;
-            IsRunning = false;
+            ClearActiveSession();
 
             await _dialogs.ShowErrorAsync(L.Error_ReapplyFailed, detail);
         }
@@ -997,8 +999,7 @@ namespace XrayUI.ViewModels
 
             // Route the download through xray when it's running so users behind GFW
             // can still reach github.com / objects.githubusercontent.com.
-            // HTTP works with both Xray's socks/mixed inbounds and HTTP-only profiles.
-            var proxy = ActiveLocalProxyPort is { } port ? $"http://127.0.0.1:{port}" : null;
+            var proxy = ActiveLocalProxyUrl;
 
             UpdateStaging? staging = null;
             try
