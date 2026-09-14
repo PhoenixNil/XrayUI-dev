@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.UI;
 using XrayUI.Helpers;
@@ -11,6 +12,7 @@ namespace XrayUI.ViewModels
     {
         private readonly SettingsService _settings;
         private readonly IDialogService _dialogs;
+        private readonly StartupService _startup;
 
         /// <summary>Exposed so PersonalizeControl code-behind can show the hotkey recorder
         /// dialog — the actual Win32 register/unregister probe stays in code-behind (needs the
@@ -32,10 +34,11 @@ namespace XrayUI.ViewModels
         /// silently leaving the UI showing a "running" state with no active node.</summary>
         public Func<bool>? IsProxyRunning { get; set; }
 
-        public PersonalizeViewModel(IDialogService dialogs, SettingsService settings)
+        public PersonalizeViewModel(IDialogService dialogs, SettingsService settings, StartupService startup)
         {
             _dialogs = dialogs;
             _settings = settings;
+            _startup = startup;
             ShowLatencyInDetails = true;
             ShowAiUnlockInDetails = true;
             ShowGroupInDetails = true;
@@ -214,6 +217,104 @@ namespace XrayUI.ViewModels
                 baseline != (ShowLatencyInDetails, ShowAiUnlockInDetails, ShowGroupInDetails, OpenServerFilterPanelOnStartup);
         }
 
+        // ── Startup ───────────────────────────────────────────────────────────
+        // The odd pair on this page: these two persist the moment they change instead of
+        // on "完成". SetStartupEnabled creates or deletes a real Task Scheduler task, and
+        // the panel can be dismissed with the back button without ever reaching Done — a
+        // task that exists while settings.json says it doesn't just gets "corrected" away
+        // by MainViewModel's reconcile on the next launch.
+
+        /// <summary>Guards the change handlers when we write the value ourselves (initial
+        /// load, external reconcile, failure rollback) rather than the user flipping it.</summary>
+        private bool _isStartupInternalUpdate;
+
+        /// <summary>Wired by MainViewModel to the control panel: id of the node xray is
+        /// running right now, or null when stopped. Turning auto-connect on mid-session
+        /// records it as the boot target — otherwise enabling it after connecting would
+        /// leave nothing to connect to until the next manual connect.</summary>
+        public Func<string?>? GetActiveServerId { get; set; }
+
+        [ObservableProperty]
+        public partial bool IsStartupEnabled { get; set; }
+
+        [ObservableProperty]
+        public partial bool IsAutoConnect { get; set; }
+
+        partial void OnIsStartupEnabledChanged(bool value)
+        {
+            if (_isStartupInternalUpdate) return;
+            _ = ApplyStartupAsync(value);
+        }
+
+        partial void OnIsAutoConnectChanged(bool value)
+        {
+            if (_isStartupInternalUpdate) return;
+            _ = PersistAutoConnectAsync(value);
+        }
+
+        // Startup gestures and Done share one read-modify-write boundary. Done must wait for
+        // task registration and its save before reloading settings, including the boot target.
+        private readonly SemaphoreSlim _startupWriteLock = new(1, 1);
+
+        private async Task WithStartupWriteLockAsync(Func<Task> operation)
+        {
+            await _startupWriteLock.WaitAsync();
+            try { await operation(); }
+            finally { _startupWriteLock.Release(); }
+        }
+
+        private Task ApplyStartupAsync(bool enabled) => WithStartupWriteLockAsync(async () =>
+        {
+            try
+            {
+                // Task registration is a slow COM RPC; keep it off the UI thread.
+                await Task.Run(() => _startup.SetStartupEnabled(enabled));
+            }
+            catch (Exception ex)
+            {
+                await _dialogs.ShowErrorAsync(L.Startup_SetFailed, ex.Message);
+                SetStartupInternal(() => IsStartupEnabled = !enabled);
+                return;
+            }
+
+            var s = await _settings.LoadSettingsAsync();
+            s.IsStartupEnabled = enabled;
+            // Clear auto-connect with the boot task so re-enabling startup cannot revive it.
+            if (!enabled)
+            {
+                SetStartupInternal(() => IsAutoConnect = false);
+                s.IsAutoConnect = false;
+                s.LastAutoConnectServerId = null;
+            }
+            await _settings.SaveSettingsAsync(s);
+        });
+
+        private Task PersistAutoConnectAsync(bool enabled) => WithStartupWriteLockAsync(async () =>
+        {
+            var s = await _settings.LoadSettingsAsync();
+            s.IsAutoConnect = enabled;
+            if (!enabled)
+                s.LastAutoConnectServerId = null;
+            else if (GetActiveServerId?.Invoke() is { } activeId)
+                s.LastAutoConnectServerId = activeId;
+            // Enabling while stopped keeps the recorded target; the next connect replaces it.
+            await _settings.SaveSettingsAsync(s);
+        });
+
+        /// <summary>Adopts the Task Scheduler's own answer (external state is ground truth,
+        /// see MainViewModel.ReconcileStartupTaskAsync). Internal write — the task already
+        /// matches, so re-registering it would be a pointless second RPC.</summary>
+        public void ApplyExternalStartupState(bool enabled) =>
+            SetStartupInternal(() => IsStartupEnabled = enabled);
+
+        /// <summary>Assigns a startup property without running its user-gesture side effect.</summary>
+        private void SetStartupInternal(Action assign)
+        {
+            _isStartupInternalUpdate = true;
+            try { assign(); }
+            finally { _isStartupInternalUpdate = false; }
+        }
+
         // ── Global hotkeys ────────────────────────────────────────────────────
         // No separate enabled flag — a hotkey is active whenever it has a combo assigned,
         // matching PowerToys' shortcut behavior. Assign via the recorder button (which auto-sets
@@ -335,7 +436,9 @@ namespace XrayUI.ViewModels
         }
 
         [RelayCommand]
-        private async Task Done()
+        private Task Done() => WithStartupWriteLockAsync(SaveAndCloseAsync);
+
+        private async Task SaveAndCloseAsync()
         {
             var s = await LoadWritableSettingsAsync(reload: true);
             if (s is null) return;
@@ -349,6 +452,10 @@ namespace XrayUI.ViewModels
                 _                    => "Default"
             };
             s.BackdropSetting = ThemeHelper.CurrentBackdrop;
+            // Redundant while Done holds the startup writers' lock, but kept: these are the
+            // authoritative UI values regardless of what the reload above returned.
+            s.IsStartupEnabled = IsStartupEnabled;
+            s.IsAutoConnect = IsAutoConnect;
             s.ShowLatencyInDetails = ShowLatencyInDetails;
             s.ShowAiUnlockInDetails = ShowAiUnlockInDetails;
             s.ShowGroupInDetails = ShowGroupInDetails;
@@ -398,6 +505,14 @@ namespace XrayUI.ViewModels
             OpenServerFilterPanelOnStartup = settings.OpenServerFilterPanelOnStartup;
             _displaySettingsBaseline = (ShowLatencyInDetails, ShowAiUnlockInDetails, ShowGroupInDetails, OpenServerFilterPanelOnStartup);
         }
+
+        /// <summary>Shows the persisted autostart state. Internal write — displaying what
+        /// was saved must not re-register the task.</summary>
+        public void LoadStartup(AppSettings settings) => SetStartupInternal(() =>
+        {
+            IsStartupEnabled = settings.IsStartupEnabled;
+            IsAutoConnect    = settings.IsAutoConnect;
+        });
 
         public void LoadLanguage(AppSettings settings)
         {

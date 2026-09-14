@@ -75,10 +75,6 @@
                                                      CommandParameter="manual" />
                             </MenuFlyoutSubItem>
                             <MenuFlyoutSeparator />
-                            <MenuFlyoutItem x:Uid="ControlPanel_StartupItem"
-                                            Text="开机启动"
-                                            Command="{x:Bind ViewModel.OpenStartupSettingsCommand}"
-                                            Icon="{x:Bind ViewModel.StartupMenuIcon, Mode=OneWay}" />
                             <MenuFlyoutSubItem x:Uid="ControlPanel_RoutingSettingsItem"
                                                Text="路由设置">
                                 <MenuFlyoutItem x:Uid="ControlPanel_RoutingGlobalItem"

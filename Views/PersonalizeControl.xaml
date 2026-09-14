@@ -501,6 +501,101 @@
                 </Border>
             </StackPanel>
 
+            <!-- ── Startup ─────────────────────────────────────────────────── -->
+            <StackPanel Spacing="10">
+                <TextBlock x:Uid="Personalize_Startup"
+                           Text="启动"
+                           FontSize="15"
+                           FontWeight="SemiBold" />
+
+                <!-- Deliberately no IsExpanded binding: expansion is view state and the switch is
+                     data state. Coupling them reflows everything below the section on a gesture
+                     that was only meant to change a setting, and overrides a collapse the user
+                     chose. Same reason PowerToys leaves its settings expanders alone. -->
+                <Expander HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Stretch"
+                          Style="{StaticResource AppSettingsExpanderStyle}">
+                    <Expander.Header>
+                        <!-- Right padding 4, not the 16 the other headers use: ToggleSwitch's
+                             template reserves a fixed 12px trailing spacer, so 4+12 puts the pill
+                             where the language expander's ComboBox sits. -->
+                        <Grid Padding="0,16,4,16"
+                              ColumnSpacing="12"
+                              HorizontalAlignment="Stretch">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xF71C;"
+                                      FontSize="16"
+                                      VerticalAlignment="Center"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="2">
+                                <TextBlock x:Name="StartupLabel"
+                                           x:Uid="Personalize_StartupTitle"
+                                           Text="开机自启"
+                                           FontSize="14" />
+                                <TextBlock x:Uid="Personalize_StartupDesc"
+                                           Text="登录 Windows 后自动启动 XrayUI"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Column="2"
+                                       AutomationProperties.AccessibilityView="Raw"
+                                       Text="{x:Bind OnOffLabel(ViewModel.IsStartupEnabled), Mode=OneWay}"
+                                       VerticalAlignment="Center" />
+
+                            <ToggleSwitch Grid.Column="3"
+                                          AutomationProperties.LabeledBy="{x:Bind StartupLabel}"
+                                          IsOn="{x:Bind ViewModel.IsStartupEnabled, Mode=TwoWay}"
+                                          OnContent=""
+                                          OffContent=""
+                                          MinWidth="0"
+                                          VerticalAlignment="Center" />
+                        </Grid>
+                    </Expander.Header>
+
+                    <!-- Subordinate option, so a CheckBox rather than a second switch: the switch
+                         above turns the boot task on, this only qualifies what that launch does.
+                         Left 58 is the row inset the other AppSettingsExpanderStyle sections use,
+                         which puts the box under the header title. Disabled while autostart is
+                         off — auto-connect only ever runs from the boot task. -->
+                    <CheckBox HorizontalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch"
+                              Margin="58,10,16,10"
+                              IsEnabled="{x:Bind ViewModel.IsStartupEnabled, Mode=OneWay}"
+                              IsChecked="{x:Bind ViewModel.IsAutoConnect, Mode=TwoWay}">
+                        <StackPanel VerticalAlignment="Center"
+                                    Spacing="2">
+                            <TextBlock x:Uid="Personalize_AutoConnectTitle"
+                                       Text="启动后自动连接"
+                                       FontSize="14" />
+                            <!-- Opacity, not TextFillColorSecondaryBrush like every other
+                                 description on this page: a local Foreground outranks the
+                                 foreground the CheckBox template hands its content when disabled,
+                                 so the brush version stays bright next to a greyed title. Dimming
+                                 the inherited color instead follows the row into the disabled
+                                 state, and in both themes lands within a few percent of the
+                                 secondary brush. -->
+                            <TextBlock x:Uid="Personalize_AutoConnectDesc"
+                                       Text="开机启动时连接上次使用的节点"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Opacity="0.75" />
+                        </StackPanel>
+                    </CheckBox>
+                </Expander>
+            </StackPanel>
+
             <!-- Display settings -->
             <StackPanel Spacing="10">
                 <TextBlock x:Uid="Personalize_DisplaySettings"
