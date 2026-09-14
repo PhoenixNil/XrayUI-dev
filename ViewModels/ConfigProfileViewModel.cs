@@ -14,10 +14,9 @@ namespace XrayUI.ViewModels
     /// running the generated config or a hand-written profile from
     /// <c>%LocalAppData%\XrayUI\profiles\</c>.
     ///
-    /// Save is the only path that writes, and it always validates first — a profile that is
-    /// enabled is a config xray will be handed verbatim, so there is no "save it broken and fix
-    /// it later" state to fall into. Disabling a profile the user has already broken is done by
-    /// resetting it to the generated template.
+    /// Save is the only path that writes. It checks JSON syntax and the profile contract;
+    /// Xray checks the assembled configuration when the user connects. Saving or enabling a
+    /// profile does not guarantee that the core will accept it.
     /// </summary>
     public partial class ConfigProfileViewModel : ObservableObject
     {
@@ -45,10 +44,6 @@ namespace XrayUI.ViewModels
 
         public readonly record struct ConfigProfileState(bool UseTunProfile, bool UseProxyProfile);
 
-        /// <summary>Suppresses the slot-changed handler while the VM itself moves the
-        /// Segmented, so a programmatic move is not mistaken for the user picking a slot.</summary>
-        private bool _isSlotSwitchInternal;
-
         public ConfigProfileViewModel(
             SettingsService settings,
             ConfigProfileStore profiles,
@@ -73,7 +68,20 @@ namespace XrayUI.ViewModels
         /// <summary>Which slot the editor is showing. An index rather than a bool because it
         /// binds straight to Segmented.SelectedIndex, the same shape the theme picker uses.</summary>
         [ObservableProperty]
-        public partial int SelectedSlotIndex { get; set; }
+        [NotifyPropertyChangedFor(nameof(IsTunSlot))]
+        public partial int SelectedSlotIndex { get; private set; }
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(CanEdit))]
+        [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ResetToDefaultCommand), nameof(PreviewCommand), nameof(OpenFolderCommand))]
+        public partial bool IsBusy { get; private set; }
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(CanEdit))]
+        [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ResetToDefaultCommand), nameof(PreviewCommand), nameof(OpenFolderCommand))]
+        public partial bool IsLoaded { get; private set; }
+
+        public bool CanEdit => IsLoaded && !IsBusy;
 
         /// <summary>TUN and system proxy are separate configs because they describe different
         /// inbound stacks. Which one a slot requires is not spelled out in the window: the
@@ -88,23 +96,18 @@ namespace XrayUI.ViewModels
 
         partial void OnIsProfileEnabledChanged(bool value) => IsDirty = true;
 
-        partial void OnSelectedSlotIndexChanged(int value)
+        /// <summary>Commit the selected slot together with its content, after any discard
+        /// confirmation and file read. The picker cannot write an index back during loading.</summary>
+        public Task SwitchSlotAsync(int slotIndex)
         {
-            OnPropertyChanged(nameof(IsTunSlot));
-            if (_isSlotSwitchInternal) return;
-            _ = SwitchSlotAsync(value);
-        }
+            if (slotIndex is not (ProxySlotIndex or TunSlotIndex) || slotIndex == SelectedSlotIndex)
+                return Task.CompletedTask;
 
-        private async Task SwitchSlotAsync(int slotIndex)
-        {
-            if (IsDirty && !await ConfirmDiscardAsync())
+            return RunBusyAsync(async () =>
             {
-                // Put the segmented control back without re-entering the changed handler.
-                SetSlotSilently(slotIndex == TunSlotIndex ? ProxySlotIndex : TunSlotIndex);
-                return;
-            }
-
-            await LoadSlotAsync();
+                if (IsDirty && !await ConfirmDiscardAsync()) return;
+                await LoadSlotAsync(slotIndex);
+            });
         }
 
         // ── Editor state ──────────────────────────────────────────────────────
@@ -130,25 +133,24 @@ namespace XrayUI.ViewModels
 
         /// <summary>
         /// Picks the slot to open on — the current mode, so the config the user is about to run
-        /// is the one they see first. Must be called before the window runs InitializeComponent:
-        /// Segmented settles its own SelectedIndex as it realizes and pushes that back through
-        /// the TwoWay binding, which lands after an async load and silently drags the editor to
-        /// the other slot. Seeding it up front is the same "populate the VM before x:Bind parses"
-        /// rule MainWindow follows.
+        /// is the one they see first. The window loads this slot after its controls are loaded;
+        /// the picker's temporary selection during initialization cannot change it.
         /// </summary>
         public void SetInitialSlot(bool tunSlot) =>
-            SetSlotSilently(tunSlot ? TunSlotIndex : ProxySlotIndex);
+            SelectedSlotIndex = tunSlot ? TunSlotIndex : ProxySlotIndex;
 
-        public Task LoadAsync() => LoadSlotAsync();
+        public Task LoadAsync() => RunBusyAsync(() => LoadSlotAsync(SelectedSlotIndex));
 
-        private async Task LoadSlotAsync()
+        private async Task LoadSlotAsync(int slotIndex)
         {
-            var tunSlot = IsTunSlot;
-            var settings = await _settings.LoadSettingsAsync();
-
+            var tunSlot = slotIndex == TunSlotIndex;
+            ClearValidation();
             string text;
+            bool enabled = false;
             try
             {
+                var settings = await _settings.LoadSettingsAsync();
+                enabled = tunSlot ? settings.UseTunConfigProfile : settings.UseProxyConfigProfile;
                 // No file yet: seed with the generated config for this mode so the user starts
                 // from something that already works rather than a blank page.
                 text = await _profiles.ReadAsync(tunSlot)
@@ -162,17 +164,21 @@ namespace XrayUI.ViewModels
             }
 
             EditorText = text;
-            IsProfileEnabled = tunSlot ? settings.UseTunConfigProfile : settings.UseProxyConfigProfile;
+            IsProfileEnabled = enabled;
+            SelectedSlotIndex = slotIndex;
 
             // Both assignments above flag the editor dirty; this is the baseline for the slot
             // that was just loaded, so clear it once here rather than suppressing each setter.
             IsDirty = false;
+            IsLoaded = true;
         }
 
         // ── Commands ──────────────────────────────────────────────────────────
 
-        [RelayCommand]
-        private async Task Save()
+        [RelayCommand(CanExecute = nameof(CanEdit))]
+        private Task Save() => RunBusyAsync(SaveCoreAsync);
+
+        private async Task SaveCoreAsync()
         {
             var tunSlot = IsTunSlot;
             var result = ConfigProfileJson.Validate(EditorText, tunSlot);
@@ -224,8 +230,10 @@ namespace XrayUI.ViewModels
             else ShowWarning($"{saved} {warnings}");
         }
 
-        [RelayCommand]
-        private async Task ResetToDefault()
+        [RelayCommand(CanExecute = nameof(CanEdit))]
+        private Task ResetToDefault() => RunBusyAsync(ResetToDefaultCoreAsync);
+
+        private async Task ResetToDefaultCoreAsync()
         {
             if (!await _dialogs.ShowConfirmationAsync(
                     L.ConfigProfile_ResetTitle, L.ConfigProfile_ResetMsg,
@@ -237,7 +245,7 @@ namespace XrayUI.ViewModels
             ClearValidation();
         }
 
-        [RelayCommand]
+        [RelayCommand(CanExecute = nameof(CanEdit))]
         private async Task Preview()
         {
             // The preview builds from what is on disk, so unsaved edits would not appear in it.
@@ -272,7 +280,7 @@ namespace XrayUI.ViewModels
             }
         }
 
-        [RelayCommand]
+        [RelayCommand(CanExecute = nameof(CanEdit))]
         private void OpenFolder()
         {
             ConfigProfileStore.OpenFolder();
@@ -293,7 +301,7 @@ namespace XrayUI.ViewModels
                 return;
             }
 
-            await LoadSlotAsync();
+            await LoadAsync();
         }
 
         [RelayCommand]
@@ -304,7 +312,9 @@ namespace XrayUI.ViewModels
         }
 
         /// <summary>Called by the window when the user closes it from the title bar.</summary>
-        public Task<bool> ConfirmCloseAsync() => IsDirty ? ConfirmDiscardAsync() : Task.FromResult(true);
+        public Task<bool> ConfirmCloseAsync() => IsBusy
+            ? Task.FromResult(false)
+            : IsDirty ? ConfirmDiscardAsync() : Task.FromResult(true);
 
         // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -313,11 +323,12 @@ namespace XrayUI.ViewModels
                 L.ConfigProfile_DiscardTitle, L.ConfigProfile_DiscardMsg, isDanger: true,
                 xamlRoot: GetXamlRoot?.Invoke());
 
-        private void SetSlotSilently(int slotIndex)
+        private async Task RunBusyAsync(Func<Task> operation)
         {
-            _isSlotSwitchInternal = true;
-            try { SelectedSlotIndex = slotIndex; }
-            finally { _isSlotSwitchInternal = false; }
+            if (IsBusy) return;
+            IsBusy = true;
+            try { await operation(); }
+            finally { IsBusy = false; }
         }
 
         private Task ShowDialogErrorAsync(string title, string message) =>

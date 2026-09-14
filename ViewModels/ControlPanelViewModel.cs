@@ -997,7 +997,8 @@ namespace XrayUI.ViewModels
 
             // Route the download through xray when it's running so users behind GFW
             // can still reach github.com / objects.githubusercontent.com.
-            var proxy = ActiveLocalProxyPort is { } port ? $"socks5://127.0.0.1:{port}" : null;
+            // HTTP works with both Xray's socks/mixed inbounds and HTTP-only profiles.
+            var proxy = ActiveLocalProxyPort is { } port ? $"http://127.0.0.1:{port}" : null;
 
             UpdateStaging? staging = null;
             try

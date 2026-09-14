@@ -27,10 +27,13 @@
             <!-- Which slot, and whether that slot is on, are one decision — keeping them on a
                  single line says so, and spares the editor a whole row of chrome. -->
             <Grid ColumnDefinitions="Auto,*,Auto">
-                <controls:Segmented Grid.Column="0"
+                <controls:Segmented x:Name="SlotPicker"
+                                    Grid.Column="0"
                                     HorizontalAlignment="Left"
                                     VerticalAlignment="Center"
-                                    SelectedIndex="{x:Bind ViewModel.SelectedSlotIndex, Mode=TwoWay}">
+                                    IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}"
+                                    SelectedIndex="{x:Bind ViewModel.SelectedSlotIndex, Mode=OneWay}"
+                                    SelectionChanged="OnSlotSelectionChanged">
                     <controls:Segmented.Resources>
                         <SolidColorBrush x:Key="SegmentedItemBackgroundPointerOver" Color="Transparent" />
                         <SolidColorBrush x:Key="SegmentedItemBorderBrushPointerOver" Color="Transparent" />
@@ -48,6 +51,7 @@
                                Text="使用自定义配置"
                                VerticalAlignment="Center" />
                     <ToggleSwitch IsOn="{x:Bind ViewModel.IsProfileEnabled, Mode=TwoWay}"
+                                  IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}"
                                   OnContent=""
                                   OffContent=""
                                   MinWidth="0"
@@ -75,6 +79,7 @@
                  Margin="20,0,20,0"
                  Header="config.json (outbounds excluded)"
                  Text="{x:Bind ViewModel.EditorText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}"
                  AcceptsReturn="True"
                  TextWrapping="NoWrap"
                  IsSpellCheckEnabled="False"

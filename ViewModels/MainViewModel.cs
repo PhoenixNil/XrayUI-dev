@@ -296,8 +296,9 @@ namespace XrayUI.ViewModels
                 _uiDispatcher.TryEnqueue(StopTimer);
         }
 
+        // Xray's socks/mixed inbounds accept HTTP too; HTTP-only profiles do not accept SOCKS.
         private string? CurrentProxyUrl() =>
-            ControlPanel.ActiveLocalProxyPort is { } port ? $"socks5://127.0.0.1:{port}" : null;
+            ControlPanel.ActiveLocalProxyPort is { } port ? $"http://127.0.0.1:{port}" : null;
 
         private void QueueUpdateCheck(string? proxyUrl)
         {

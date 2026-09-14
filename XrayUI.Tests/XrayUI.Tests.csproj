@@ -41,6 +41,8 @@
     <Compile Include="..\Services\CustomRuleValueParser.cs" Link="Prod\Services\CustomRuleValueParser.cs" />
     <Compile Include="..\Services\XrayConfigConstants.cs" Link="Prod\Services\XrayConfigConstants.cs" />
     <Compile Include="..\Services\ConfigProfileJson.cs" Link="Prod\Services\ConfigProfileJson.cs" />
+    <!-- Exercise editor transitions with test doubles for storage, dialogs and WinUI types. -->
+    <Compile Include="..\ViewModels\ConfigProfileViewModel.cs" Link="Prod\ViewModels\ConfigProfileViewModel.cs" />
     <Compile Include="..\Services\LogLineParser.cs" Link="Prod\Services\LogLineParser.cs" />
     <Compile Include="..\Services\XhttpSettings.cs" Link="Prod\Services\XhttpSettings.cs" />
     <Compile Include="..\Services\EchSettings.cs" Link="Prod\Services\EchSettings.cs" />

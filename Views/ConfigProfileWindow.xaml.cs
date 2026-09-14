@@ -15,14 +15,15 @@ namespace XrayUI.Views
         // Set while the VM's own Close command is closing us, so the Closed handler does not
         // ask about unsaved changes a second time.
         private bool _closeConfirmed;
+        private bool _isInitialized;
+        private bool _syncingSlot;
 
         public ConfigProfileViewModel ViewModel { get; }
 
         public ConfigProfileWindow(Window owner, ConfigProfileViewModel viewModel, bool tunSlot)
         {
             ViewModel = viewModel;
-            // Before InitializeComponent: x:Bind initializes the Segmented from the VM as it
-            // parses, and seeding afterwards loses the race with the control's own selection.
+            // The view model owns the initial slot. The picker only requests changes once loaded.
             ViewModel.SetInitialSlot(tunSlot);
             this.InitializeComponent();
             _owner = owner;
@@ -44,19 +45,41 @@ namespace XrayUI.Views
             AutomationProperties.SetName(PreviewButton, L.ConfigProfile_PreviewTooltip);
             AutomationProperties.SetName(EditorTextBox, L.ConfigProfile_EditorAutomationName);
 
-            this.ShowAsOwnedModal(owner);
-
             // Let the VM route its error dialogs to this window's XamlRoot instead of
             // falling back to MainWindow's — otherwise they render behind.
             ViewModel.GetXamlRoot = () => Content?.XamlRoot;
             ViewModel.CloseRequested += OnCloseRequested;
             ViewModel.FolderOpened += OnFolderOpened;
 
-            _ = ViewModel.LoadAsync();
+            WindowRoot.Loaded += OnWindowLoaded;
 
             this.Closed += OnClosed;
             this.Activated += OnWindowActivated;
             AppWindow.Closing += OnAppWindowClosing;
+            this.ShowAsOwnedModal(owner);
+        }
+
+        private async void OnWindowLoaded(object sender, RoutedEventArgs args)
+        {
+            if (_isInitialized) return;
+            _isInitialized = true;
+            await ViewModel.LoadAsync();
+            SyncSlotPicker();
+        }
+
+        private async void OnSlotSelectionChanged(object sender, SelectionChangedEventArgs args)
+        {
+            if (!_isInitialized || _syncingSlot || ViewModel.IsBusy) return;
+            await ViewModel.SwitchSlotAsync(SlotPicker.SelectedIndex);
+            // Also restores the old selection when the user cancels discarding their edits.
+            SyncSlotPicker();
+        }
+
+        private void SyncSlotPicker()
+        {
+            _syncingSlot = true;
+            try { SlotPicker.SelectedIndex = ViewModel.SelectedSlotIndex; }
+            finally { _syncingSlot = false; }
         }
 
         /// <summary>
@@ -126,6 +149,7 @@ namespace XrayUI.Views
 
         private void OnClosed(object sender, WindowEventArgs args)
         {
+            WindowRoot.Loaded -= OnWindowLoaded;
             AppWindow.Closing -= OnAppWindowClosing;
             this.Activated -= OnWindowActivated;
             ViewModel.CloseRequested -= OnCloseRequested;

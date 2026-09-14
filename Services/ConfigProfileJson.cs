@@ -53,8 +53,9 @@ namespace XrayUI.Services
     /// Validates a hand-written config profile: a complete xray config minus outbounds, which
     /// XrayUI injects from the selected node.
     ///
-    /// Errors block the save; warnings describe a config that will start but not do what the
-    /// user probably meant. Both are returned as enums rather than messages so this file stays
+    /// Checks JSON syntax and XrayUI's profile contract, not the full Xray schema or runtime
+    /// validity. Errors block the save; warnings flag possible configuration mistakes.
+    /// Both are returned as enums rather than messages so this file stays
     /// free of WinAppSDK — it is source-linked into XrayUI.Tests, and the localized text is
     /// assembled by the editor window.
     /// </summary>
