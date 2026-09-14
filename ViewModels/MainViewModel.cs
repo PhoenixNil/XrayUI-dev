@@ -88,7 +88,8 @@ namespace XrayUI.ViewModels
 
             ServerList   = new ServerListViewModel(dialogs, settings, latencyProbe, realLatencyProbe);
             ServerDetail = new ServerDetailViewModel(latencyProbe, aiUnlockCheck);
-            ControlPanel = new ControlPanelViewModel(dialogs, settings, xray, tunService, updateService);
+            ControlPanel = new ControlPanelViewModel(
+                dialogs, settings, xray, tunService, updateService, new ConfigProfileStore());
             Personalize  = new PersonalizeViewModel(dialogs, settings, startupService);
 
             // Wire ControlPanel so it knows the current selected server
@@ -107,11 +108,10 @@ namespace XrayUI.ViewModels
             // Live TUN state for the speed test's egress pin — settings.IsTunMode alone lags
             // the UI toggle and can survive a crash as a stale true (see IDialogService remarks).
             realLatencyProbe.IsTunActive = () => ControlPanel.IsRunning && ControlPanel.IsTunMode;
-            // Subscription fetches ride the core's own SOCKS inbound whenever it is running:
+            // Subscription fetches use the core's local proxy whenever it is available:
             // IsProxyRunning can't tell manual mode (system proxy untouched) from system-proxy
             // mode, and a direct fetch on a proxy-only link burns the schedule's whole interval.
-            ServerListViewModel.GetLocalProxyPort =
-                () => ControlPanel.IsRunning ? ControlPanel.LocalPort : (int?)null;
+            ServerListViewModel.GetLocalProxyUrl = () => ControlPanel.ActiveLocalProxyUrl;
 
             ServerList.PropertyChanged   += OnServerListPropertyChanged;
             ControlPanel.PropertyChanged += OnControlPanelPropertyChanged;
@@ -146,6 +146,8 @@ namespace XrayUI.ViewModels
             ControlPanel.AllowLanConnections   = s.AllowLanConnections;
             ControlPanel.RoutingMode           = s.RoutingMode;
             ControlPanel.IsSystemProxyEnabled  = s.IsSystemProxyEnabled;
+            // Gates the gear items a config profile owns, and the "custom" routing label.
+            ControlPanel.ApplyConfigProfileState(s.UseTunConfigProfile, s.UseProxyConfigProfile);
             ControlPanel.InitializePersonalize(s);
             Personalize.LoadDisplayOptions(s);
             Personalize.LoadLanguage(s);
@@ -188,7 +190,7 @@ namespace XrayUI.ViewModels
             // Fire-and-forget background tasks. Failures here must never block
             // startup or surface as dialogs (per the auto-update failure policy).
             _ = Task.Run(() => _updateService.CleanupOldStagingDirs());
-            QueueUpdateCheck(CurrentProxyUrl());
+            QueueUpdateCheck(ControlPanel.ActiveLocalProxyUrl);
         }
 
         /// <summary>
@@ -293,9 +295,6 @@ namespace XrayUI.ViewModels
             else
                 _uiDispatcher.TryEnqueue(StopTimer);
         }
-
-        private string? CurrentProxyUrl() =>
-            ControlPanel.IsRunning ? $"socks5://127.0.0.1:{ControlPanel.LocalPort}" : null;
 
         private void QueueUpdateCheck(string? proxyUrl)
         {
@@ -476,7 +475,11 @@ namespace XrayUI.ViewModels
                 return;
             }
 
-            if (e.PropertyName == nameof(ControlPanelViewModel.RoutingMode))
+            // MiniRoutingMode reads RoutingModeText, and a config profile moves that text
+            // without RoutingMode itself changing: ApplyConfigProfileState and the TUN slot
+            // switch raise only the derived property. Listening for RoutingMode alone left the
+            // mini view on Smart/Global while a custom profile was driving the config.
+            if (e.PropertyName == nameof(ControlPanelViewModel.RoutingModeText))
             {
                 OnPropertyChanged(nameof(MiniRoutingMode));
                 return;
@@ -494,10 +497,10 @@ namespace XrayUI.ViewModels
             OnPropertyChanged(nameof(MiniDotVisibility));
             SwitchToSelectedServerCommand.NotifyCanExecuteChanged();
 
-            ServerDetail.OnProxyRunningChanged(isRunning, ControlPanel.LocalPort);
+            ServerDetail.OnProxyRunningChanged(isRunning, ControlPanel.ActiveLocalProxyPort);
 
             if (isRunning && !ControlPanel.IsUpdateAvailable)
-                QueueUpdateCheck(CurrentProxyUrl());
+                QueueUpdateCheck(ControlPanel.ActiveLocalProxyUrl);
 
             // Scheduled refreshes stand down while the proxy is down, so connecting is the moment
             // an overdue subscription becomes fetchable. Without this it would sit until the next

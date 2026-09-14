@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using XrayUI.Services;
@@ -116,6 +118,34 @@ namespace XrayUI.Models
         /// Only active when RoutingMode == "smart".
         /// </summary>
         public JsonObject? AdvancedRouting { get; set; }
+
+        /// <summary>
+        /// A detached copy, for callers that need to override a value without touching
+        /// SettingsService's cached instance (config preview, profile templates).
+        ///
+        /// Round-trips through the source-generated context because AOT rules out reflection and
+        /// a hand-written member-wise copy would silently miss every field added later. Note
+        /// <see cref="IsFailedLoadFallback"/> is [JsonIgnore] and deliberately does not survive:
+        /// a clone is a fresh value the caller built, not the failed load it came from.
+        /// </summary>
+        public AppSettings Clone() =>
+            JsonSerializer.Deserialize(
+                JsonSerializer.Serialize(this, AppJsonSerializerContext.Default.AppSettings),
+                AppJsonSerializerContext.Default.AppSettings)
+            ?? throw new InvalidOperationException("Could not clone AppSettings.");
+
+        // ── Config profiles ─────────────────────────────────────
+        /// <summary>
+        /// When set, the next start in the matching mode uses the hand-written config profile
+        /// from <c>%LocalAppData%\XrayUI\profiles\</c> instead of the generated config. The
+        /// profile owns every section except outbounds, which are always injected from the
+        /// selected node. Which of the two slots applies is decided by TUN mode, not by the
+        /// profile's contents, so elevation and route cleanup stay driven by the mode toggle.
+        /// </summary>
+        public bool UseTunConfigProfile { get; set; }
+
+        /// <inheritdoc cref="UseTunConfigProfile"/>
+        public bool UseProxyConfigProfile { get; set; }
 
         // ── Subscriptions ─────────────────────────────────────────────────────
         /// <summary>Persisted subscription sources. Nodes derived from these carry SubscriptionId = the entry's Id.</summary>

@@ -17,18 +17,29 @@ namespace XrayUI.Services
         }
 
         public static bool PresetExists() =>
-            File.Exists(PresetPaths.ServersFile) || File.Exists(PresetPaths.SettingsFile);
+            File.Exists(PresetPaths.ServersFile)
+            || File.Exists(PresetPaths.SettingsFile)
+            || ConfigProfileStore.HasProfilesIn(PresetPaths.ProfilesDir);
 
         public async Task<PresetImportResult> ApplyAsync()
         {
             var importedServers = await TryReplaceServersAsync().ConfigureAwait(false);
             var settingsResult = await TryReplaceSettingsAsync().ConfigureAwait(false);
 
+            // Replaces the files but never the enable switches, which are the recipient's own
+            // state. A slot already switched on therefore starts running the restored config on
+            // the next connect — which is why the result reports the count rather than
+            // succeeding silently.
+            var importedProfiles = await ConfigProfileStore
+                .CopyFromAsync(PresetPaths.ProfilesDir, overwrite: true)
+                .ConfigureAwait(false);
+
             return new PresetImportResult(
                 importedServers,
                 settingsResult.Subscriptions,
                 settingsResult.CustomRules,
-                settingsResult.AdvancedRouting);
+                settingsResult.AdvancedRouting,
+                importedProfiles);
         }
 
         private async Task<int> TryReplaceServersAsync()
@@ -95,5 +106,6 @@ namespace XrayUI.Services
         int ImportedServers,
         int ImportedSubscriptions,
         int ImportedCustomRules,
-        bool ImportedAdvancedRouting);
+        bool ImportedAdvancedRouting,
+        int ImportedProfiles);
 }

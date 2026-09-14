@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 
 namespace XrayUI.Services
@@ -8,5 +8,9 @@ namespace XrayUI.Services
         public static readonly string Dir = Path.Combine(AppContext.BaseDirectory, "Import");
         public static readonly string SettingsFile = Path.Combine(Dir, "settings.json");
         public static readonly string ServersFile = Path.Combine(Dir, "servers.json");
+
+        /// <summary>Config profiles ride along as plain files rather than fields of the preset
+        /// settings, because that is what they are on disk.</summary>
+        public static readonly string ProfilesDir = Path.Combine(Dir, "profiles");
     }
 }

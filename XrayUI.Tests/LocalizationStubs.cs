@@ -4,7 +4,7 @@ namespace XrayUI.Helpers
     // facade (Helpers/L.cs, Helpers/Loc.cs). Only the members that linked
     // production sources actually touch are stubbed; add members here when a
     // newly linked file references more of L.*.
-    public static class L
+    public static partial class L
     {
         public static string ServerDetail_Timeout => "Timeout";
         public static string Subscription_NeverUpdated => "Never updated";

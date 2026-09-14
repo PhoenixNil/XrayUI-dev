@@ -88,6 +88,7 @@ public static class L
     public static string ControlPanel_StatusNotRunning   => Loc.GetString("ControlPanel_StatusNotRunning");
     public static string ControlPanel_RoutingGlobal      => Loc.GetString("ControlPanel_RoutingGlobal");
     public static string ControlPanel_RoutingSmart       => Loc.GetString("ControlPanel_RoutingSmart");
+    public static string ControlPanel_RoutingCustom      => Loc.GetString("ControlPanel_RoutingCustom");
     public static string ControlPanel_UpdateFound        => Loc.GetString("ControlPanel_UpdateFound");
 
     // ── Error dialogs ──────────────────────────────────────────────────────
@@ -99,6 +100,41 @@ public static class L
     public static string Error_XrayReapplyFailed   => Loc.GetString("Error_XrayReapplyFailed");
     public static string Error_UpdateFailed        => Loc.GetString("Error_UpdateFailed");
     public static string Error_UpdaterLaunchFailed => Loc.GetString("Error_UpdaterLaunchFailed");
+
+    // ── Config profiles ──────────────────────────────────────────
+    // The window's own labels live on x:Uids (ConfigProfile_Header, _SlotTun, _SlotProxy,
+    // _Subtitle, _EnableTitle, _ResetBtn, _SaveBtn, _CloseBtn) and need no accessor here.
+    // The two formatted strings (ConfigProfile_ErrTunNameMismatch,
+    // ConfigProfile_WarnUnknownOutboundTag) go through Loc.Format, matching the split used by
+    // CustomRules_OpenEditorFailedMsg.
+    public static string ConfigProfile_Title                => Loc.GetString("ConfigProfile_Title");
+    public static string ConfigProfile_LoadFailed           => Loc.GetString("ConfigProfile_LoadFailed");
+    public static string ConfigProfile_ExternalChangeWarning => Loc.GetString("ConfigProfile_ExternalChangeWarning");
+    public static string ConfigProfile_SaveFailedTitle      => Loc.GetString("ConfigProfile_SaveFailedTitle");
+    public static string ConfigProfile_SettingsUnwritable   => Loc.GetString("ConfigProfile_SettingsUnwritable");
+    public static string ConfigProfile_Saved                => Loc.GetString("ConfigProfile_Saved");
+    public static string ConfigProfile_SavedInactive        => Loc.GetString("ConfigProfile_SavedInactive");
+    public static string ConfigProfile_ResetTitle           => Loc.GetString("ConfigProfile_ResetTitle");
+    public static string ConfigProfile_ResetMsg             => Loc.GetString("ConfigProfile_ResetMsg");
+    public static string ConfigProfile_PreviewStaleTitle    => Loc.GetString("ConfigProfile_PreviewStaleTitle");
+    public static string ConfigProfile_PreviewStaleMsg      => Loc.GetString("ConfigProfile_PreviewStaleMsg");
+    public static string ConfigProfile_PreviewTitle         => Loc.GetString("ConfigProfile_PreviewTitle");
+    public static string ConfigProfile_PreviewNoServer      => Loc.GetString("ConfigProfile_PreviewNoServer");
+    public static string ConfigProfile_DiscardTitle         => Loc.GetString("ConfigProfile_DiscardTitle");
+    public static string ConfigProfile_DiscardMsg           => Loc.GetString("ConfigProfile_DiscardMsg");
+    public static string ConfigProfile_OpenFolderTooltip    => Loc.GetString("ConfigProfile_OpenFolderTooltip");
+    public static string ConfigProfile_PreviewTooltip       => Loc.GetString("ConfigProfile_PreviewTooltip");
+    public static string ConfigProfile_EditorAutomationName => Loc.GetString("ConfigProfile_EditorAutomationName");
+
+    public static string ConfigProfile_ErrEmpty                 => Loc.GetString("ConfigProfile_ErrEmpty");
+    public static string ConfigProfile_ErrRootMustBeObject      => Loc.GetString("ConfigProfile_ErrRootMustBeObject");
+    public static string ConfigProfile_ErrOutboundsNotAllowed   => Loc.GetString("ConfigProfile_ErrOutboundsNotAllowed");
+    public static string ConfigProfile_ErrInboundsMissing       => Loc.GetString("ConfigProfile_ErrInboundsMissing");
+    public static string ConfigProfile_ErrTunInboundMissing     => Loc.GetString("ConfigProfile_ErrTunInboundMissing");
+    public static string ConfigProfile_ErrTunInboundNotAllowed  => Loc.GetString("ConfigProfile_ErrTunInboundNotAllowed");
+
+    public static string ConfigProfile_WarnNoSystemProxyInbound => Loc.GetString("ConfigProfile_WarnNoSystemProxyInbound");
+    public static string ConfigProfile_WarnNoAutoSystemRouting  => Loc.GetString("ConfigProfile_WarnNoAutoSystemRouting");
 
     // settings.json failed to parse. Not profile-specific: Personalize shows it too.
     public static string Settings_InvalidTitle => Loc.GetString("Settings_InvalidTitle");
@@ -143,6 +179,7 @@ public static class L
     public static string Personalize_ImportFailed          => Loc.GetString("Personalize_ImportFailed");
     public static string Personalize_ImportSuccess         => Loc.GetString("Personalize_ImportSuccess");
     public static string Personalize_ImportAdvancedSuffix  => Loc.GetString("Personalize_ImportAdvancedSuffix");
+    public static string Personalize_ImportProfilesSuffix => Loc.GetString("Personalize_ImportProfilesSuffix");
     public static string Personalize_PresetMissingTitle    => Loc.GetString("Personalize_PresetMissingTitle");
     public static string Personalize_PresetMissingMsg      => Loc.GetString("Personalize_PresetMissingMsg");
     public static string Personalize_ExportTooltip         => Loc.GetString("Personalize_ExportTooltip");
