@@ -170,12 +170,8 @@ namespace XrayUI.ViewModels
         /// </summary>
         public async Task<bool> ApplyPendingChangesAsync()
         {
-            var s = await _settings.LoadSettingsAsync();
-            if (s.IsFailedLoadFallback)
-            {
-                await _dialogs.ShowErrorAsync(L.Settings_InvalidTitle, L.Settings_InvalidMsg);
-                return false;
-            }
+            var s = await LoadWritableSettingsAsync();
+            if (s is null) return false;
 
             s.Language = LanguageHelper.TagAt(SelectedLanguageIndex);
             s.RoutingRegion = SelectedRegionCode;
@@ -285,22 +281,16 @@ namespace XrayUI.ViewModels
             new PresetExportService(_settings).ExportAsync();
 
         /// <summary>
-        /// Drops the cache so hand-edits made while this panel was open are picked up, then
-        /// reports whether settings.json is usable. <see cref="SettingsService"/> already refuses
-        /// to save over a failed load, so this is not what prevents the data loss — it is what
-        /// tells the user why their change went nowhere, at the one moment they can act on it.
+        /// Returns the settings instance the caller can edit, or reports a failed load.
+        /// Reload on Done to pick up hand-edits made while the panel was open.
         /// </summary>
-        public async Task<bool> ValidateSettingsFileAsync()
+        private async Task<AppSettings?> LoadWritableSettingsAsync(bool reload = false)
         {
-            var s = await _settings.ReloadAsync();
+            var settings = await (reload ? _settings.ReloadAsync() : _settings.LoadSettingsAsync());
+            if (!settings.IsFailedLoadFallback) return settings;
 
-            if (s.IsFailedLoadFallback)
-            {
-                await _dialogs.ShowErrorAsync(L.Settings_InvalidTitle, L.Settings_InvalidMsg);
-                return false;
-            }
-
-            return true;
+            await _dialogs.ShowErrorAsync(L.Settings_InvalidTitle, L.Settings_InvalidMsg);
+            return null;
         }
 
         public static bool PresetExists() => PresetImportService.PresetExists();
@@ -347,13 +337,9 @@ namespace XrayUI.ViewModels
         [RelayCommand]
         private async Task Done()
         {
-            // On a settings.json the user has left unparseable the save below is refused, so
-            // bail here where there is still somewhere to say why. Doubles as the cache drop
-            // that makes the load pick up hand-edits made while this panel was open, so Done
-            // cannot write stale values back over freshly hand-edited ones.
-            if (!await ValidateSettingsFileAsync()) return;
+            var s = await LoadWritableSettingsAsync(reload: true);
+            if (s is null) return;
 
-            var s = await _settings.LoadSettingsAsync();
             ProtocolColorStore.SaveTo(s);
             GlobalHotkeyStore.SaveTo(s);
             s.ThemeSetting = ThemeHelper.CurrentTheme switch
