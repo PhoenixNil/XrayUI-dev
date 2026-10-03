@@ -41,8 +41,11 @@ namespace XrayUI.ViewModels
         [NotifyPropertyChangedFor(nameof(FullModeVisibility))]
         public partial bool IsMiniMode { get; set; }
 
-        public string ActiveServerName =>
-            (ControlPanel.IsRunning ? _activeServer : ServerList.SelectedServer)?.Name ?? L.Main_NoSelection;
+        // The node the UI describes: the live one while connected, otherwise the list selection,
+        // whichever the start button would act on.
+        public ServerEntry? DisplayedServer => ControlPanel.IsRunning ? _activeServer : ServerList.SelectedServer;
+
+        public string ActiveServerName => DisplayedServer?.Name ?? L.Main_NoSelection;
 
         // Tray icon tooltip. Uses (IsRunning || IsReapplying) so it stays in the "running"
         // form across a node switch — IsReapplying brackets the stop→start gap (the same
@@ -433,6 +436,7 @@ namespace XrayUI.ViewModels
             if (e.PropertyName == nameof(ServerListViewModel.SelectedServer))
             {
                 ServerDetail.SelectedServer = ServerList.SelectedServer;
+                OnPropertyChanged(nameof(DisplayedServer));
                 OnPropertyChanged(nameof(ActiveServerName));
                 OnPropertyChanged(nameof(TrayTooltip));
                 ControlPanel.NotifyStartStopStateChanged();
@@ -461,6 +465,7 @@ namespace XrayUI.ViewModels
                 // logically active. Clear so the UI doesn't claim a stale Active state.
                 UpdateActiveServer(null);
                 ServerList.IsProxyRunning = ControlPanel.IsRunning;
+                OnPropertyChanged(nameof(DisplayedServer));
                 OnPropertyChanged(nameof(ActiveServerName));
                 OnPropertyChanged(nameof(TrayTooltip));
 
@@ -536,6 +541,7 @@ namespace XrayUI.ViewModels
             if (isRunning)
                 _ = _jumpList.RefreshAsync(ServerList.Servers, ControlPanel.ActiveServerId);
             ServerList.IsProxyRunning = isRunning;
+            OnPropertyChanged(nameof(DisplayedServer));
             OnPropertyChanged(nameof(ActiveServerName));
             OnPropertyChanged(nameof(TrayTooltip));
             OnPropertyChanged(nameof(MiniIsRunning));

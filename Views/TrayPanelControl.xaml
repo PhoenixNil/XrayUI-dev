@@ -1,0 +1,229 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+
+<UserControl x:Class="XrayUI.Views.TrayPanelControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+
+    <!-- Fixed width: the panel window sizes itself to this content. -->
+    <Grid Width="340"
+          Padding="16"
+          RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header: the tray icon's own blue/green picture, then start or stop, the main window
+             and quit. -->
+        <Grid ColumnDefinitions="Auto,*,Auto"
+              ColumnSpacing="8">
+            <Image Width="20"
+                   Height="20"
+                   VerticalAlignment="Center"
+                   Source="{x:Bind AppIconFor(ViewModel.ShowsRunning), Mode=OneWay}" />
+            <TextBlock x:Uid="TrayPanel_Title"
+                       Grid.Column="1"
+                       Style="{StaticResource BodyStrongTextBlockStyle}"
+                       VerticalAlignment="Center"
+                       Text="快速访问" />
+            
+
+            <StackPanel Grid.Column="2"
+                        Orientation="Horizontal"
+                        Spacing="4">
+                <!-- One button keeps its focus while the glyph morphs between play and stop. -->
+                <Button x:Name="ConnectionButton"
+                        AutomationProperties.AutomationId="TrayPanelConnectionButton"
+                        Width="28"
+                        Height="28"
+                        VerticalAlignment="Center"
+                        Padding="0"
+                        BorderThickness="0"
+                        Command="{x:Bind ViewModel.ToggleConnectionCommand}">
+                    <Button.Resources>
+                        <SolidColorBrush x:Key="IdleForeground" Color="{ThemeResource TextFillColorPrimary}" />
+                        <SolidColorBrush x:Key="IdleHoverBackground" Color="{ThemeResource ControlFillColorSecondary}" />
+                        <SolidColorBrush x:Key="IdlePressedBackground" Color="{ThemeResource ControlFillColorTertiary}" />
+                        <SolidColorBrush x:Key="ConnectionBackground" Color="Transparent" />
+                        <SolidColorBrush x:Key="ConnectionForeground" Color="{ThemeResource TextFillColorPrimary}" />
+                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{ThemeResource ControlFillColorSecondary}" />
+                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{ThemeResource ControlFillColorTertiary}" />
+                        <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="Transparent" />
+                    </Button.Resources>
+                    <!-- Drawn on a 24-unit grid and scaled to 15, which puts the stroke at about the
+                         0.8 DIP of the neighbouring icons. Play and stop are both four points, so a
+                         storyboard can move each point from one shape to the other. -->
+                    <Viewbox Width="15"
+                             Height="15"
+                             IsHitTestVisible="False">
+                        <Path x:Name="ConnectionGlyph"
+                              Width="24"
+                              Height="24"
+                              StrokeThickness="1.4"
+                              StrokeLineJoin="Round">
+                            <Path.Data>
+                                <PathGeometry>
+                                    <PathFigure x:Name="GlyphFigure"
+                                                IsClosed="True">
+                                        <LineSegment x:Name="GlyphSegment1" />
+                                        <LineSegment x:Name="GlyphSegment2" />
+                                        <LineSegment x:Name="GlyphSegment3" />
+                                    </PathFigure>
+                                </PathGeometry>
+                            </Path.Data>
+                        </Path>
+                    </Viewbox>
+                </Button>
+
+                <Button x:Name="OpenMainButton"
+                        x:Uid="TrayPanel_OpenMain"
+                        AutomationProperties.AutomationId="TrayPanelOpenMainButton"
+                        Height="32"
+                        Padding="12,0"
+                        Content="主界面"
+                        Command="{x:Bind ViewModel.OpenMainWindowCommand}" />
+
+                <!-- Fluent System Icons arrow_exit_20_regular: Segoe has no sign-out glyph that
+                     also exists on Windows 10. -->
+                <Button x:Name="ExitButton"
+                        AutomationProperties.AutomationId="TrayPanelExitButton"
+                        Width="32"
+                        Height="32"
+                        Padding="0"
+                        Command="{x:Bind ViewModel.ExitApplicationCommand}">
+                    <Viewbox Width="16"
+                             Height="16">
+                        <Grid Width="20"
+                              Height="20">
+                            <PathIcon Data="M12.5 17C12.7761 17 13 16.7761 13 16.5C13 16.2239 12.7761 16 12.5 16H6C4.89543 16 4 15.1046 4 14V6C4 4.89543 4.89543 4 6 4H12.5C12.7761 4 13 3.77614 13 3.5C13 3.22386 12.7761 3 12.5 3H6C4.34315 3 3 4.34315 3 6V14C3 15.6569 4.34315 17 6 17H12.5ZM13.6464 6.14645C13.8417 5.95118 14.1583 5.95118 14.3536 6.14645L17.8536 9.64645C18.0488 9.84171 18.0488 10.1583 17.8536 10.3536L14.3536 13.8536C14.1583 14.0488 13.8417 14.0488 13.6464 13.8536C13.4512 13.6583 13.4512 13.3417 13.6464 13.1464L16.2929 10.5H7.5C7.22386 10.5 7 10.2761 7 10C7 9.72386 7.22386 9.5 7.5 9.5H16.2929L13.6464 6.85355C13.4512 6.65829 13.4512 6.34171 13.6464 6.14645Z" />
+                        </Grid>
+                    </Viewbox>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- The node's name across the whole width, so a long one is cut at the panel's edge and
+             not wherever the state text happens to begin. Underneath: its protocol in the
+             protocol's colour, with the state level with it on the right. -->
+        <Grid Grid.Row="1"
+              ColumnDefinitions="*,Auto"
+              RowDefinitions="Auto,Auto"
+              ColumnSpacing="16"
+              RowSpacing="2">
+            <TextBlock Grid.ColumnSpan="2"
+                       Style="{StaticResource BodyStrongTextBlockStyle}"
+                       TextTrimming="CharacterEllipsis"
+                       Text="{x:Bind ViewModel.ServerName, Mode=OneWay}" />
+
+            <Grid Grid.Row="1"
+                  VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
+                           FontWeight="SemiBold"
+                           Foreground="{x:Bind ViewModel.Protocol, Mode=OneWay, Converter={StaticResource ProtocolToBrushConverter}}"
+                           Text="{x:Bind ViewModel.ProtocolText, Mode=OneWay}"
+                           Visibility="{x:Bind ViewModel.ProtocolVisibility, Mode=OneWay}" />
+                <TextBlock x:Uid="TrayPanel_NodeLabel"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="节点"
+                           Visibility="{x:Bind ViewModel.NodeLabelVisibility, Mode=OneWay}" />
+            </Grid>
+
+            <StackPanel Grid.Row="1"
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="6">
+                <Ellipse Width="8"
+                         Height="8"
+                         VerticalAlignment="Center"
+                         Fill="{StaticResource StateSuccessBrush}"
+                         Visibility="{x:Bind ViewModel.ConnectedDotVisibility, Mode=OneWay}" />
+                <Ellipse Width="8"
+                         Height="8"
+                         VerticalAlignment="Center"
+                         Fill="{StaticResource StateNeutralBrush}"
+                         Visibility="{x:Bind ViewModel.IdleDotVisibility, Mode=OneWay}" />
+                <ProgressRing Width="12"
+                              Height="12"
+                              MinWidth="12"
+                              MinHeight="12"
+                              VerticalAlignment="Center"
+                              IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
+                              Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <!-- Held to the 16 DIP line of the caption beside it, so this row is no taller than
+                     the protocol line was. -->
+                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}"
+                           VerticalAlignment="Center"
+                           LineHeight="16"
+                           LineStackingStrategy="BlockLineHeight"
+                           Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Routing mode -->
+        <Grid Grid.Row="2"
+              ColumnDefinitions="*,*"
+              ColumnSpacing="8">
+            <ToggleButton x:Uid="TrayPanel_RoutingSmart"
+                          AutomationProperties.AutomationId="TrayPanelSmartRoutingButton"
+                          HorizontalAlignment="Stretch"
+                          Content="智能分流"
+                          IsEnabled="{x:Bind ViewModel.CanChangeRouting, Mode=OneWay}"
+                          IsChecked="{x:Bind ViewModel.IsSmartRouting, Mode=OneWay}"
+                          Command="{x:Bind ViewModel.SelectRoutingCommand}"
+                          CommandParameter="smart" />
+            <ToggleButton x:Uid="TrayPanel_RoutingGlobal"
+                          AutomationProperties.AutomationId="TrayPanelGlobalRoutingButton"
+                          Grid.Column="1"
+                          HorizontalAlignment="Stretch"
+                          Content="全局路由"
+                          IsEnabled="{x:Bind ViewModel.CanChangeRouting, Mode=OneWay}"
+                          IsChecked="{x:Bind ViewModel.IsGlobalRouting, Mode=OneWay}"
+                          Command="{x:Bind ViewModel.SelectRoutingCommand}"
+                          CommandParameter="global" />
+        </Grid>
+
+        <!-- Proxy switches, side by side -->
+        <Grid Grid.Row="3"
+              ColumnDefinitions="*,*"
+              ColumnSpacing="8">
+            <StackPanel Orientation="Horizontal"
+                        Spacing="12">
+                <TextBlock x:Name="SystemProxyLabel"
+                           x:Uid="TrayPanel_SystemProxyLabel"
+                           VerticalAlignment="Center"
+                           Text="系统代理" />
+                <ToggleSwitch AutomationProperties.AutomationId="TrayPanelSystemProxySwitch"
+                              AutomationProperties.LabeledBy="{x:Bind SystemProxyLabel}"
+                              MinWidth="0"
+                              VerticalAlignment="Center"
+                              OnContent=""
+                              OffContent=""
+                              IsEnabled="{x:Bind ViewModel.CanToggleSystemProxy, Mode=OneWay}"
+                              IsOn="{x:Bind ViewModel.IsSystemProxyOn, Mode=TwoWay}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="12">
+                <TextBlock x:Name="TunLabel"
+                           x:Uid="TrayPanel_TunLabel"
+                           VerticalAlignment="Center"
+                           Text="TUN" />
+                <ToggleSwitch AutomationProperties.AutomationId="TrayPanelTunSwitch"
+                              AutomationProperties.LabeledBy="{x:Bind TunLabel}"
+                              MinWidth="0"
+                              VerticalAlignment="Center"
+                              OnContent=""
+                              OffContent=""
+                              IsEnabled="{x:Bind ViewModel.CanToggleTun, Mode=OneWay}"
+                              IsOn="{x:Bind ViewModel.IsTunOn, Mode=TwoWay}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>
