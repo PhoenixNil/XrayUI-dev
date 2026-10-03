@@ -44,20 +44,22 @@
                         VerticalAlignment="Center"
                         Padding="0"
                         BorderThickness="0"
+                        Background="Transparent"
                         Command="{x:Bind ViewModel.ToggleConnectionCommand}">
                     <Button.Resources>
                         <SolidColorBrush x:Key="IdleForeground" Color="{ThemeResource TextFillColorPrimary}" />
-                        <SolidColorBrush x:Key="IdleHoverBackground" Color="{ThemeResource ControlFillColorSecondary}" />
-                        <SolidColorBrush x:Key="IdlePressedBackground" Color="{ThemeResource ControlFillColorTertiary}" />
-                        <SolidColorBrush x:Key="ConnectionBackground" Color="Transparent" />
-                        <SolidColorBrush x:Key="ConnectionForeground" Color="{ThemeResource TextFillColorPrimary}" />
+                        <SolidColorBrush x:Key="StopForeground" Color="{ThemeResource SystemFillColorCritical}" />
+                        <SolidColorBrush x:Key="ConnectionStroke" Color="{ThemeResource TextFillColorPrimary}" />
+                        <SolidColorBrush x:Key="ConnectionFill" Color="Transparent" />
                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{ThemeResource ControlFillColorSecondary}" />
                         <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{ThemeResource ControlFillColorTertiary}" />
                         <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="Transparent" />
                     </Button.Resources>
-                    <!-- Drawn on a 24-unit grid and scaled to 15, which puts the stroke at about the
-                         0.8 DIP of the neighbouring icons. Play and stop are both four points, so a
-                         storyboard can move each point from one shape to the other. -->
+                    <!-- Drawn on a 24-unit grid and scaled to 15. Idle, play is a 1.4-unit outline,
+                         about the 0.8 DIP of the neighbouring icons. Connected, stop is a solid red
+                         square like the Snipping Tool's: a thick stroke in the fill colour rounds its
+                         corners. Play and stop are both four points, so a storyboard can move each
+                         point from one shape to the other. -->
                     <Viewbox Width="15"
                              Height="15"
                              IsHitTestVisible="False">

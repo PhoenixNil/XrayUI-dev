@@ -6,7 +6,6 @@ using Microsoft.UI.Xaml.Media.Animation;
 using Windows.Foundation;
 using Windows.UI;
 using Windows.UI.ViewManagement;
-using Colors = Microsoft.UI.Colors;
 using XrayUI.Helpers;
 
 namespace XrayUI.Views
@@ -15,10 +14,14 @@ namespace XrayUI.Views
     {
         // The connection glyph on its 24-unit grid, one point for each corner of the square.
         // The triangle's tip counts twice, so the morph opens it into the square's right edge
-        // and the shape stays symmetric top to bottom the whole way.
+        // and the shape stays symmetric top to bottom the whole way. The square sits inset by half
+        // its stroke: the round-joined stroke draws the outer edge at 1..23 (13.75 DIP once the
+        // Viewbox scales it) and makes the corner radius half its thickness, 4 units (2.5 DIP).
         private static readonly Point[] PlayGlyph = [new(6, 4.5), new(20, 12), new(20, 12), new(6, 19.5)];
-        private static readonly Point[] StopGlyph = [new(4, 4), new(20, 4), new(20, 20), new(4, 20)];
+        private static readonly Point[] StopGlyph = [new(5, 5), new(19, 5), new(19, 19), new(5, 19)];
         private static readonly TimeSpan GlyphMorphDuration = TimeSpan.FromMilliseconds(300);
+        private const double PlayStrokeThickness = 1.4;
+        private const double StopStrokeThickness = 8;
 
         private ImageSource? _idleIcon;
         private ImageSource? _runningIcon;
@@ -37,8 +40,8 @@ namespace XrayUI.Views
             ViewModel = viewModel;
             InitializeComponent();
 
-            ConnectionButton.Background = LocalBrush("ConnectionBackground");
-            ConnectionGlyph.Stroke = LocalBrush("ConnectionForeground");
+            ConnectionGlyph.Stroke = LocalBrush("ConnectionStroke");
+            ConnectionGlyph.Fill = LocalBrush("ConnectionFill");
             UpdateConnectionAppearance();
             SnapConnectionGlyph();
             Loaded += OnLoaded;
@@ -80,18 +83,22 @@ namespace XrayUI.Views
         private void UpdateConnectionAppearance()
         {
             var running = ViewModel.IsConnected;
-            LocalBrush("ConnectionBackground").Color = running ? DangerColor("DangerAccentButtonBackground") : Colors.Transparent;
-            LocalBrush("ButtonBackgroundPointerOver").Color = running ? DangerColor("DangerAccentButtonBackgroundPointerOver") : LocalBrush("IdleHoverBackground").Color;
-            LocalBrush("ButtonBackgroundPressed").Color = running ? DangerColor("DangerAccentButtonBackgroundPressed") : LocalBrush("IdlePressedBackground").Color;
-            LocalBrush("ButtonBackgroundDisabled").Color = running ? DangerColor("DangerAccentButtonBackgroundDisabled") : Colors.Transparent;
-            LocalBrush("ConnectionForeground").Color = running ? Colors.White : LocalBrush("IdleForeground").Color;
+            LocalBrush("ConnectionStroke").Color = StrokeColor(running);
+            LocalBrush("ConnectionFill").Color = FillColor(running);
+            ConnectionGlyph.StrokeThickness = running ? StopStrokeThickness : PlayStrokeThickness;
             SetLabel(ConnectionButton, running ? L.ControlPanel_Stop : L.ControlPanel_Start);
             UpdateGlyphOpacity();
         }
 
         private SolidColorBrush LocalBrush(string key) => (SolidColorBrush)ConnectionButton.Resources[key];
 
-        private static Color DangerColor(string key) => ((SolidColorBrush)Application.Current.Resources[key]).Color;
+        // Read from the button's own resources, so it follows the panel's actual theme.
+        private Color StopColor => LocalBrush("StopForeground").Color;
+
+        private Color StrokeColor(bool running) => running ? StopColor : LocalBrush("IdleForeground").Color;
+
+        // Idle, the fill is the stop red at zero alpha, so fading it in never passes through black.
+        private Color FillColor(bool running) => running ? StopColor : StopColor with { A = 0 };
 
         private void UpdateGlyphOpacity() => ConnectionGlyph.Opacity = ConnectionButton.IsEnabled ? 1 : 0.4;
 
@@ -140,7 +147,32 @@ namespace XrayUI.Views
                 Storyboard.SetTargetProperty(point, i == 0 ? "StartPoint" : "Point");
                 _glyphMorph.Children.Add(point);
             }
+            AddMorph(new ColorAnimation { From = StrokeColor(!connected), To = StrokeColor(connected) },
+                LocalBrush("ConnectionStroke"), "Color");
+            AddMorph(new ColorAnimation { From = FillColor(!connected), To = FillColor(connected) },
+                LocalBrush("ConnectionFill"), "Color");
+            AddMorph(new DoubleAnimation
+            {
+                From = connected ? PlayStrokeThickness : StopStrokeThickness,
+                To = connected ? StopStrokeThickness : PlayStrokeThickness,
+            }, ConnectionGlyph, "StrokeThickness");
             _glyphMorph.Begin();
+        }
+
+        // Same timing as the points, ending on the values UpdateConnectionAppearance already set.
+        private void AddMorph(Timeline animation, DependencyObject target, string property)
+        {
+            animation.Duration = GlyphMorphDuration;
+            animation.FillBehavior = FillBehavior.Stop;
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            switch (animation)
+            {
+                case ColorAnimation color: color.EnableDependentAnimation = true; color.EasingFunction = ease; break;
+                case DoubleAnimation number: number.EnableDependentAnimation = true; number.EasingFunction = ease; break;
+            }
+            Storyboard.SetTarget(animation, target);
+            Storyboard.SetTargetProperty(animation, property);
+            _glyphMorph!.Children.Add(animation);
         }
 
         // Point 0 starts the figure; the others end its three line segments. Reached through
