@@ -11,6 +11,7 @@
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
+    <WebView2EnableCsWinRTProjectionExcludeCoreRef>true</WebView2EnableCsWinRTProjectionExcludeCoreRef>
     <!-- PRI fallback target when the system locale has no matching Strings/{lang}/Resources.resw.
          Keeps non-zh/en users (ko/ja/ru/...) on English rather than relying on PRI's
          alphabetical default. -->
@@ -111,7 +112,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>compile</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="WinUIEx" Version="2.9.1" />
+    <PackageReference Include="WinUIEx" Version="2.9.3" />
     <!-- Clash YAML import: parsed via YamlDotNet's reflection-free RepresentationModel
          (YamlStream) only — never the typed Deserializer — to stay AOT/trim-safe. -->
     <PackageReference Include="YamlDotNet" Version="18.0.0" />
