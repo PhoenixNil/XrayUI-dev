@@ -735,7 +735,7 @@ namespace XrayUI.ViewModels
         /// instead of the generated config. Which slot applies follows the TUN toggle, so this
         /// flips as the user switches modes.
         /// </summary>
-        private bool IsCustomConfigActive => IsTunMode ? _useTunConfigProfile : _useProxyConfigProfile;
+        public bool IsCustomConfigActive => IsTunMode ? _useTunConfigProfile : _useProxyConfigProfile;
 
         /// <summary>Gate for the gear-menu items a config profile takes ownership of: local
         /// port, routing mode, custom rules and DNS all live in the profile once it is on, so
@@ -753,6 +753,7 @@ namespace XrayUI.ViewModels
 
         private void NotifyConfigProfileStateChanged()
         {
+            OnPropertyChanged(nameof(IsCustomConfigActive));
             OnPropertyChanged(nameof(IsBuiltInConfigEnabled));
             OnPropertyChanged(nameof(RoutingModeText));
         }

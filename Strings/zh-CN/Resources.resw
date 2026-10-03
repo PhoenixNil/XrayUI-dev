@@ -142,6 +142,30 @@
   <data name="Tray_TooltipIdle" xml:space="preserve">
     <value>XrayUI - 未连接</value>
   </data>
+  <data name="TrayPanel_Connected" xml:space="preserve">
+    <value>已连接</value>
+  </data>
+  <data name="TrayPanel_Title.Text" xml:space="preserve">
+    <value>快速访问</value>
+  </data>
+  <data name="TrayPanel_OpenMain.Content" xml:space="preserve">
+    <value>主界面</value>
+  </data>
+  <data name="TrayPanel_RoutingSmart.Content" xml:space="preserve">
+    <value>智能分流</value>
+  </data>
+  <data name="TrayPanel_RoutingGlobal.Content" xml:space="preserve">
+    <value>全局路由</value>
+  </data>
+  <data name="TrayPanel_SystemProxyLabel.Text" xml:space="preserve">
+    <value>系统代理</value>
+  </data>
+  <data name="TrayPanel_TunLabel.Text" xml:space="preserve">
+    <value>TUN</value>
+  </data>
+  <data name="TrayPanel_NodeLabel.Text" xml:space="preserve">
+    <value>节点</value>
+  </data>
   <data name="ServerList_Edit" xml:space="preserve">
     <value>编辑</value>
   </data>

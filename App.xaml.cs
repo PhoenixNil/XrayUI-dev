@@ -413,7 +413,7 @@ namespace XrayUI
                 }
                 while (!_cleanupStarted && _pendingConnections.TryDequeue(out var pending))
                 {
-                    mainWindow.ShowForJumpList();
+                    mainWindow.ShowFullWindow();
                     await mainWindow.ViewModel.ConnectFromJumpListAsync(pending.Request, pending.UseDefaultMode);
                 }
             }

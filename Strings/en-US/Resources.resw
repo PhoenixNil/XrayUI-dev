@@ -142,6 +142,30 @@
   <data name="Tray_TooltipIdle" xml:space="preserve">
     <value>XrayUI - Idle</value>
   </data>
+  <data name="TrayPanel_Connected" xml:space="preserve">
+    <value>Connected</value>
+  </data>
+  <data name="TrayPanel_Title.Text" xml:space="preserve">
+    <value>Quick Access</value>
+  </data>
+  <data name="TrayPanel_OpenMain.Content" xml:space="preserve">
+    <value>Main Window</value>
+  </data>
+  <data name="TrayPanel_RoutingSmart.Content" xml:space="preserve">
+    <value>Smart</value>
+  </data>
+  <data name="TrayPanel_RoutingGlobal.Content" xml:space="preserve">
+    <value>Global</value>
+  </data>
+  <data name="TrayPanel_SystemProxyLabel.Text" xml:space="preserve">
+    <value>System Proxy</value>
+  </data>
+  <data name="TrayPanel_TunLabel.Text" xml:space="preserve">
+    <value>TUN</value>
+  </data>
+  <data name="TrayPanel_NodeLabel.Text" xml:space="preserve">
+    <value>Node</value>
+  </data>
   <data name="ServerList_Edit" xml:space="preserve">
     <value>Edit</value>
   </data>

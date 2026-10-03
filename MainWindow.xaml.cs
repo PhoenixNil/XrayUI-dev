@@ -45,6 +45,11 @@ namespace XrayUI
         // Set when we parked the window off-screen at startup; cleared after
         // we re-center it on the first user-initiated show (tray click).
         private bool _needsCenterOnFirstShow;
+        // Opened by a left click on the tray icon; created on first use and kept.
+        private Views.TrayPanelWindow? _trayPanel;
+        // When and where the click that last opened the tray panel landed; see IsSecondTrayClick.
+        private long _trayClickAt;
+        private NativePoint _trayClickPoint;
 
         private const uint WmQueryEndSession = 0x0011;
         private const uint WmEndSession = 0x0016;
@@ -69,7 +74,7 @@ namespace XrayUI
         private readonly TaskCompletionSource _initialization = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal Task Initialization => _initialization.Task;
 
-        internal void ShowForJumpList()
+        internal void ShowFullWindow()
         {
             RestoreFromTray();
             SetMiniMode(false);
@@ -85,7 +90,7 @@ namespace XrayUI
             var xrayService     = new XrayService();
             var tunService      = new TunService();
             var startupService  = new StartupService();
-            var dialogService   = new DialogService(() => _initialized ? Content?.XamlRoot : null);
+            var dialogService   = new DialogService(() => _initialized ? GetDialogXamlRoot() : null);
             var updateService   = new UpdateService();
 
             ViewModel = new MainViewModel(dialogService, settingsService, xrayService, tunService, startupService, updateService);
@@ -230,7 +235,8 @@ namespace XrayUI
             try
             {
                 trayIcon = new TrayIcon(TrayIconId, iconPath, ViewModel.TrayTooltip);
-                trayIcon.Selected += (_, _) => RestoreFromTray();
+                trayIcon.Selected += OnTraySelected;
+                trayIcon.LeftDoubleClick += OnTrayLeftDoubleClick;
                 trayIcon.ContextMenu += (_, e) => e.Flyout = BuildTrayContextMenu();
                 trayIcon.IsVisible = true;
                 return trayIcon;
@@ -252,6 +258,81 @@ namespace XrayUI
             if (path is null || !File.Exists(path)) return;
             AppWindow.SetIcon(path);
             _trayIcon?.SetIcon(path);
+        }
+
+        // A click opens the tray panel and a double-click restores the window. The panel opens on
+        // the first click, so a double-click shows it briefly before the window takes over — the
+        // price of a panel that opens on the click rather than after the double-click time.
+        private void OnTraySelected(TrayIcon sender, TrayIconEventArgs args)
+        {
+            if (IsSecondTrayClick())
+            {
+                CloseTrayPanelAndRestore();
+                return;
+            }
+
+            var panel = _trayPanel ??= CreateTrayPanel();
+
+            // Open but never activated, so light dismiss can't close it: the icon toggles it.
+            if (panel.IsOpen)
+            {
+                panel.HidePanel();
+                return;
+            }
+
+            // Clicking the icon while the panel is open deactivates it first, which light-dismisses
+            // it; the same click then arrives here and must not reopen it, or the icon could never
+            // close the panel.
+            if (Environment.TickCount64 - panel.LastHiddenAt < GetDoubleClickTime()) return;
+
+            _trayClickAt = Environment.TickCount64;
+            _ = GetCursorPos(out _trayClickPoint);
+            panel.ShowPanel(new TrayPanelViewModel(
+                ViewModel, openMainWindow: CloseTrayPanelAndRestore, exitApplication: ExitApplication));
+        }
+
+        private void OnTrayLeftDoubleClick(TrayIcon sender, TrayIconEventArgs args) => CloseTrayPanelAndRestore();
+
+        // The panel takes activation on the first click, which can leave Windows unable to see the
+        // second as part of a double-click: it may arrive as a plain click, or only as the click
+        // that light-dismisses the panel. So a double-click is recognised here instead — a second
+        // click on the icon within the double-click time of the one that opened the panel. The
+        // opening click's record is left to expire rather than cleared on use, so every report of
+        // the second click restores the window: the light dismiss comes first, when the press has
+        // just handed the foreground to the taskbar, and can only show it; the shell's own report
+        // of the click follows with the right to bring it to the front (see RestoreFromTray).
+        private bool IsSecondTrayClick()
+        {
+            if (Environment.TickCount64 - _trayClickAt > GetDoubleClickTime()) return false;
+            if (!GetCursorPos(out var point)) return false;
+            // An icon-sized neighbourhood rather than the double-click rectangle: clicks are read
+            // after the fact, by which time the pointer may have drifted a few pixels.
+            return Math.Abs(point.X - _trayClickPoint.X) <= GetSystemMetrics(SmCxSmIcon) / 2
+                && Math.Abs(point.Y - _trayClickPoint.Y) <= GetSystemMetrics(SmCySmIcon) / 2;
+        }
+
+        private void CloseTrayPanelAndRestore()
+        {
+            _trayPanel?.HidePanel();
+            RestoreFromTray();
+        }
+
+        private Views.TrayPanelWindow CreateTrayPanel()
+        {
+            // ConfigureTray resolved both before the tray icon, and with it this panel, existed.
+            var panel = new Views.TrayPanelWindow(_idleIconPath!, _runningIconPath!);
+            panel.LightDismissed += (_, _) =>
+            {
+                if (IsSecondTrayClick())
+                    CloseTrayPanelAndRestore();
+            };
+            // Back in the tray once the panel is gone: give back what it held, as HideToTray does.
+            panel.Hidden += (_, _) =>
+            {
+                if (_isHiddenToTray)
+                    ReleaseUiResources();
+            };
+            return panel;
         }
 
         private MenuFlyout BuildTrayContextMenu()
@@ -301,6 +382,21 @@ namespace XrayUI
             return true;
         }
 
+        // Dialogs live in this window's XamlRoot. Raised while the window sits in the tray or under
+        // the tray panel — a connect from the panel or a hotkey that fails, the panel's TUN
+        // elevation prompt — one would block its caller behind a window nobody is looking at, so
+        // close the panel and bring the window back first, at full size: the mini window is too
+        // small to host a dialog.
+        private XamlRoot? GetDialogXamlRoot()
+        {
+            if (_isHiddenToTray || _trayPanel?.IsOpen == true)
+            {
+                _trayPanel?.HidePanel();
+                ShowFullWindow();
+            }
+            return Content?.XamlRoot;
+        }
+
         internal void RestoreFromTray()
         {
             _isHiddenToTray = false;
@@ -314,6 +410,13 @@ namespace XrayUI
             }
 
             Activate();
+
+            // Activate never brings the window to the front by itself: it ends in SetActiveWindow,
+            // which does not raise a background app, and once the window is visible calling it again
+            // changes nothing. In the tray we are such an app, allowed the foreground only while
+            // handling the shell's report of a click on the icon, so ask for it explicitly; refused,
+            // Windows flashes the taskbar button instead.
+            _ = this.SetForegroundWindow();
         }
 
         private void HandleHotkeyMessage(int id)
@@ -708,6 +811,26 @@ namespace XrayUI
 
         [DllImport("user32.dll")]
         private static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetDoubleClickTime();
+
+        private const int SmCxSmIcon = 49;
+        private const int SmCySmIcon = 50;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativePoint
+        {
+            public int X;
+            public int Y;
+        }
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetCursorPos(out NativePoint point);
+
+        [DllImport("user32.dll")]
+        private static extern int GetSystemMetrics(int index);
 
         [DllImport("kernel32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
