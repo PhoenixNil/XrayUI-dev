@@ -73,7 +73,7 @@
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <ToggleSwitch x:Name="Ipv6ToggleSwitch"
                                   Grid.Column="1"
-                                  AutomationProperties.LabeledBy="{x:Bind Ipv6LabelText}"
+                                  AutomationProperties.LabeledBy="{x:Bind Ipv6LabelText, Mode=OneTime}"
                                   MinWidth="0"
                                   OnContent=""
                                   OffContent=""

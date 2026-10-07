@@ -202,7 +202,7 @@
                            VerticalAlignment="Center"
                            Text="系统代理" />
                 <ToggleSwitch AutomationProperties.AutomationId="TrayPanelSystemProxySwitch"
-                              AutomationProperties.LabeledBy="{x:Bind SystemProxyLabel}"
+                              AutomationProperties.LabeledBy="{x:Bind SystemProxyLabel, Mode=OneTime}"
                               MinWidth="0"
                               VerticalAlignment="Center"
                               OnContent=""
@@ -218,7 +218,7 @@
                            VerticalAlignment="Center"
                            Text="TUN" />
                 <ToggleSwitch AutomationProperties.AutomationId="TrayPanelTunSwitch"
-                              AutomationProperties.LabeledBy="{x:Bind TunLabel}"
+                              AutomationProperties.LabeledBy="{x:Bind TunLabel, Mode=OneTime}"
                               MinWidth="0"
                               VerticalAlignment="Center"
                               OnContent=""

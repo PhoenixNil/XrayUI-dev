@@ -130,7 +130,7 @@
                                       SelectedIndex="{x:Bind ViewModel.SelectedLanguageIndex, Mode=TwoWay}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="helpers:LanguageInfo">
-                                        <TextBlock Text="{x:Bind DisplayName}" />
+                                        <TextBlock Text="{x:Bind DisplayName, Mode=OneTime}" />
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
@@ -555,7 +555,7 @@
                                        VerticalAlignment="Center" />
 
                             <ToggleSwitch Grid.Column="3"
-                                          AutomationProperties.LabeledBy="{x:Bind StartupLabel}"
+                                          AutomationProperties.LabeledBy="{x:Bind StartupLabel, Mode=OneTime}"
                                           IsOn="{x:Bind ViewModel.IsStartupEnabled, Mode=TwoWay}"
                                           OnContent=""
                                           OffContent=""
@@ -668,7 +668,7 @@
                                        VerticalAlignment="Center" />
 
                             <ToggleSwitch Grid.Column="3"
-                                          AutomationProperties.LabeledBy="{x:Bind OpenFilterPanelLabel}"
+                                          AutomationProperties.LabeledBy="{x:Bind OpenFilterPanelLabel, Mode=OneTime}"
                                           IsOn="{x:Bind ViewModel.OpenServerFilterPanelOnStartup, Mode=TwoWay}"
                                           OnContent=""
                                           OffContent=""

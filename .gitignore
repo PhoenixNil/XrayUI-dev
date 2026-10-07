@@ -1,4 +1,4 @@
-## .NET / C# / WinUI3
+﻿## .NET / C# / WinUI3
 
 # Build results
 [Dd]ebug/
@@ -95,4 +95,4 @@ Generated\ Files/
 # Claude / AI
 .claude/
 /CLAUDE.md
-/BuildAndRun.ps1
+/AGENTS.md

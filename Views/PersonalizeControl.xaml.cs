@@ -1,7 +1,7 @@
 ﻿using System;
+using System.IO;
 using Microsoft.UI.Xaml.Automation;
-using Windows.Storage;
-using Windows.Storage.Pickers;
+using Microsoft.Windows.Storage.Pickers;
 using XrayUI.Helpers;
 using XrayUI.Services;
 
@@ -99,21 +99,19 @@ namespace XrayUI.Views
                     return;
                 }
 
-                var picker = new FileOpenPicker
+                // Desktop picker (not Windows.Storage.Pickers): it returns a path and
+                // also works when the process is elevated after a TUN session.
+                var picker = new FileOpenPicker(ThemeHelper.MainWindow!.AppWindow.Id)
                 {
                     SuggestedStartLocation = PickerLocationId.ComputerFolder,
                 };
                 picker.FileTypeFilter.Add(".yaml");
                 picker.FileTypeFilter.Add(".yml");
 
-                // Unpackaged app: the picker must be associated with the host window's HWND.
-                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(ThemeHelper.MainWindow);
-                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-
                 var file = await picker.PickSingleFileAsync();
                 if (file is null) return;
 
-                var text = await FileIO.ReadTextAsync(file);
+                var text = await File.ReadAllTextAsync(file.Path);
                 var (imported, skipped) = await ViewModel.ImportClashConfigAsync(text);
 
                 if (imported == 0)

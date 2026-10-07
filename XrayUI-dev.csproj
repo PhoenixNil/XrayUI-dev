@@ -54,7 +54,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Default engine binaries (x64). Used for empty RID (`dotnet build` / BuildAndRun.ps1)
+    <!-- Default engine binaries (x64). Used for empty RID (plain `dotnet build`)
          and explicit -r win-x64 publishes. Explicit form avoids silently matching
          any future RID we haven't accounted for. -->
     <None Include="Assets\engine\xray.exe" Condition="'$(RuntimeIdentifier)' == 'win-x64' or '$(RuntimeIdentifier)' == ''">
@@ -96,6 +96,10 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.Segmented" Version="8.2.251219" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
+    <!-- Build-time only (WUI* diagnostics); nothing ships in the app output. -->
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinUIAnalyzer" Version="0.7.1">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.0.1" />
     <!-- Promote these two transitive deps of WindowsAppSDK to direct references so we can
          strip their runtime assets (DirectML.dll / onnxruntime.dll / Microsoft.Windows.AI.MachineLearning.dll).
