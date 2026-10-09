@@ -40,7 +40,11 @@ namespace XrayUI.Services
             _tunService = tunService;
         }
 
-        private const string TestUrl = "http://www.gstatic.com/generate_204";
+        // HTTPS on purpose. Some CDN/Worker-fronted nodes never relay plaintext HTTP to a domain
+        // target (and SOCKS5 here hands the core the hostname, not an IP), so the http:// form of
+        // this URL timed out on every node of such a subscription even though they browse fine.
+        // Same URL as mihomo's default health check.
+        private const string TestUrl = "https://www.gstatic.com/generate_204";
 
         // Overall budget for one server's whole warm-up-then-measure cycle. 7s (vs v2rayN's 10s):
         // a usable node returns its 204 well under this, and the shorter ceiling caps how long
