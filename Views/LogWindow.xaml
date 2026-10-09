@@ -21,24 +21,18 @@
                 <FontIconSource  Glyph="&#xE9D9;" />
             </TitleBar.IconSource>
         </TitleBar>
-
-        <!-- Log text area — one Span per buffer line, timestamp Run dimmed
-             (see LogLineParser); built in code-behind. ScrollView (not the
-             legacy ScrollViewer): its scroll bars are driven by ScrollView's
-             own controller instead of the WUX visual-state storyboards whose
-             thumb kept wedging invisible on some machines. ContentOrientation
-             must stay "Both" or the NoWrap text gets clipped instead of
-             scrolling horizontally. Padding lives on the TextBlock as Margin
-             because ScrollView doesn't apply Padding to its content. -->
+        
         <ScrollView x:Name="LogScrollViewer"
                     Grid.Row="1"
                     ContentOrientation="Both"
                     VerticalScrollBarVisibility="Auto"
                     HorizontalScrollBarVisibility="Auto">
             <TextBlock x:Name="LogTextBlock"
-                       Margin="12,12,12,0"
+                       Margin="12,12,12,16"
                        FontFamily="Cascadia Code, Consolas, Courier New"
                        FontSize="12"
+                       LineHeight="20"
+                       LineStackingStrategy="BlockLineHeight"
                        IsTextSelectionEnabled="True"
                        TextWrapping="NoWrap"
                        Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
