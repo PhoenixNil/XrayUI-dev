@@ -28,14 +28,32 @@
                    Source="{x:Bind AppIconFor(ViewModel.ShowsRunning), Mode=OneWay}" />
             <TextBlock x:Uid="TrayPanel_Title"
                        Grid.Column="1"
-                       Style="{StaticResource BodyStrongTextBlockStyle}"
+
                        VerticalAlignment="Center"
                        Text="快速访问" />
-            
+
 
             <StackPanel Grid.Column="2"
                         Orientation="Horizontal"
                         Spacing="4">
+                <!-- The default hover fill lightens, which vanishes on the light acrylic; light
+                     mode darkens instead, like the subtle buttons of Windows' own flyouts. Dark
+                     keeps the default. -->
+                <StackPanel.Resources>
+                    <ResourceDictionary>
+                        <ResourceDictionary.ThemeDictionaries>
+                            <ResourceDictionary x:Key="Light">
+                                <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
+                                <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
+                            </ResourceDictionary>
+                            <ResourceDictionary x:Key="Default">
+                                <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="ControlFillColorSecondaryBrush" />
+                                <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="ControlFillColorTertiaryBrush" />
+                            </ResourceDictionary>
+                        </ResourceDictionary.ThemeDictionaries>
+                        <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="Transparent" />
+                    </ResourceDictionary>
+                </StackPanel.Resources>
                 <!-- One button keeps its focus while the glyph morphs between play and stop. -->
                 <Button x:Name="ConnectionButton"
                         AutomationProperties.AutomationId="TrayPanelConnectionButton"
@@ -51,9 +69,6 @@
                         <SolidColorBrush x:Key="StopForeground" Color="{ThemeResource SystemFillColorCritical}" />
                         <SolidColorBrush x:Key="ConnectionStroke" Color="{ThemeResource TextFillColorPrimary}" />
                         <SolidColorBrush x:Key="ConnectionFill" Color="Transparent" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{ThemeResource ControlFillColorSecondary}" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{ThemeResource ControlFillColorTertiary}" />
-                        <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="Transparent" />
                     </Button.Resources>
                     <!-- Drawn on a 24-unit grid and scaled to 15. Idle, play is a 1.4-unit outline,
                          about the 0.8 DIP of the neighbouring icons. Connected, stop is a solid red
@@ -83,26 +98,34 @@
                 </Button>
 
                 <Button x:Name="OpenMainButton"
-                        x:Uid="TrayPanel_OpenMain"
                         AutomationProperties.AutomationId="TrayPanelOpenMainButton"
-                        Height="32"
-                        Padding="12,0"
-                        Content="主界面"
-                        Command="{x:Bind ViewModel.OpenMainWindowCommand}" />
+                        Width="28"
+                        Height="28"
+                        Padding="0"
+                        BorderThickness="0"
+                        Background="Transparent"
+                        BorderBrush="Transparent"
+                        Command="{x:Bind ViewModel.OpenMainWindowCommand}">
+                    <FontIcon Glyph="&#xE8A7;"  FontSize="14"/>
+                </Button>
 
                 <!-- Fluent System Icons arrow_exit_20_regular: Segoe has no sign-out glyph that
                      also exists on Windows 10. -->
                 <Button x:Name="ExitButton"
                         AutomationProperties.AutomationId="TrayPanelExitButton"
-                        Width="32"
-                        Height="32"
+                        Width="28"
+                        Height="28"
                         Padding="0"
+                        BorderThickness="0"
+                        Background="Transparent"
+                        BorderBrush="Transparent"
                         Command="{x:Bind ViewModel.ExitApplicationCommand}">
                     <Viewbox Width="16"
                              Height="16">
                         <Grid Width="20"
                               Height="20">
-                            <PathIcon Data="M12.5 17C12.7761 17 13 16.7761 13 16.5C13 16.2239 12.7761 16 12.5 16H6C4.89543 16 4 15.1046 4 14V6C4 4.89543 4.89543 4 6 4H12.5C12.7761 4 13 3.77614 13 3.5C13 3.22386 12.7761 3 12.5 3H6C4.34315 3 3 4.34315 3 6V14C3 15.6569 4.34315 17 6 17H12.5ZM13.6464 6.14645C13.8417 5.95118 14.1583 5.95118 14.3536 6.14645L17.8536 9.64645C18.0488 9.84171 18.0488 10.1583 17.8536 10.3536L14.3536 13.8536C14.1583 14.0488 13.8417 14.0488 13.6464 13.8536C13.4512 13.6583 13.4512 13.3417 13.6464 13.1464L16.2929 10.5H7.5C7.22386 10.5 7 10.2761 7 10C7 9.72386 7.22386 9.5 7.5 9.5H16.2929L13.6464 6.85355C13.4512 6.65829 13.4512 6.34171 13.6464 6.14645Z" />
+                            <PathIcon
+                                Data="M12.5 17C12.7761 17 13 16.7761 13 16.5C13 16.2239 12.7761 16 12.5 16H6C4.89543 16 4 15.1046 4 14V6C4 4.89543 4.89543 4 6 4H12.5C12.7761 4 13 3.77614 13 3.5C13 3.22386 12.7761 3 12.5 3H6C4.34315 3 3 4.34315 3 6V14C3 15.6569 4.34315 17 6 17H12.5ZM13.6464 6.14645C13.8417 5.95118 14.1583 5.95118 14.3536 6.14645L17.8536 9.64645C18.0488 9.84171 18.0488 10.1583 17.8536 10.3536L14.3536 13.8536C14.1583 14.0488 13.8417 14.0488 13.6464 13.8536C13.4512 13.6583 13.4512 13.3417 13.6464 13.1464L16.2929 10.5H7.5C7.22386 10.5 7 10.2761 7 10C7 9.72386 7.22386 9.5 7.5 9.5H16.2929L13.6464 6.85355C13.4512 6.65829 13.4512 6.34171 13.6464 6.14645Z" />
                         </Grid>
                     </Viewbox>
                 </Button>
