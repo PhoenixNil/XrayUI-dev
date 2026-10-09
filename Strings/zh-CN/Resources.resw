@@ -148,7 +148,7 @@
   <data name="TrayPanel_Title.Text" xml:space="preserve">
     <value>快速访问</value>
   </data>
-  <data name="TrayPanel_OpenMain.Content" xml:space="preserve">
+  <data name="TrayPanel_OpenMain" xml:space="preserve">
     <value>主界面</value>
   </data>
   <data name="TrayPanel_RoutingSmart.Content" xml:space="preserve">

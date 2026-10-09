@@ -46,6 +46,7 @@ namespace XrayUI.Views
             SnapConnectionGlyph();
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
+            SetLabel(OpenMainButton, L.TrayPanel_OpenMain);
             SetLabel(ExitButton, L.Tray_Exit);
         }
 

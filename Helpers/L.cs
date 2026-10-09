@@ -272,6 +272,7 @@ public static class L
     // Tray_TooltipRunning is parameterized ("XrayUI - {0}") — use Loc.Format at the call site.
     public static string Tray_TooltipIdle      => Loc.GetString("Tray_TooltipIdle");
     public static string TrayPanel_Connected   => Loc.GetString("TrayPanel_Connected");
+    public static string TrayPanel_OpenMain    => Loc.GetString("TrayPanel_OpenMain");
 
     // ── Taskbar Jump List ──────────────────────────────────────────────────
     public static string JumpList_Recent           => Loc.GetString("JumpList_Recent");
