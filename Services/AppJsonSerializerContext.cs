@@ -41,5 +41,5 @@ internal partial class AppJsonSerializerContext : JsonSerializerContext
     public static JsonSerializerOptions WriteReadable => _writeReadable.Value;
 
     public static JsonTypeInfo<T> Readable<T>() =>
-        (JsonTypeInfo<T>)WriteReadable.GetTypeInfo(typeof(T));
+        WriteReadable.GetTypeInfo<T>();
 }

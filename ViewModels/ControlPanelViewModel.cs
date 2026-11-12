@@ -605,8 +605,8 @@ namespace XrayUI.ViewModels
         /// Synchronous on purpose: CleanupTunOnExit (Window.Closed / crash / the elevation
         /// handoff racing its 800ms self-kill) runs it inline; the WM_ENDSESSION fast path
         /// uses CleanupCurrentTunRoutesWithoutElevation instead and never reaches here.
-        /// Interactive callers wrap it in Task.Run because the netsh/route batch blocks in
-        /// WaitForExit (up to 5s when already elevated; the unelevated runas branch can
+        /// Interactive callers wrap it in Task.Run because the synchronous wrapper waits for
+        /// the command runner (up to 5s when already elevated; the unelevated runas branch can
         /// additionally block on the UAC prompt).
         /// </summary>
         private void CleanupTunRoutesSafely()

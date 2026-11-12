@@ -98,10 +98,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET 10
+      - name: Setup .NET 11
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
 
       - name: Compute version from tag
         id: ver
@@ -146,7 +146,7 @@ jobs:
       - name: Bundle updater into staging
         shell: pwsh
         run: |
-          $publishDir = "bin/Release/net10.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
+          $publishDir = "bin/Release/net11.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
           $updaterExe = "updater-rs/target/${{ matrix.rust_target }}/release/xrayui-updater.exe"
           if (-not (Test-Path $updaterExe)) {
             Write-Host "::error::Updater build did not produce $updaterExe"
@@ -160,7 +160,7 @@ jobs:
       - name: Verify AOT exe produced
         shell: pwsh
         run: |
-          $publishDir = "bin/Release/net10.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
+          $publishDir = "bin/Release/net11.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
           $exe = "$publishDir/XrayUI-dev.exe"
           Write-Host "Listing $publishDir :"
           if (Test-Path $publishDir) {
@@ -177,7 +177,7 @@ jobs:
       - name: Pack zip
         shell: pwsh
         run: |
-          $publishDir = "bin/Release/net10.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
+          $publishDir = "bin/Release/net11.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
           $zipName = "XrayUI-${{ matrix.rid }}${{ env.VARIANT }}.zip"
           Compress-Archive -Path "$publishDir/*" -DestinationPath $zipName -CompressionLevel Optimal
           Write-Host "Created $zipName ($((Get-Item $zipName).Length) bytes)"

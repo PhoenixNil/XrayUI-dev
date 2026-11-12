@@ -96,6 +96,8 @@ namespace XrayUI.Services
             }
         }
 
+        internal void AppendDiagnosticLog(string line) => AppendLog(line);
+
         private void AppendLog(string line)
         {
             lock (_bufferLock)

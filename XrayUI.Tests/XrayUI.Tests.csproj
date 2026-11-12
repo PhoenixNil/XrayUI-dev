@@ -1,11 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Plain net10.0 (no -windows TFM, no WinUI): the tested sources are pure
+    <!-- Plain net11.0 (no -windows TFM, no WinUI): the tested sources are pure
          parsing/serialization logic. Linking them here instead of referencing
          the app project keeps the test build free of XAML compile, CsWinRT
          projection, and the Windows App SDK runtime. -->
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -48,6 +48,7 @@
     <Compile Include="..\Services\EchSettings.cs" Link="Prod\Services\EchSettings.cs" />
     <Compile Include="..\Services\FinalmaskJson.cs" Link="Prod\Services\FinalmaskJson.cs" />
     <Compile Include="..\Services\SubscriptionRefreshBatchRunner.cs" Link="Prod\Services\SubscriptionRefreshBatchRunner.cs" />
+    <Compile Include="..\Services\TunCommandRunner.cs" Link="Prod\Services\TunCommandRunner.cs" />
     <Compile Include="..\Services\JumpListRequest.cs" Link="Prod\Services\JumpListRequest.cs" />
     <Compile Include="..\Services\RecentConnectionHistory.cs" Link="Prod\Services\RecentConnectionHistory.cs" />
     <Compile Include="..\Services\RouteTestProtocol.cs" Link="Prod\Services\RouteTestProtocol.cs" />

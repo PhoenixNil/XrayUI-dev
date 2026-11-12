@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -20,12 +19,14 @@ namespace XrayUI.Services;
 public class TunService
 {
     private readonly string _engineDirectory;
+    private readonly Action<string>? _log;
 
     private const string TunInterfaceName = XrayConfigConstants.TunInterfaceName;
 
-    public TunService()
+    public TunService(Action<string>? log = null)
     {
         _engineDirectory = Path.Combine(AppContext.BaseDirectory, "Assets", "engine");
+        _log = log;
     }
 
     /// <summary>Checks whether wintun.dll exists.</summary>
@@ -276,7 +277,6 @@ public class TunService
             batch.AddRange(BuildDnsResetBatch());
 
             RunElevatedBatch(batch);
-            Debug.WriteLine("[TunService] TUN 路由兜底清理完成");
         }
         catch (Exception ex)
         {
@@ -341,60 +341,16 @@ public class TunService
     }
 
     /// <summary>
-    /// Runs a batch of full command lines (e.g. "netsh interface ipv4 ...", "route delete ...")
-    /// in a single cmd.exe — chained with `&amp;` so a failure in one doesn't abort the rest.
-    /// One UAC prompt total when not already admin; zero when admin.
+    /// Retains a synchronous entry point for shutdown cleanup. Interactive callers already
+    /// run this on a worker thread. The runner never captures the UI synchronization context.
     /// </summary>
-    private static bool RunElevatedBatch(IReadOnlyList<string> commandLines)
+    private bool RunElevatedBatch(IReadOnlyList<string> commandLines)
+        => TunCommandRunner.Run(commandLines, !AdminHelper.IsAdministrator(), WriteLog);
+
+    private void WriteLog(string message)
     {
-        if (commandLines.Count == 0)
-            return true;
-
-        var combined = string.Join(" & ", commandLines);
-        var cmdPath = Path.Combine(Environment.SystemDirectory, "cmd.exe");
-        var isAdmin = AdminHelper.IsAdministrator();
-
-        var psi = new ProcessStartInfo
-        {
-            FileName = cmdPath,
-            Arguments = "/c " + combined,
-            WindowStyle = ProcessWindowStyle.Hidden,
-        };
-
-        if (isAdmin)
-        {
-            psi.UseShellExecute = false;
-            psi.CreateNoWindow = true;
-            psi.RedirectStandardOutput = true;
-            psi.RedirectStandardError = true;
-        }
-        else
-        {
-            psi.UseShellExecute = true;
-            psi.Verb = "runas";
-        }
-
-        try
-        {
-            using var process = Process.Start(psi);
-            if (process is null)
-                return false;
-
-            process.WaitForExit(5000);
-            // Exit code reflects only the LAST command in the chain — best-effort cleanup,
-            // not an authoritative "all succeeded" signal.
-            Debug.WriteLine($"[TunService] cleanup 批处理退出代码: {process.ExitCode}");
-            return true;
-        }
-        catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
-        {
-            Debug.WriteLine("[TunService] 管理员授权被取消");
-            return false;
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[TunService] cleanup 批处理执行失败: {ex.Message}");
-            return false;
-        }
+        Debug.WriteLine(message);
+        try { _log?.Invoke(message); }
+        catch (Exception ex) { Debug.WriteLine($"[TunService] Logging failed: {ex.Message}"); }
     }
 }

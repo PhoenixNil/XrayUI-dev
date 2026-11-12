@@ -104,7 +104,7 @@ namespace XrayUI.ViewModels
 
         [RelayCommand]
         private Task RefreshSubscription(SubscriptionEntry sub) =>
-            _onRefreshMany([sub], null);
+            _onRefreshMany((SubscriptionEntry[])[sub], null);
 
         /// <summary>
         /// Uses the same bounded batch runner as scheduled refreshes. Individual failures land in
@@ -168,7 +168,7 @@ namespace XrayUI.ViewModels
             {
                 await _onEdit(sub);
                 editSaved = true;
-                if (urlChanged) await _onRefreshMany([sub], null);
+                if (urlChanged) await _onRefreshMany((SubscriptionEntry[])[sub], null);
             }
             catch (Exception ex)
             {

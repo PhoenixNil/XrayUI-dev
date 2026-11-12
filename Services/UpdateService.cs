@@ -235,7 +235,7 @@ namespace XrayUI.Services
             psi.ArgumentList.Add($"--install-dir={staging.InstallDir}");
             psi.ArgumentList.Add($"--launch-after={AppExeName}");
 
-            Process.Start(psi);
+            Process.StartAndForget(psi);
         }
 
         public void CleanupOldStagingDirs()

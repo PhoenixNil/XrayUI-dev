@@ -96,3 +96,4 @@ Generated\ Files/
 .claude/
 /CLAUDE.md
 /AGENTS.md
+/.codex/config.toml

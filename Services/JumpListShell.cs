@@ -136,7 +136,7 @@ public static unsafe class JumpListShell
             {
                 Marshal.ThrowExceptionForHR(((delegate* unmanaged[Stdcall]<nint, char*, int, int>)Table(link)[10])
                     (link, arguments, argumentsLength));
-                if (JumpListRequest.Parse([new string(arguments)]) is { } request) ids.Add(request.ServerId);
+                if (JumpListRequest.Parse((string[])[new string(arguments)]) is { } request) ids.Add(request.ServerId);
             }
             finally { Release(link); }
         }

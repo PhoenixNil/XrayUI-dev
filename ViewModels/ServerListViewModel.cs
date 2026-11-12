@@ -1010,7 +1010,7 @@ namespace XrayUI.ViewModels
             try
             {
                 sub.Usage = default;
-                await RefreshSubscriptionsAsync([sub]);
+                await RefreshSubscriptionsAsync((SubscriptionEntry[])[sub]);
             }
             catch (Exception ex)
             {

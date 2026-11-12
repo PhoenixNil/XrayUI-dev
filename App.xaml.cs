@@ -152,7 +152,7 @@ namespace XrayUI
                 // An in-process delayed task would be killed by Environment.Exit below.
                 try
                 {
-                    Process.Start(new ProcessStartInfo
+                    Process.StartAndForget(new ProcessStartInfo
                     {
                         FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
                         Arguments = $"/c ping 127.0.0.1 -n 2 > nul & start \"\" \"{exePath}\"",
@@ -451,8 +451,10 @@ namespace XrayUI
 
                 await Task.Delay(150);
 
-                using var previousInstance = Process.GetProcessById(parentPid);
-                if (!previousInstance.HasExited)
+                using var previousInstance = Process.TryGetProcessById(parentPid, out var process)
+                    ? process
+                    : null;
+                if (previousInstance is not null && !previousInstance.HasExited)
                 {
                     try
                     {
@@ -486,11 +488,6 @@ namespace XrayUI
                 {
                     previousInstanceExited = true;
                 }
-            }
-            catch (ArgumentException)
-            {
-                // The previous instance already exited.
-                previousInstanceExited = true;
             }
             catch (Exception ex)
             {

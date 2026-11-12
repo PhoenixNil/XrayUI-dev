@@ -165,7 +165,7 @@ namespace XrayUI.Views
                     if (folder is null) return;
 
                     // Trailing backslash matches all executables in the directory.
-                    AppendMatchValues([folder.Path.TrimEnd('\\') + "\\"]);
+                    AppendMatchValues((string[])[folder.Path.TrimEnd('\\') + "\\"]);
                     return;
                 }
 

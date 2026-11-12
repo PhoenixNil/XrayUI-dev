@@ -88,7 +88,7 @@ namespace XrayUI
             // Build services before InitializeComponent so ViewModel is ready for x:Bind
             var settingsService = new SettingsService();
             var xrayService     = new XrayService();
-            var tunService      = new TunService();
+            var tunService      = new TunService(xrayService.AppendDiagnosticLog);
             var startupService  = new StartupService();
             var dialogService   = new DialogService(() => _initialized ? GetDialogXamlRoot() : null);
             var updateService   = new UpdateService();
