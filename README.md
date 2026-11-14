@@ -64,6 +64,12 @@ dotnet publish -c Release -r win-arm64 -p:Platform=ARM64
   </a>
 </p>
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+
+- **Committers and reviewers**: [@PhoenixNil](https://github.com/PhoenixNil)
+- **Approvers**: [@PhoenixNil](https://github.com/PhoenixNil)
 ### Third-party services
 
 The features below contact services that are not operated by the developer. Each request reveals the IP address of the connection (the proxy server's address when routed through the proxy) and standard HTTP request metadata to that service. XrayUI sends no account credentials or personal data with them. Their handling of this data is governed by their own privacy policies.
