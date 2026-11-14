@@ -138,9 +138,17 @@
     <ApplicationIcon>Assets\Icons\output.ico</ApplicationIcon>
   </PropertyGroup>
 
-  <!-- Version: defaults for local builds; CI overrides via -p:Version=<tag> -->
+  <!-- Version & PE metadata. SignPath's artifact configuration enforces
+       ProductName ("XrayUI-dev") and ProductVersion on both signed exes, so the
+       two must match what updater-rs/build.rs writes. The SDK otherwise appends
+       "+<commit sha>" to ProductVersion, which the updater does not carry. -->
   <PropertyGroup>
     <Version Condition="'$(Version)' == ''">0.0.0-dev</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Product>XrayUI-dev</Product>
+    <Company>PhoenixNil</Company>
+    <Description>A native Windows GUI client for the Xray core</Description>
+    <Copyright>Copyright (c) PhoenixNil</Copyright>
   </PropertyGroup>
 
   <!-- Auto-update channel marker. release.yml publishes two variants per RID:
@@ -180,7 +188,7 @@
     <!-- Always release-built (size-optimised, rarely debugged). Cargo can't emit a
          dotted file name, so build xrayui-updater.exe and copy it to the contract
          name XrayUI.Updater.exe that UpdateService.cs + shipped versions expect. -->
-    <Exec Command="cargo build --release --manifest-path &quot;$(MSBuildThisFileDirectory)updater-rs\Cargo.toml&quot; --bin xrayui-updater --target $(RustUpdaterTarget)" />
+    <Exec Command="cargo build --release --manifest-path &quot;$(MSBuildThisFileDirectory)updater-rs\Cargo.toml&quot; --bin xrayui-updater --target $(RustUpdaterTarget)" EnvironmentVariables="XRAYUI_VERSION=$(Version)" />
     <Copy SourceFiles="$(MSBuildThisFileDirectory)updater-rs\target\$(RustUpdaterTarget)\release\xrayui-updater.exe" DestinationFiles="$(PublishDir)XrayUI.Updater.exe" />
     <Message Text="Bundled XrayUI.Updater.exe (Rust, $(RustUpdaterTarget)) into $(PublishDir)" Importance="high" />
   </Target>

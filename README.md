@@ -64,6 +64,14 @@ dotnet publish -c Release -r win-arm64 -p:Platform=ARM64
   </a>
 </p>
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+
+- **Committers and reviewers**: [@PhoenixNil](https://github.com/PhoenixNil)
+- **Approvers**: [@PhoenixNil](https://github.com/PhoenixNil)
+- **Privacy Policy**: This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it (such as user-configured proxy connections, subscription updates, latency/AI unlock checks, and update checks against GitHub Releases and `www.xrayui.site/changelog.json`). No telemetry, analytics, or personal data is collected or transmitted to the developer.
+
 ## License
 
 Apache License 2.0.

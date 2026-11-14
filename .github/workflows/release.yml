@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: write
 
 jobs:
@@ -66,6 +67,9 @@ jobs:
     needs: changelog-gate
     runs-on: windows-latest
     timeout-minutes: 30
+    outputs:
+      # Identical in every matrix leg, so whichever leg writes last is fine.
+      version: ${{ steps.ver.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -137,6 +141,8 @@ jobs:
           targets: ${{ matrix.rust_target }}
 
       - name: Build Updater (${{ matrix.rust_target }})
+        env:
+          XRAYUI_VERSION: ${{ steps.ver.outputs.version }}
         run: >
           cargo build --release
           --manifest-path updater-rs/Cargo.toml
@@ -174,54 +180,124 @@ jobs:
           }
           Write-Host "OK: AOT exe found at $exe ($((Get-Item $exe).Length) bytes)"
 
-      - name: Pack zip
-        shell: pwsh
-        run: |
-          $publishDir = "bin/Release/net11.0-windows10.0.19041.0/${{ matrix.rid }}/publish"
-          $zipName = "XrayUI-${{ matrix.rid }}${{ env.VARIANT }}.zip"
-          Compress-Archive -Path "$publishDir/*" -DestinationPath $zipName -CompressionLevel Optimal
-          Write-Host "Created $zipName ($((Get-Item $zipName).Length) bytes)"
-
-      - name: Generate SHA256
-        shell: pwsh
-        run: |
-          $zip = "XrayUI-${{ matrix.rid }}${{ env.VARIANT }}.zip"
-          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
-          # Standard sha256sum format: "<hash>  <filename>" (two spaces, no newline).
-          [System.IO.File]::WriteAllText("$zip.sha256", "$hash  $zip", [System.Text.Encoding]::ASCII)
-          Write-Host "Wrote $zip.sha256 = $hash"
-
-      - name: Upload zip artifact
+      - name: Upload publish staging artifact
         uses: actions/upload-artifact@v4
         with:
-          name: XrayUI-${{ matrix.rid }}${{ env.VARIANT }}
-          path: XrayUI-${{ matrix.rid }}${{ env.VARIANT }}.zip*
-          retention-days: 14
+          name: bundle-${{ matrix.rid }}${{ env.VARIANT }}
+          path: bin/Release/net11.0-windows10.0.19041.0/${{ matrix.rid }}/publish
+          # Long enough to "Re-run failed jobs" on the signing job the next day
+          # (missed approval) without rebuilding all four variants.
+          retention-days: 3
           if-no-files-found: error
 
-  release:
-    name: create GitHub release
+  sign-and-release:
+    name: sign executables & create release
     needs: publish
-    runs-on: ubuntu-latest
-    # Only create a Release on real tag pushes. workflow_dispatch is for testing
-    # the publish flow only; download the zip artifacts from the run page to verify.
-    if: startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: write
+    runs-on: windows-latest
+    # Release signing waits for a manual approval in SignPath (up to 60 min below).
+    timeout-minutes: 75
 
     steps:
-      - name: Download all artifacts
+      - name: Download staging bundles
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          pattern: bundle-*
+          path: bundles
 
-      - name: Flatten release files
+      - name: Collect first-party executables for signing
+        shell: pwsh
         run: |
-          mkdir -p release-files
-          find artifacts \( -name '*.zip' -o -name '*.sha256' \) -exec mv {} release-files/ \;
-          ls -la release-files
+          # Only sign XrayUI's own binaries; third-party/upstream components
+          # (xray.exe, wintun.dll, WebView2Loader.dll, Windows App SDK DLLs)
+          # must remain untouched per SignPath Foundation policy.
+          # Layout is <variant>/<exe>, which is what the SignPath artifact
+          # configuration matches (and it requires exactly four of each).
+          foreach ($bundle in Get-ChildItem bundles -Directory) {
+            $dstDir = "to-sign/$($bundle.Name -replace '^bundle-', '')"
+            New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
+            foreach ($exe in 'XrayUI-dev.exe', 'XrayUI.Updater.exe') {
+              Copy-Item (Join-Path $bundle.FullName $exe) -Destination $dstDir
+            }
+          }
+
+      - name: Upload unsigned executables for SignPath
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-executables
+          path: to-sign
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Sign executables via SignPath
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+          organization-id: 'dc6155bb-1582-498b-aa2d-f1ffa44f2aa2'
+          project-slug: 'XrayUI-dev'
+          signing-policy-slug: ${{ startsWith(github.ref, 'refs/tags/') && 'release-signing' || 'test-signing' }}
+          github-artifact-id: '${{ steps.upload-unsigned.outputs.artifact-id }}'
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          # The action extracts the signed zip here, keeping the <variant>/<exe> layout.
+          output-artifact-directory: 'signed-executables'
+          # Enforced as ProductVersion on every signed exe by the artifact configuration.
+          parameters: |
+            version: "${{ needs.publish.outputs.version }}"
+
+      - name: Verify signatures and stage signed binaries
+        shell: pwsh
+        run: |
+          $isTag = '${{ github.ref }}'.StartsWith('refs/tags/')
+          foreach ($bundle in Get-ChildItem bundles -Directory) {
+            $v = $bundle.Name -replace '^bundle-', ''
+            foreach ($exe in 'XrayUI-dev.exe', 'XrayUI.Updater.exe') {
+              $signedExe = "signed-executables/$v/$exe"
+              if (-not (Test-Path $signedExe)) {
+                Write-Host "::error::Signed executable not found: $signedExe"
+                exit 1
+              }
+
+              # The test certificate is self-signed, so it never reports Valid on
+              # the runner; there the check is only that a signature is present.
+              $sig = Get-AuthenticodeSignature -FilePath $signedExe
+              if ($null -eq $sig.SignerCertificate -or ($isTag -and $sig.Status -ne 'Valid')) {
+                Write-Host "::error::Bad signature on $v/${exe}: $($sig.Status) ($($sig.StatusMessage))"
+                exit 1
+              }
+
+              Write-Host "Verified $v/$exe signed by '$($sig.SignerCertificate.Subject)' (Status: $($sig.Status))"
+              Copy-Item $signedExe -Destination $bundle.FullName -Force
+            }
+          }
+
+      - name: Pack signed release zips and generate SHA256
+        shell: pwsh
+        run: |
+          # SHA256 must be computed AFTER signing and repacking so UpdateService.cs matches the final zip.
+          New-Item -ItemType Directory -Path 'release-files' -Force | Out-Null
+          foreach ($bundle in Get-ChildItem bundles -Directory) {
+            # bundle-win-x64-wasdk -> XrayUI-win-x64-wasdk.zip (UpdateService.cs contract).
+            $zipName = "$($bundle.Name -replace '^bundle-', 'XrayUI-').zip"
+            $zipPath = "release-files/$zipName"
+            Compress-Archive -Path "$($bundle.FullName)/*" -DestinationPath $zipPath -CompressionLevel Optimal -Force
+            $hash = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
+            # Standard sha256sum format: "<hash>  <filename>" (two spaces, no newline).
+            [System.IO.File]::WriteAllText("$zipPath.sha256", "$hash  $zipName", [System.Text.Encoding]::ASCII)
+            Write-Host "Created $zipName ($((Get-Item $zipPath).Length) bytes), sha256=$hash"
+          }
+
+      - name: Upload signed test zips (workflow_dispatch)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-release-files
+          path: release-files/*
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         env:
           # Direct-download base for this tag's assets; asset names below are the
@@ -236,6 +312,10 @@ jobs:
 
             #### Self-contained WinAppSDK version (larger; use only when the normal version fails to start)
             - [x64](${{ env.DL }}/XrayUI-win-x64-wasdk.zip) | [ARM64](${{ env.DL }}/XrayUI-win-arm64-wasdk.zip)
+
+            ## Code signing policy
+
+            Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/). See the [code signing policy](${{ github.server_url }}/${{ github.repository }}#code-signing-policy).
           files: |
             release-files/*.zip
             release-files/*.sha256
