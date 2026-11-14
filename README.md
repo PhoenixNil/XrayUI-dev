@@ -64,13 +64,13 @@ dotnet publish -c Release -r win-arm64 -p:Platform=ARM64
   </a>
 </p>
 
-## Code signing policy
+### Third-party services
 
-Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+The features below contact services that are not operated by the developer. Each request reveals the IP address of the connection (the proxy server's address when routed through the proxy) and standard HTTP request metadata to that service. XrayUI sends no account credentials or personal data with them. Their handling of this data is governed by their own privacy policies.
 
-- **Committers and reviewers**: [@PhoenixNil](https://github.com/PhoenixNil)
-- **Approvers**: [@PhoenixNil](https://github.com/PhoenixNil)
-- **Privacy Policy**: This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it (such as user-configured proxy connections, subscription updates, latency/AI unlock checks, and update checks against GitHub Releases and `www.xrayui.site/changelog.json`). No telemetry, analytics, or personal data is collected or transmitted to the developer.
+- **Google** — latency tests request `www.gstatic.com/generate_204`, and the AI unlock check contacts `gemini.google.com`. [Privacy policy](https://policies.google.com/privacy)
+- **OpenAI** — the AI unlock check contacts `api.openai.com`. [Privacy policy](https://openai.com/policies/privacy-policy/)
+- **Anthropic** — the AI unlock check contacts `api.anthropic.com`. [Privacy policy](https://www.anthropic.com/legal/privacy)
 
 ## License
 
