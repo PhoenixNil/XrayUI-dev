@@ -344,7 +344,7 @@ namespace XrayUI.Services
             }
 
             progress.Report(FormatProgress(displayName, received, total));
-            return Convert.ToHexString(hasher.GetHashAndReset()).ToLowerInvariant();
+            return Convert.ToHexStringLower(hasher.GetHashAndReset());
         }
 
         private static ProgressDialogUpdate FormatProgress(string name, long received, long? total)

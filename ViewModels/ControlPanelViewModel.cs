@@ -795,7 +795,7 @@ namespace XrayUI.ViewModels
         {
             try
             {
-                var exePath = Process.GetCurrentProcess().MainModule?.FileName;
+                var exePath = Environment.ProcessPath;
                 if (string.IsNullOrEmpty(exePath)) return;
                 var currentPid = Environment.ProcessId;
                 var restartArguments = string.IsNullOrWhiteSpace(arguments)
@@ -808,7 +808,7 @@ namespace XrayUI.ViewModels
                     Arguments      = restartArguments,
                     UseShellExecute = true,
                     Verb           = "runas"
-                });
+                })?.Dispose();
 
                 _ = Task.Run(async () =>
                 {

@@ -1502,15 +1502,6 @@ Path: {0}</value>
   <data name="XrayLog_ProcessExited" xml:space="preserve">
     <value>[xray process exited]</value>
   </data>
-  <data name="XrayLog_JobCreateFailed" xml:space="preserve">
-    <value>[Warning] CreateJobObject failed (err={0}); orphan-process safety net disabled</value>
-  </data>
-  <data name="XrayLog_JobAssignFailed" xml:space="preserve">
-    <value>[Warning] AssignProcessToJobObject failed (err={0}); orphan-process safety net inactive</value>
-  </data>
-  <data name="XrayLog_JobBindException" xml:space="preserve">
-    <value>[Warning] Job Object bind exception: {0}</value>
-  </data>
   <data name="Chain_NeedServerList" xml:space="preserve">
     <value>Chain proxy needs the server list to resolve entry/exit nodes.</value>
   </data>

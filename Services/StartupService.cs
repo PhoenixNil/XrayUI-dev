@@ -29,7 +29,7 @@ namespace XrayUI.Services
         private static readonly Guid IID_ITaskService    = new("2FABA4C7-4DA9-4013-9697-20CC3FD40F85");
 
         private static readonly string _exePath =
-            Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+            Environment.ProcessPath ?? string.Empty;
 
         public bool IsStartupEnabled()
         {

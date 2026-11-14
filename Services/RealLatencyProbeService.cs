@@ -131,7 +131,6 @@ namespace XrayUI.Services
             await File.WriteAllTextAsync(ConfigPath, configJson, ct).ConfigureAwait(false);
 
             Process? process = null;
-            JobObjectGuard? jobGuard = null;
             var output = new StringBuilder();
 
             try
@@ -145,7 +144,9 @@ namespace XrayUI.Services
                     CreateNoWindow = true,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
-                    RedirectStandardError = true
+                    RedirectStandardError = true,
+                    // Orphan safety net: the kernel kills this core if the host process dies.
+                    KillOnParentExit = true
                 };
                 psi.EnvironmentVariables["XRAY_LOCATION_ASSET"] = XrayService.RulesDir;
 
@@ -161,7 +162,6 @@ namespace XrayUI.Services
                 process.ErrorDataReceived += (_, e) => Capture(e.Data);
 
                 process.Start();
-                jobGuard = JobObjectGuard.Assign(process);
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
 
@@ -209,7 +209,6 @@ namespace XrayUI.Services
                 }
                 catch { }
 
-                jobGuard?.Dispose();
                 process?.Dispose();
 
                 try

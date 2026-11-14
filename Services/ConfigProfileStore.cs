@@ -146,7 +146,7 @@ namespace XrayUI.Services
                 {
                     FileName = AppPaths.ProfilesDir,
                     UseShellExecute = true,
-                });
+                })?.Dispose();
             }
             catch (Exception ex)
             {
