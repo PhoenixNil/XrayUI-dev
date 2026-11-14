@@ -27,6 +27,10 @@ windows-sys = { version = "0.61.2", features = [
 # Without it, an *.exe with "update" in its name trips Windows' installer-detection
 # heuristic and pops UAC on every launch — see XrayUI.Updater/app.manifest.
 embed-manifest = "1.5.0"
+# Compiles the version resource (ProductName/ProductVersion, required for code
+# signing) with the Windows SDK's rc.exe. Default features only add Cargo.toml
+# metadata parsing, which drags in toml + serde; build.rs sets every field itself.
+winresource ={ version = "0.1.34", default-features = false }
 
 # Size-tuned: this helper is logic-light, so favour bytes over speed.
 [profile.release]
