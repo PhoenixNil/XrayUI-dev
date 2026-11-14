@@ -262,7 +262,7 @@ jobs:
               # the runner; there the check is only that a signature is present.
               $sig = Get-AuthenticodeSignature -FilePath $signedExe
               if ($null -eq $sig.SignerCertificate -or ($isTag -and $sig.Status -ne 'Valid')) {
-                Write-Host "::error::Bad signature on $v/$exe: $($sig.Status) ($($sig.StatusMessage))"
+                Write-Host "::error::Bad signature on $v/${exe}: $($sig.Status) ($($sig.StatusMessage))"
                 exit 1
               }
 
