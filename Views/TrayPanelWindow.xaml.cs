@@ -238,9 +238,12 @@ namespace XrayUI.Views
                 }
                 if (pick is null) return null;
 
-                var bitmap = await pick.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
-                var source = new SoftwareBitmapSource();
-                await source.SetBitmapAsync(bitmap);
+                using var bitmap = await pick.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+                // Keep an independent pixel copy: SoftwareBitmapSource retains the original
+                // bitmap for later rendering, so disposing it here would close a cached icon.
+                var source = new WriteableBitmap(bitmap.PixelWidth, bitmap.PixelHeight);
+                bitmap.CopyToBuffer(source.PixelBuffer);
+                source.Invalidate();
                 return source;
             }
             catch (Exception ex)

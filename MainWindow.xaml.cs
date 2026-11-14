@@ -47,6 +47,8 @@ namespace XrayUI
         private bool _needsCenterOnFirstShow;
         // Opened by a left click on the tray icon; created on first use and kept.
         private Views.TrayPanelWindow? _trayPanel;
+        private int _resourceReleaseVersion;
+        private Microsoft.UI.Dispatching.DispatcherQueueTimer? _resourceReleaseTimer;
         // When and where the click that last opened the tray panel landed; see IsSecondTrayClick.
         private long _trayClickAt;
         private NativePoint _trayClickPoint;
@@ -154,8 +156,8 @@ namespace XrayUI
 
             // For --startup-minimized we only hide the window here so the XamlRoot
             // stays alive for any dialogs raised during InitializeAsync (e.g.
-            // auto-connect errors). The full tray transition (ReleaseUiResources)
-            // runs after init so resources are still freed in the minimized case.
+            // auto-connect errors). The full tray transition schedules idle cleanup
+            // after init so startup work is not interrupted by resource reclamation.
             if (StartMinimized)
             {
                 AppWindow.IsShownInSwitchers = false;
@@ -285,6 +287,7 @@ namespace XrayUI
             // close the panel.
             if (Environment.TickCount64 - panel.LastHiddenAt < GetDoubleClickTime()) return;
 
+            CancelUiResourceRelease();
             _trayClickAt = Environment.TickCount64;
             _ = GetCursorPos(out _trayClickPoint);
             panel.ShowPanel(new TrayPanelViewModel(
@@ -326,12 +329,8 @@ namespace XrayUI
                 if (IsSecondTrayClick())
                     CloseTrayPanelAndRestore();
             };
-            // Back in the tray once the panel is gone: give back what it held, as HideToTray does.
-            panel.Hidden += (_, _) =>
-            {
-                if (_isHiddenToTray)
-                    ReleaseUiResources();
-            };
+            // Content is already released; process-wide cleanup waits for 30 seconds hidden.
+            panel.Hidden += (_, _) => ScheduleUiResourceRelease(delay: true);
             return panel;
         }
 
@@ -378,7 +377,7 @@ namespace XrayUI
             // intact; restoring is one synchronous frame.
             _rootElement.Visibility = Visibility.Collapsed;
 
-            ReleaseUiResources();
+            ScheduleUiResourceRelease();
             return true;
         }
 
@@ -399,6 +398,7 @@ namespace XrayUI
 
         internal void RestoreFromTray()
         {
+            CancelUiResourceRelease();
             _isHiddenToTray = false;
             AppWindow.IsShownInSwitchers = true;
             _rootElement.Visibility = Visibility.Visible;
@@ -507,6 +507,7 @@ namespace XrayUI
             }
 
             _allowClose = true;
+            CancelUiResourceRelease();
             _isHiddenToTray = false;
             try
             {
@@ -653,6 +654,7 @@ namespace XrayUI
 
         private void OnClosed(object sender, WindowEventArgs args)
         {
+            CancelUiResourceRelease();
             ViewModel.StopSubscriptionRefreshScheduler();
             ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _rootElement.ActualThemeChanged -= OnRootElementActualThemeChanged;
@@ -766,6 +768,7 @@ namespace XrayUI
 
         private void PrepareForSessionEnding()
         {
+            CancelUiResourceRelease();
             _isSessionEnding = true;
             _allowClose = true;
             _isHiddenToTray = false;
@@ -777,17 +780,56 @@ namespace XrayUI
             _allowClose = false;
         }
 
+        private bool CanReleaseUiResources() =>
+            _isHiddenToTray && !_allowClose && !_isSessionEnding
+            && _trayPanel?.IsOpen != true && _trayPanel?.AppWindow.IsVisible != true;
+
+        private void CancelUiResourceRelease()
+        {
+            ++_resourceReleaseVersion;
+            _resourceReleaseTimer?.Stop();
+            _resourceReleaseTimer = null;
+        }
+
+        private void ScheduleUiResourceRelease(bool delay = false)
+        {
+            CancelUiResourceRelease();
+            if (!CanReleaseUiResources()) return;
+
+            // Only the latest request may run. Reopening invalidates queued work before it starts.
+            var version = _resourceReleaseVersion;
+            void EnqueueRelease() => DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                if (version == _resourceReleaseVersion && CanReleaseUiResources())
+                    ReleaseUiResources();
+            });
+
+            if (!delay)
+            {
+                EnqueueRelease();
+                return;
+            }
+
+            var timer = DispatcherQueue.CreateTimer();
+            timer.IsRepeating = false;
+            timer.Interval = TimeSpan.FromSeconds(30);
+            timer.Tick += (_, _) =>
+            {
+                if (version != _resourceReleaseVersion) return;
+                _resourceReleaseTimer = null;
+                EnqueueRelease();
+            };
+            _resourceReleaseTimer = timer;
+            timer.Start();
+        }
+
         private static void ReleaseUiResources()
         {
             try
             {
-                // Compact LOH in this single GC pass — subscription/JSON paths
-                // routinely allocate >85KB buffers that pin into LOH and never
-                // compact under default settings.
-                System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
-                    System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
-                GC.Collect(GC.MaxGeneration, GCCollectionMode.Optimized, blocking: true, compacting: true);
-                GC.WaitForPendingFinalizers();
+                // Runs after hiding, at low queue priority. Let the GC decide whether collection
+                // is worthwhile.
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Optimized, blocking: false);
 
                 using var process = Process.GetCurrentProcess();
                 SetProcessWorkingSetSize(process.Handle, (IntPtr)(-1), (IntPtr)(-1));
