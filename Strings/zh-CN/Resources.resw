@@ -1505,15 +1505,6 @@
   <data name="XrayLog_ProcessExited" xml:space="preserve">
     <value>[xray 进程已退出]</value>
   </data>
-  <data name="XrayLog_JobCreateFailed" xml:space="preserve">
-    <value>[警告] CreateJobObject 失败 (err={0})，孤儿进程兜底已禁用</value>
-  </data>
-  <data name="XrayLog_JobAssignFailed" xml:space="preserve">
-    <value>[警告] AssignProcessToJobObject 失败 (err={0})，孤儿进程兜底未生效</value>
-  </data>
-  <data name="XrayLog_JobBindException" xml:space="preserve">
-    <value>[警告] Job Object 绑定异常：{0}</value>
-  </data>
   <data name="Chain_NeedServerList" xml:space="preserve">
     <value>链式代理需要服务器列表才能解析入口和出口节点。</value>
   </data>

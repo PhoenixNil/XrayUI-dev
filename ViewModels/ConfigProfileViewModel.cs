@@ -271,7 +271,7 @@ namespace XrayUI.ViewModels
                 {
                     FileName = AppPaths.XrayConfigPreviewPath,
                     UseShellExecute = true,
-                });
+                })?.Dispose();
             }
             catch (Exception ex)
             {

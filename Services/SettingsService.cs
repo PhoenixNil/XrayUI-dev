@@ -59,7 +59,7 @@ namespace XrayUI.Services
             {
                 FileName = SettingsFile,
                 UseShellExecute = true,
-            });
+            })?.Dispose();
         }
 
         /// <summary>

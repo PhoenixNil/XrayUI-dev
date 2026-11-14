@@ -145,7 +145,7 @@ namespace XrayUI
             // exception) means the platform refused — fall through to a manual relaunch.
             try { AppInstance.Restart(string.Empty); } catch { }
 
-            var exePath = Process.GetCurrentProcess().MainModule?.FileName;
+            var exePath = Environment.ProcessPath;
             if (!string.IsNullOrEmpty(exePath))
             {
                 // Let an external process wait for this one to exit before relaunching.
@@ -310,7 +310,7 @@ namespace XrayUI
                         WorkingDirectory = AppContext.BaseDirectory,
                         UseShellExecute = true,
                         Verb = "runas",
-                    });
+                    })?.Dispose();
                     return;
                 }
                 catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)

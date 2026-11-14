@@ -31,11 +31,6 @@ namespace XrayUI.Services
 
         private Process? _process;
 
-        // Kernel-level safety net: xray.exe is assigned to a kill-on-close Job Object, so if the
-        // UI process dies any way (taskkill /F, AV crash, OOM) the kernel kills xray.exe too.
-        // Created lazily on first start and reused across Start/Stop cycles.
-        private JobObjectGuard? _jobGuard;
-
         private StringBuilder _startupLog = new();
         private bool _collectStartupLog;
         private readonly Lock _startupLogLock = new();
@@ -191,7 +186,10 @@ namespace XrayUI.Services
                     CreateNoWindow = true,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
-                    RedirectStandardError = true
+                    RedirectStandardError = true,
+                    // Kernel-level safety net, bound at process creation: if the UI process dies
+                    // any way (taskkill /F, AV crash, OOM) the kernel kills xray.exe too.
+                    KillOnParentExit = true
                 };
                 psi.EnvironmentVariables["XRAY_LOCATION_ASSET"] = RulesDir;
 
@@ -216,7 +214,6 @@ namespace XrayUI.Services
 
                 BeginStartupLogCapture();
                 _process.Start();
-                AttachToJobObject(_process);
                 _process.BeginOutputReadLine();
                 _process.BeginErrorReadLine();
 
@@ -370,33 +367,6 @@ namespace XrayUI.Services
             RouteTest = null;
             AppendLog(L.XrayLog_ProcessExited);
             RunningChanged?.Invoke(this, false);
-        }
-
-        // ─────────── Job Object: orphan-xray safety net ───────────
-        // The kill-on-close Job Object interop lives in Helpers/JobObjectGuard (shared with the
-        // real-delay speed-test core). The guard is created lazily and reused across Start/Stop
-        // cycles; each launched process is assigned to it.
-
-        private void AttachToJobObject(Process process)
-        {
-            try
-            {
-                _jobGuard ??= JobObjectGuard.Create();
-                if (_jobGuard is null)
-                {
-                    AppendLog(Loc.Format("XrayLog_JobCreateFailed", Marshal.GetLastWin32Error()));
-                    return;
-                }
-
-                if (!_jobGuard.TryAssign(process))
-                {
-                    AppendLog(Loc.Format("XrayLog_JobAssignFailed", Marshal.GetLastWin32Error()));
-                }
-            }
-            catch (Exception ex)
-            {
-                AppendLog(Loc.Format("XrayLog_JobBindException", ex.Message));
-            }
         }
     }
 }
