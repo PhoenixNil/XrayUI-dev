@@ -278,6 +278,13 @@ namespace XrayUI.Services
 
                 if (outcome == XrayReadySignal.Outcome.Exited || _process.HasExited)
                 {
+                    // Exited can fire before the redirected streams have delivered their last
+                    // lines, and the core's "Failed to start" reason is the last line it prints.
+                    // Measured on 26.11.9 with every core busy: 1 run in 400 read the log without
+                    // it at Exited, none after WaitForExitAsync, which also waits for both
+                    // streams to reach EOF. Bounded, so a handle held open elsewhere cannot hang
+                    // the start; on timeout the log is read as it stands.
+                    await DrainOutputAsync(_process);
                     var startupLog = StopStartupLogCaptureAndRead();
                     LastError = DescribeStartFailure(startupLog, _process.ExitCode, out _);
                     AppendLog(Loc.Format("XrayLog_StartFailed", LastError));
@@ -397,6 +404,26 @@ namespace XrayUI.Services
 
             AppendLog(L.XrayLog_Shutdown);
             RunningChanged?.Invoke(this, false);
+        }
+
+        private static readonly TimeSpan OutputDrainCap = TimeSpan.FromSeconds(1);
+
+        /// <summary>
+        /// Waits until an exited process's redirected stdout/stderr have been read to EOF, so
+        /// every line has reached the DataReceived handlers. Best effort, capped at
+        /// <see cref="OutputDrainCap"/>. Shared with the latency probe's throwaway core.
+        /// </summary>
+        internal static async Task DrainOutputAsync(Process process, CancellationToken ct = default)
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(OutputDrainCap);
+            try
+            {
+                await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+            }
         }
 
         private void OnProcessExited(object? sender, EventArgs e)

@@ -156,7 +156,7 @@ namespace XrayUI.Services
 
                     // Exited is not yet drained: wait for the redirected streams to reach EOF so
                     // the "Failed to start" line is in the log before it is read for the tag.
-                    await process.WaitForExitAsync(ct).ConfigureAwait(false);
+                    await XrayService.DrainOutputAsync(process, ct).ConfigureAwait(false);
                     string log;
                     lock (output) log = output.ToString().Trim();
                     string failure = XrayService.DescribeStartFailure(log, process.ExitCode, out var diagnosis);
