@@ -320,9 +320,9 @@ namespace XrayUI
                 catch (Exception ex) { Debug.WriteLine($"[JumpList] Elevated relay failed: {ex}"); }
             }
 
-            // No XAML window exists in this short-lived relay. Do not create a second connection owner.
-            MessageBoxW(0, L.JumpList_ActivationFailed, L.JumpList_Title, 0x10);
-        }
+			// No XAML window exists in this short-lived relay. Do not create a second connection owner.
+			_ = MessageBoxW(0, L.JumpList_ActivationFailed, L.JumpList_Title, 0x10);
+		}
 
         private bool RegisterCurrentAsMainInstance(AppInstance? appInstance = null)
         {
