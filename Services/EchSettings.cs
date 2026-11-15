@@ -1,12 +1,11 @@
 namespace XrayUI.Services
 {
     /// <summary>
-    /// Shared constants and normalization for VLESS+TLS Encrypted Client Hello (ECH) settings.
-    /// Used by parser, serializer, config builder, dialog, and detail view.
+    /// Normalization for the ECH force-query value share links carry. The core no longer has
+    /// the option, so only the link parser and serializer use this, to round-trip the value.
     /// </summary>
     internal static class EchSettings
     {
-        public const string None = "none";
         public const string Half = "half";
         public const string Full = "full";
 

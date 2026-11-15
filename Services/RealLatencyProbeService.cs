@@ -18,7 +18,7 @@ namespace XrayUI.Services
     /// config — completely separate from the live connection owned by <see cref="XrayService"/> —
     /// so it works even when nothing is connected and never disturbs the user's active session.
     ///
-    /// Chain servers are not supported here (they need a second outbound + proxySettings); the
+    /// Chain servers are not supported here (they need a second outbound + sockopt.dialerProxy); the
     /// caller must filter them out before calling.
     /// </summary>
     public sealed class RealLatencyProbeService
@@ -68,6 +68,13 @@ namespace XrayUI.Services
         // socks inbound is bound — see XrayReadySignal). Normally arrives in tens of ms; the
         // cap reproduces the old fixed-delay behavior if the core stays silent.
         private static readonly TimeSpan CoreReadyCap = TimeSpan.FromSeconds(2);
+
+        /// <summary>
+        /// How many nodes the core may reject, one restart each, before the run is given up as
+        /// failed. A rejection is a config-parse error, so each restart costs only a process
+        /// spawn; the cap just bounds a list made almost entirely of unloadable nodes.
+        /// </summary>
+        private const int MaxRejectedNodes = 32;
 
         // Dedicated config path, separate from XrayService's xray_config.json so a test never
         // clobbers the live session's config file.
@@ -125,60 +132,55 @@ namespace XrayUI.Services
                 : null;
             Debug.WriteLine($"[RealLatencyProbe] 测速出口网卡: {outboundInterface ?? "系统默认路由"}");
 
-            // 3. Build + write the dedicated multi-inbound speed-test config.
-            string configJson = XrayConfigBuilder.BuildSpeedtestConfig(entries, outboundInterface);
-            Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
-            await File.WriteAllTextAsync(ConfigPath, configJson, ct).ConfigureAwait(false);
-
             Process? process = null;
-            var output = new StringBuilder();
 
             try
             {
-                // 4. Launch the throwaway core.
-                var psi = new ProcessStartInfo
+                // 3-5. Write the dedicated multi-inbound speed-test config and start the
+                // throwaway core on it. One config carries every node, and the core refuses the
+                // whole file over a single outbound it will not load (a plaintext VLESS/Trojan
+                // node to a public address, a removed Shadowsocks cipher). Its error names that
+                // outbound, so that node is reported failed and the core restarted without it;
+                // otherwise one such node in a subscription fails the test for every other.
+                Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+                int rejectedNodes = 0;
+                while (true)
                 {
-                    FileName = XrayService.ExePath,
-                    Arguments = $"run -config \"{ConfigPath}\"",
-                    WorkingDirectory = Path.GetDirectoryName(XrayService.ExePath)!,
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    // Orphan safety net: the kernel kills this core if the host process dies.
-                    KillOnParentExit = true
-                };
-                psi.EnvironmentVariables["XRAY_LOCATION_ASSET"] = XrayService.RulesDir;
+                    string configJson = XrayConfigBuilder.BuildSpeedtestConfig(entries, outboundInterface);
+                    await File.WriteAllTextAsync(ConfigPath, configJson, ct).ConfigureAwait(false);
 
-                process = new Process { StartInfo = psi };
-                var readySignal = XrayReadySignal.Attach(process);
-                // xray logs to both stdout and stderr; capture both so a failed start has a reason.
-                void Capture(string? line)
-                {
-                    if (line is null) return;
-                    lock (output) output.AppendLine(line);
-                }
-                process.OutputDataReceived += (_, e) => Capture(e.Data);
-                process.ErrorDataReceived += (_, e) => Capture(e.Data);
+                    var output = new StringBuilder();
+                    process = await StartCoreAsync(output, ct).ConfigureAwait(false);
+                    if (!process.HasExited)
+                        break;
 
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
-                // 5. Wait until the core reports every inbound is up. An early exit falls
-                // through to the HasExited check below, which reads the captured log.
-                await readySignal.WaitAsync(CoreReadyCap, ct).ConfigureAwait(false);
-
-                if (process.HasExited)
-                {
+                    // Exited is not yet drained: wait for the redirected streams to reach EOF so
+                    // the "Failed to start" line is in the log before it is read for the tag.
+                    await process.WaitForExitAsync(ct).ConfigureAwait(false);
                     string log;
                     lock (output) log = output.ToString().Trim();
-                    LastError = log.Length > 0
-                        ? log
-                        : Loc.Format("Xray_ExitedImmediately", process.ExitCode);
-                    foreach (var s in servers)
-                        Report(s, -1);
-                    return;
+                    string failure = XrayService.DescribeStartFailure(log, process.ExitCode, out var diagnosis);
+                    process.Dispose();
+                    process = null;
+
+                    int rejected = XrayConfigBuilder.SpeedtestEntryIndex(diagnosis.OutboundTag);
+                    if (rejected < 0 || rejected >= entries.Count || ++rejectedNodes > MaxRejectedNodes)
+                    {
+                        // Not a failure one node can be blamed for (or far too many of them).
+                        LastError = failure;
+                        foreach (var (s, _) in entries)
+                            Report(s, -1);
+                        return;
+                    }
+
+                    Debug.WriteLine($"[RealLatencyProbe] 内核拒绝节点 {entries[rejected].server.Name}: {failure}");
+                    Report(entries[rejected].server, -1);
+                    entries.RemoveAt(rejected);
+                    if (entries.Count == 0)
+                    {
+                        LastError = failure;
+                        return;
+                    }
                 }
 
                 // 6. Probe each server through its own socks port (capped concurrency).
@@ -195,21 +197,15 @@ namespace XrayUI.Services
             }
             catch (Exception ex)
             {
+                // entries, not servers: a node the core rejected above already has its result.
                 LastError = ex.Message;
-                foreach (var s in servers)
+                foreach (var (s, _) in entries)
                     Report(s, -1);
             }
             finally
             {
                 // 7. Tear down the throwaway core and its temp config.
-                try
-                {
-                    if (process is not null && !process.HasExited)
-                        process.Kill(entireProcessTree: true);
-                }
-                catch { }
-
-                process?.Dispose();
+                KillAndDispose(process);
 
                 try
                 {
@@ -218,6 +214,57 @@ namespace XrayUI.Services
                 }
                 catch { }
             }
+        }
+
+        /// <summary>
+        /// Launches the throwaway core on <see cref="ConfigPath"/> and waits until it reports
+        /// its inbounds up, exits, or <see cref="CoreReadyCap"/> passes. The caller owns the
+        /// returned process and tells the outcomes apart by <see cref="Process.HasExited"/>.
+        /// </summary>
+        /// <param name="output">Receives everything the core prints; lock it to read.</param>
+        private static async Task<Process> StartCoreAsync(StringBuilder output, CancellationToken ct)
+        {
+            var process = new Process { StartInfo = XrayService.CreateCoreStartInfo(ConfigPath) };
+            try
+            {
+                var readySignal = XrayReadySignal.Attach(process);
+                // xray logs to both stdout and stderr; capture both so a failed start has a reason.
+                void Capture(string? line)
+                {
+                    if (line is null) return;
+                    lock (output) output.AppendLine(line);
+                }
+                process.OutputDataReceived += (_, e) => Capture(e.Data);
+                process.ErrorDataReceived += (_, e) => Capture(e.Data);
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                await readySignal.WaitAsync(CoreReadyCap, ct).ConfigureAwait(false);
+                return process;
+            }
+            catch
+            {
+                // Never handed to the caller, so its finally cannot clean this one up.
+                KillAndDispose(process);
+                throw;
+            }
+        }
+
+        private static void KillAndDispose(Process? process)
+        {
+            if (process is null)
+                return;
+
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+            }
+            catch { }
+
+            process.Dispose();
         }
 
         private static async Task ProbeOneAsync(

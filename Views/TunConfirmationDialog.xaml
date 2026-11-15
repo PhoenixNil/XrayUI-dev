@@ -80,6 +80,28 @@
                                   HorizontalAlignment="Right"
                                   VerticalAlignment="Center" />
                 </Grid>
+
+                <!-- DNS leak guard (WFP filters) -->
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="LeakGuardLabelText"
+                               x:Uid="Tun_LeakGuardLabel"
+                               Text="防 DNS 泄漏"
+                               FontSize="15"
+                               VerticalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <ToggleSwitch x:Name="LeakGuardToggleSwitch"
+                                  Grid.Column="1"
+                                  AutomationProperties.LabeledBy="{x:Bind LeakGuardLabelText, Mode=OneTime}"
+                                  MinWidth="0"
+                                  OnContent=""
+                                  OffContent=""
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center" />
+                </Grid>
             </StackPanel>
         </Border>
     </StackPanel>

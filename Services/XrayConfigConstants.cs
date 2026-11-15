@@ -36,6 +36,9 @@
         // The v6 gateway sits in fd00::/8, deliberately clear of the FakeDNS v6 pool (fc00::/18).
         public const string TunGatewayV4   = "172.18.0.1/30";
         public const string TunGatewayV6   = "fdfe:dcba:9876::1/64";
+        // The resolver the leak guard sets on the adapter: the other host of the /30 above, so it
+        // is on-link through the TUN and inside the gateway range the core requires of it.
+        public const string TunDnsV4       = "172.18.0.2";
         public const string TunAutoRouteV4 = "0.0.0.0/0";
         public const string TunAutoRouteV6 = "::/0";
 

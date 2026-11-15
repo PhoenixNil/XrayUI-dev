@@ -50,6 +50,7 @@ public static class L
     public static string EditServer_Security         => Loc.GetString("EditServer_Security");
     public static string EditServer_Fingerprint      => Loc.GetString("EditServer_Fingerprint");
     public static string EditServer_AllowInsecure    => Loc.GetString("EditServer_AllowInsecure");
+    public static string EditServer_UseSystemCa      => Loc.GetString("EditServer_UseSystemCa");
     public static string EditServer_CertFingerprint  => Loc.GetString("EditServer_CertFingerprint");
     public static string EditServer_FlowPlaceholder  => Loc.GetString("EditServer_FlowPlaceholder");
 
@@ -160,6 +161,7 @@ public static class L
 
     // ── TUN confirmation ───────────────────────────────────────────────────
     public static string Tun_InterfaceTooltip   => Loc.GetString("Tun_InterfaceTooltip");
+    public static string Tun_LeakGuardTooltip   => Loc.GetString("Tun_LeakGuardTooltip");
     public static string Tun_AutoInterfaceLabel => Loc.GetString("Tun_AutoInterfaceLabel");
 
     // ── Subscription dialog ────────────────────────────────────────────────
@@ -356,6 +358,7 @@ public static class L
 
     // ── Xray engine / chain / TUN preflight (parameterless; parameterized keys
     //    like Xray_ExeNotFound / XrayLog_Started use Loc.Format at the call site) ──
+    public static string Xray_Hint_PlaintextProxy => Loc.GetString("Xray_Hint_PlaintextProxy");
     public static string XrayLog_Stopped         => Loc.GetString("XrayLog_Stopped");
     public static string XrayLog_ProcessExited   => Loc.GetString("XrayLog_ProcessExited");
     public static string XrayLog_Shutdown        => Loc.GetString("XrayLog_Shutdown");

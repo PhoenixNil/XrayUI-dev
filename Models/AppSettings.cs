@@ -46,6 +46,11 @@ namespace XrayUI.Models
         /// <summary>Route IPv6 (::/0) through the TUN adapter too. Opt-in; off by default to avoid
         /// IPv6 leak / Happy-Eyeballs stalls on IPv4-only networks.</summary>
         public bool TunIpv6Enabled { get; set; } = false;
+        /// <summary>Have the core add Windows Filtering Platform filters that keep other
+        /// programs' DNS, and the IP version the TUN does not route, from leaving outside the
+        /// TUN (autoSystemWfpBlockLeak "dns" + "misconfigtun"). Opt-in: the filters also cut off
+        /// other VPNs' DNS, VM NAT name resolution and captive-portal sign-in while TUN is up.</summary>
+        public bool TunLeakGuardEnabled { get; set; } = false;
         public bool IsStartupEnabled { get; set; } = false;
         public bool IsAutoConnect    { get; set; } = false;
         /// <summary>Auto-connect when the user opens the app by hand (not boot, jump list or

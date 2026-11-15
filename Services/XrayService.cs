@@ -152,6 +152,56 @@ namespace XrayUI.Services
             }
         }
 
+        /// <summary>
+        /// How a core is launched on a config file. Shared with the latency probe's throwaway
+        /// core so the two cannot drift apart on arguments, asset location or the orphan guard.
+        /// </summary>
+        internal static ProcessStartInfo CreateCoreStartInfo(string configPath)
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = ExePath,
+                Arguments = $"run -config \"{configPath}\"",
+                WorkingDirectory = Path.GetDirectoryName(ExePath)!,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                // Kernel-level safety net, bound at process creation: if the UI process dies
+                // any way (taskkill /F, AV crash, OOM) the kernel kills xray.exe too.
+                KillOnParentExit = true
+            };
+            psi.EnvironmentVariables["XRAY_LOCATION_ASSET"] = RulesDir;
+            return psi;
+        }
+
+        /// <summary>
+        /// The message for a core that exited during startup: its log, with a localized
+        /// explanation in front when the error names a cause <see cref="CoreStartupDiagnosis"/>
+        /// knows (the hint says what to change, the log still says where the core found it),
+        /// or the bare exit code when it printed nothing.
+        /// </summary>
+        /// <param name="diagnosis">What was recognized, for callers that act on it.</param>
+        internal static string DescribeStartFailure(
+            string startupLog, int exitCode, out CoreStartupDiagnosis diagnosis)
+        {
+            diagnosis = CoreStartupDiagnosis.Parse(startupLog);
+            if (startupLog.Length == 0)
+                return Loc.Format("Xray_ExitedImmediately", exitCode);
+
+            string? hint = diagnosis.Problem switch
+            {
+                CoreStartupProblem.PlaintextProxy => L.Xray_Hint_PlaintextProxy,
+                CoreStartupProblem.UnknownCipher => Loc.Format("Xray_Hint_UnknownCipher", diagnosis.Detail),
+                CoreStartupProblem.MissingGeoCategory => Loc.Format("Xray_Hint_MissingGeoCategory", diagnosis.Detail),
+                _ => null
+            };
+
+            return hint is null
+                ? startupLog
+                : hint + Environment.NewLine + Environment.NewLine + startupLog;
+        }
+
         /// <param name="config">The config to run. Its route-test endpoint is published once the
         /// core is up.</param>
         public async Task<bool> StartAsync(BuiltXrayConfig config)
@@ -178,22 +228,11 @@ namespace XrayUI.Services
                 Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
                 await File.WriteAllTextAsync(ConfigPath, config.Json);
 
-                var psi = new ProcessStartInfo
+                _process = new Process
                 {
-                    FileName = ExePath,
-                    Arguments = $"run -config \"{ConfigPath}\"",
-                    WorkingDirectory = Path.GetDirectoryName(ExePath)!,
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    // Kernel-level safety net, bound at process creation: if the UI process dies
-                    // any way (taskkill /F, AV crash, OOM) the kernel kills xray.exe too.
-                    KillOnParentExit = true
+                    StartInfo = CreateCoreStartInfo(ConfigPath),
+                    EnableRaisingEvents = true
                 };
-                psi.EnvironmentVariables["XRAY_LOCATION_ASSET"] = RulesDir;
-
-                _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
                 var readySignal = XrayReadySignal.Attach(_process);
 
                 _process.OutputDataReceived += (_, e) =>
@@ -240,9 +279,7 @@ namespace XrayUI.Services
                 if (outcome == XrayReadySignal.Outcome.Exited || _process.HasExited)
                 {
                     var startupLog = StopStartupLogCaptureAndRead();
-                    LastError = startupLog.Length > 0
-                        ? startupLog
-                        : Loc.Format("Xray_ExitedImmediately", _process.ExitCode);
+                    LastError = DescribeStartFailure(startupLog, _process.ExitCode, out _);
                     AppendLog(Loc.Format("XrayLog_StartFailed", LastError));
                     return false;
                 }

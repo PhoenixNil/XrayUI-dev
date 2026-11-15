@@ -131,6 +131,16 @@ namespace XrayUI.Models
         public partial bool AllowInsecure { get; set; }
 
         /// <summary>
+        /// Verify the server certificate against the Windows certificate store instead of the
+        /// CA list bundled in the core (tlsSettings.useSystemCA). Off by default, matching the
+        /// core; only a node signed by a private CA installed on this machine needs it. Applies
+        /// wherever a tlsSettings block is emitted, so not to REALITY. No share-link convention
+        /// carries it, so it is set by hand in the edit dialog.
+        /// </summary>
+        [ObservableProperty]
+        public partial bool UseSystemCa { get; set; }
+
+        /// <summary>
         /// Server certificate fingerprint (SHA-256 hex) to pin instead of validating the chain.
         /// Maps to tlsSettings.pinnedPeerCertSha256, so it applies to every TLS outbound — but
         /// not to REALITY, which authenticates by public key and has no tlsSettings.
@@ -144,7 +154,11 @@ namespace XrayUI.Models
         [ObservableProperty]
         public partial string EchConfigList { get; set; }
 
-        /// <summary>ECH force query mode: "half", "full", or empty/none.</summary>
+        /// <summary>
+        /// ECH force query mode: "half", "full", or empty/none. The core removed the option
+        /// (ECH is forced whenever a config list is set), so this is no longer written into the
+        /// config or editable; it survives only so imported share links round-trip unchanged.
+        /// </summary>
         [ObservableProperty]
         public partial string EchForceQuery { get; set; }
 
@@ -276,6 +290,7 @@ namespace XrayUI.Models
             Sni                = source.Sni;
             Fingerprint        = source.Fingerprint;
             AllowInsecure      = source.AllowInsecure;
+            UseSystemCa        = source.UseSystemCa;
             PinnedPeerCertSha256 = source.PinnedPeerCertSha256;
             EchConfigList      = source.EchConfigList;
             EchForceQuery      = source.EchForceQuery;

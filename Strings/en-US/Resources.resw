@@ -635,6 +635,9 @@
   <data name="EditServer_AllowInsecure" xml:space="preserve">
     <value>Allow insecure connection (skip certificate verification)</value>
   </data>
+  <data name="EditServer_UseSystemCa" xml:space="preserve">
+    <value>Verify with the Windows certificate store (private CA nodes)</value>
+  </data>
   <data name="EditServer_CertFingerprint" xml:space="preserve">
     <value>Certificate fingerprint (SHA-256)</value>
   </data>
@@ -1417,6 +1420,12 @@ This action cannot be undone. Are you sure you want to continue?</value>
   <data name="Tun_AutoInterfaceLabel" xml:space="preserve">
     <value>auto (recommended)</value>
   </data>
+  <data name="Tun_LeakGuardLabel.Text" xml:space="preserve">
+    <value>Block DNS leaks</value>
+  </data>
+  <data name="Tun_LeakGuardTooltip" xml:space="preserve">
+    <value>Uses the Windows Filtering Platform to stop other programs from sending DNS queries outside the TUN, and blocks the IP version that is not routed into it (all IPv6 traffic unless IPv6 is enabled). While this is on, DNS for other VPNs, name resolution for NAT-ed virtual machines and public Wi-Fi sign-in pages may stop working.</value>
+  </data>
   <data name="Tun_Ipv6Label.Text" xml:space="preserve">
     <value>Enable IPv6 address</value>
   </data>
@@ -1474,6 +1483,15 @@ This action cannot be undone. Are you sure you want to continue?</value>
   <data name="Xray_ExeNotFound" xml:space="preserve">
     <value>Could not find xray.exe
 Path: {0}</value>
+  </data>
+  <data name="Xray_Hint_PlaintextProxy" xml:space="preserve">
+    <value>The core no longer allows VLESS / Trojan to reach a public server unencrypted. Enable TLS or REALITY for this node (VLESS can also use VLESS Encryption), or pick another node.</value>
+  </data>
+  <data name="Xray_Hint_UnknownCipher" xml:space="preserve">
+    <value>The core does not support the cipher &quot;{0}&quot;. The Shadowsocks none / plain methods were removed; use an AEAD or 2022 cipher instead.</value>
+  </data>
+  <data name="Xray_Hint_MissingGeoCategory" xml:space="preserve">
+    <value>A rule refers to {0}, but the current geosite.dat / geoip.dat has no such category. Remove or replace it in your custom rules, advanced routing or config profile.</value>
   </data>
   <data name="Xray_ExitedImmediately" xml:space="preserve">
     <value>xray exited immediately (exit code {0})</value>
