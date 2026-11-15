@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using XrayUI.Helpers;
@@ -51,7 +52,9 @@ namespace XrayUI.Services
             // them last means the same code path serves both, and a profile cannot desync the
             // config from the server list.
             var outbounds = BuildOutbounds(
-                server, settings, availableServers, profileMode: profileJson is not null);
+                server, settings, availableServers,
+                profileMode: profileJson is not null,
+                forwardNonAddressDns: TunBlocksOutsideDns(config));
             config["outbounds"] = outbounds;
 
             var routeTest = AddRouteTestApi(config, outbounds, apiPort, settings.IsTunMode);
@@ -255,35 +258,86 @@ namespace XrayUI.Services
                 ? CreateStringArray(XrayConfigConstants.TunAutoRouteV4, XrayConfigConstants.TunAutoRouteV6)
                 : CreateStringArray(XrayConfigConstants.TunAutoRouteV4);
 
+            var tunSettings = new JsonObject
+            {
+                ["name"] = XrayConfigConstants.TunInterfaceName,
+                ["mtu"] = XrayConfigConstants.NormalizeTunMtu(settings.TunMtu),
+                ["gateway"] = gateway,
+                ["autoSystemRoutingTable"] = autoRoutes,
+                ["autoOutboundsInterface"] = XrayConfigConstants.TunOutboundInterfaceAuto
+            };
+
+            if (IsLeakGuardActive(settings))
+            {
+                // Windows queries the DNS servers of every interface, each through its own
+                // interface, so routes alone do not keep lookups inside the TUN. The "dns"
+                // filter blocks those; the core then requires a resolver on the TUN itself,
+                // inside the gateway or routed range. The address is nominal: the port-53 lead
+                // rule hands every query from tun-in to dns-out, so nothing is ever sent to it.
+                tunSettings["dns"] = CreateStringArray(XrayConfigConstants.TunDnsV4);
+                // "misconfigtun" blocks the IP version that has no route into the TUN, which
+                // is IPv6 unless TunIpv6Enabled is on.
+                tunSettings["autoSystemWfpBlockLeak"] = CreateStringArray("dns", "misconfigtun");
+            }
+
             return new JsonObject
             {
                 ["tag"] = XrayConfigConstants.TunInboundTag,
                 ["protocol"] = "tun",
-                ["settings"] = new JsonObject
-                {
-                    ["name"] = XrayConfigConstants.TunInterfaceName,
-                    ["mtu"] = XrayConfigConstants.NormalizeTunMtu(settings.TunMtu),
-                    ["gateway"] = gateway,
-                    ["autoSystemRoutingTable"] = autoRoutes,
-                    ["autoOutboundsInterface"] = XrayConfigConstants.TunOutboundInterfaceAuto
-                },
+                ["settings"] = tunSettings,
                 ["sniffing"] = sniffing,
             };
         }
 
+        /// <summary>
+        /// True when DNS queries entering through the TUN are answered by xray's own DNS module
+        /// (a port-53 rule to dns-out) rather than forwarded. FakeDNS needs that to hand out
+        /// fake IPs; the leak guard needs it because the resolver it puts on the TUN is nominal.
+        /// </summary>
+        private static bool IsTunDnsHijacked(AppSettings settings) =>
+            IsFakeDnsActive(settings) || IsLeakGuardActive(settings);
+
+        /// <summary>True when the generated TUN inbound carries the WFP leak filters.</summary>
+        private static bool IsLeakGuardActive(AppSettings settings) =>
+            settings.IsTunMode && settings.TunLeakGuardEnabled;
+
+        /// <summary>
+        /// True when the config's TUN inbound blocks other programs' DNS outside the TUN
+        /// (<c>autoSystemWfpBlockLeak</c> lists "dns"), which is what obliges dns-out to answer
+        /// every query type — see <see cref="ApplyDnsForwarding"/>. Read back from the built
+        /// config rather than from settings, like the system proxy port: a profile started
+        /// from the template while the guard was on carries these filters in its own inbound,
+        /// whatever the setting says by the time it runs.
+        /// </summary>
+        private static bool TunBlocksOutsideDns(JsonObject config) =>
+            config["inbounds"] is JsonArray inbounds
+            && inbounds.OfType<JsonObject>().Any(inbound =>
+                IsString(inbound["protocol"], "tun")
+                && inbound["settings"] is JsonObject tunSettings
+                && tunSettings["autoSystemWfpBlockLeak"] is JsonArray leaks
+                && leaks.Any(leak => IsString(leak, "dns")));
+
+        private static bool IsString(JsonNode? node, string expected) =>
+            node is JsonValue value
+            && value.TryGetValue<string>(out var text)
+            && string.Equals(text, expected, StringComparison.OrdinalIgnoreCase);
+
         /// <param name="profileMode">Set when the config came from a hand-written profile, which
         /// makes block and dns-out unconditional. Deriving the set from the tags the routing
         /// rules name would look tighter and fail badly: tags are also referenced from
-        /// routing.balancers[].selector and an outbound's own proxySettings.tag, and a set that
+        /// routing.balancers[].selector and an outbound's own sockopt.dialerProxy, and a set that
         /// misses one leaves xray refusing to start on an unknown tag. The superset fails safe
         /// instead — both outbounds are inert when nothing routes to them. Kept in agreement with
         /// <see cref="ConfigProfileJson.InjectedOutboundTags"/>, which declares the same tags as
         /// legal to reference.</param>
+        /// <param name="forwardNonAddressDns">Give dns-out a real upstream for non-A/AAAA
+        /// queries; see <see cref="TunBlocksOutsideDns"/>.</param>
         private static JsonArray BuildOutbounds(
             ServerEntry server,
             AppSettings settings,
             IEnumerable<ServerEntry>? availableServers,
-            bool profileMode = false)
+            bool profileMode,
+            bool forwardNonAddressDns)
         {
             var list = new JsonArray();
 
@@ -292,7 +346,7 @@ namespace XrayUI.Services
                 var (entryServer, exitServer) = ResolveChainServers(server, availableServers);
                 var proxy = BuildProxyOutbound(exitServer, ProxyOutboundTag);
                 var chainEntry = BuildProxyOutbound(entryServer, ChainEntryOutboundTag);
-                ApplyProxySettings(proxy, ChainEntryOutboundTag);
+                ApplyDialerProxy(proxy, ChainEntryOutboundTag);
                 AddNode(list, proxy);
                 AddNode(list, chainEntry);
             }
@@ -330,13 +384,20 @@ namespace XrayUI.Services
                 });
             }
 
-            if (profileMode || IsFakeDnsActive(settings))
+            if (profileMode || IsTunDnsHijacked(settings))
             {
-                AddNode(list, new JsonObject
+                var dnsOut = new JsonObject
                 {
                     ["tag"] = XrayConfigConstants.DnsOutboundTag,
                     ["protocol"] = "dns",
-                });
+                };
+
+                if (forwardNonAddressDns)
+                {
+                    ApplyDnsForwarding(dnsOut, settings);
+                }
+
+                AddNode(list, dnsOut);
             }
 
             var outboundInterface = NormalizeTunOutboundInterface(settings.TunOutboundInterface);
@@ -354,6 +415,57 @@ namespace XrayUI.Services
 
             return list;
         }
+
+        /// <summary>
+        /// Gives dns-out a real upstream for everything that is not an A/AAAA query. With no
+        /// rules the core answers those types (TXT, SRV, MX, HTTPS...) with an empty success,
+        /// which is survivable only while Windows can still ask the physical adapters' DNS
+        /// servers. The leak guard blocks exactly that, leaving dns-out the one resolver other
+        /// programs can reach — so it has to answer every type. The query's own destination
+        /// cannot be the upstream: it is the nominal <see cref="XrayConfigConstants.TunDnsV4"/>.
+        ///
+        /// Forwarded queries are dialed by this outbound directly rather than routed, so they
+        /// are sent through the proxy outbound explicitly; going out the physical adapter would
+        /// be the very leak the guard is there to close. TCP, because not every proxy protocol
+        /// carries UDP (http does not) and every public resolver answers on TCP 53.
+        /// </summary>
+        private static void ApplyDnsForwarding(JsonObject dnsOut, AppSettings settings)
+        {
+            var rules = new JsonArray();
+            // Explicit, though it restates the core's default for these two types: once any
+            // rule exists, an unlisted A/AAAA query would fall through to the forward below
+            // and skip xray's DNS module (split-horizon servers, FakeDNS pool).
+            AddNode(rules, new JsonObject
+            {
+                ["action"] = "hijack",
+                ["qType"] = "1,28"
+            });
+            AddNode(rules, new JsonObject
+            {
+                ["action"] = "direct"
+            });
+
+            dnsOut["settings"] = new JsonObject
+            {
+                ["rewriteNetwork"] = "tcp",
+                ["rewriteAddress"] = ForwardDnsAddress(settings.ProxyDnsServer),
+                ["rewritePort"] = 53,
+                ["rules"] = rules
+            };
+
+            ApplyDialerProxy(dnsOut, ProxyOutboundTag);
+        }
+
+        /// <summary>
+        /// The plain-DNS address forwarded queries are rewritten to. The user's proxy resolver
+        /// when it is a bare IP; a DoH/DoT URL or a host name cannot be used here (the dns
+        /// outbound speaks only classic DNS, and resolving a name would need the very resolver
+        /// being configured), so those fall back to the default.
+        /// </summary>
+        private static string ForwardDnsAddress(string? proxyDnsServer) =>
+            IPAddress.TryParse(proxyDnsServer?.Trim(), out var ip) ? ip.ToString() : DefaultProxyDns;
+
+        private const string DefaultProxyDns = "8.8.8.8";
 
         internal static string? NormalizeTunOutboundInterface(string? interfaceName)
         {
@@ -397,13 +509,16 @@ namespace XrayUI.Services
             return (entryServer, exitServer);
         }
 
-        private static void ApplyProxySettings(JsonObject outbound, string tag)
+        /// <summary>
+        /// Makes <paramref name="outbound"/> dial through the outbound tagged
+        /// <paramref name="tag"/>. This is the only spelling the core still accepts: outbound
+        /// "proxySettings" was removed in Xray 26.9.9 and now fails config parsing outright.
+        /// Unlike the interface pin below, this applies to wireguard too — the core routes that
+        /// outbound's UDP through the same dialer.
+        /// </summary>
+        private static void ApplyDialerProxy(JsonObject outbound, string tag)
         {
-            outbound["proxySettings"] = new JsonObject
-            {
-                ["tag"] = tag,
-                ["transportLayer"] = true
-            };
+            GetOrAddSockopt(outbound)["dialerProxy"] = tag;
         }
 
         private static void ApplyOutboundInterface(JsonObject outbound, string interfaceName)
@@ -415,6 +530,13 @@ namespace XrayUI.Services
             if (string.Equals(protocol, "wireguard", StringComparison.OrdinalIgnoreCase))
                 return;
 
+            GetOrAddSockopt(outbound)["interface"] = interfaceName;
+        }
+
+        // Both callers above write into the same sockopt object (a chain's exit outbound gets a
+        // dialerProxy and, in TUN mode, an interface pin), so this must merge, never replace.
+        private static JsonObject GetOrAddSockopt(JsonObject outbound)
+        {
             var streamSettings = outbound["streamSettings"] as JsonObject;
             if (streamSettings is null)
             {
@@ -429,7 +551,7 @@ namespace XrayUI.Services
                 streamSettings["sockopt"] = sockopt;
             }
 
-            sockopt["interface"] = interfaceName;
+            return sockopt;
         }
 
         private static JsonObject BuildProxyOutbound(ServerEntry server, string tag)
@@ -681,11 +803,12 @@ namespace XrayUI.Services
             var peers = new JsonArray();
             AddNode(peers, peer);
 
+            // No domainStrategy: the core removed it from the wireguard outbound. Domain targets
+            // are resolved through the tunnel by its remoteDNS, whose default list is kept.
             var settings = new JsonObject
             {
                 ["secretKey"] = server.WgPrivateKey,
-                ["peers"] = peers,
-                ["domainStrategy"] = "ForceIP"
+                ["peers"] = peers
             };
 
             // Omit address entirely when no CIDR was configured: an explicit "address": [] reads as
@@ -791,6 +914,14 @@ namespace XrayUI.Services
                 tlsSettings["pinnedPeerCertSha256"] = server.PinnedPeerCertSha256;
             }
 
+            // The core verifies against its own bundled CA list by default and no longer
+            // consults the Windows certificate store, so a node signed by a private CA the user
+            // installed there needs this to keep verifying.
+            if (server.UseSystemCa)
+            {
+                tlsSettings["useSystemCA"] = true;
+            }
+
             return tlsSettings;
         }
 
@@ -827,13 +958,9 @@ namespace XrayUI.Services
                 if (string.Equals(server.Protocol, "vless", StringComparison.OrdinalIgnoreCase)
                     && !string.IsNullOrWhiteSpace(server.EchConfigList))
                 {
+                    // No echForceQuery beside it: the core dropped that field (ECH is forced
+                    // whenever a config list is set) and silently ignores it now.
                     tlsSettings["echConfigList"] = server.EchConfigList;
-
-                    var echForceQuery = EchSettings.NormalizeForceQuery(server.EchForceQuery);
-                    if (!string.IsNullOrEmpty(echForceQuery))
-                    {
-                        tlsSettings["echForceQuery"] = echForceQuery;
-                    }
                 }
 
                 stream["tlsSettings"] = tlsSettings;
@@ -856,24 +983,19 @@ namespace XrayUI.Services
 
             if (network == "ws")
             {
-                JsonObject headers;
-                if (string.IsNullOrWhiteSpace(server.WsHost))
+                var wsSettings = new JsonObject
                 {
-                    headers = [];
-                }
-                else
+                    ["path"] = server.Path
+                };
+
+                // The standalone "host" key, same as xhttp below. The older headers.Host
+                // spelling still loads but logs a "will be removed soon" deprecation warning.
+                if (!string.IsNullOrWhiteSpace(server.WsHost))
                 {
-                    headers = new JsonObject
-                    {
-                        ["Host"] = server.WsHost
-                    };
+                    wsSettings["host"] = server.WsHost;
                 }
 
-                stream["wsSettings"] = new JsonObject
-                {
-                    ["path"] = server.Path,
-                    ["headers"] = headers
-                };
+                stream["wsSettings"] = wsSettings;
             }
             else if (network == "grpc")
             {
@@ -926,9 +1048,10 @@ namespace XrayUI.Services
         private static void ApplyFinalmask(JsonObject streamSettings, ServerEntry server)
         {
             var finalmask = FinalmaskJson.Parse(server.Finalmask);
-            if (finalmask is JsonObject)
+            if (finalmask is JsonObject root)
             {
-                streamSettings["finalmask"] = finalmask;
+                FinalmaskJson.TranslateLegacyUdpHop(root);
+                streamSettings["finalmask"] = root;
             }
         }
 
@@ -1070,7 +1193,7 @@ namespace XrayUI.Services
         {
             if (!settings.IsTunMode) return;
 
-            if (settings.FakeDnsEnabled)
+            if (IsTunDnsHijacked(settings))
             {
                 // Must precede the self/xray direct rule so DNS queries from tun-in get
                 // intercepted by xray's internal DNS handler (and the fakedns pool) rather
@@ -1245,7 +1368,7 @@ namespace XrayUI.Services
         {
             var (geositeDomestic, _) = RegionGeoTokens(settings.RoutingRegion);
             var directDns = settings.DirectDnsServer ?? DefaultDirectDns(settings.RoutingRegion);
-            var proxyDns = settings.ProxyDnsServer ?? "8.8.8.8";
+            var proxyDns = settings.ProxyDnsServer ?? DefaultProxyDns;
 
             var directEntry = new JsonObject
             {
@@ -1311,6 +1434,25 @@ namespace XrayUI.Services
             array.Add((JsonNode?)JsonValue.Create(value));
         }
 
+        private const string SpeedtestOutboundTagPrefix = "out-";
+
+        /// <summary>
+        /// Maps an outbound tag of a <see cref="BuildSpeedtestConfig"/> config back to the index
+        /// of the entry it was built from, or -1 when the tag is not one of those (null, the
+        /// freedom fallback). Lets the latency probe find the node the core rejected by the tag
+        /// in the core's own error, without knowing the tag scheme.
+        /// </summary>
+        public static int SpeedtestEntryIndex(string? outboundTag) =>
+            outboundTag is not null
+            && outboundTag.StartsWith(SpeedtestOutboundTagPrefix, StringComparison.Ordinal)
+            && int.TryParse(
+                outboundTag.AsSpan(SpeedtestOutboundTagPrefix.Length),
+                System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var index)
+                ? index
+                : -1;
+
         /// <summary>
         /// Builds a dedicated speed-test config for the "real delay" latency test: one socks
         /// inbound + one proxy outbound per server, paired 1:1 via routing (in-{i} → out-{i}).
@@ -1336,7 +1478,7 @@ namespace XrayUI.Services
             {
                 var (server, port) = entries[i];
                 var inTag = $"in-{i}";
-                var outTag = $"out-{i}";
+                var outTag = $"{SpeedtestOutboundTagPrefix}{i}";
 
                 AddNode(inbounds, new JsonObject
                 {

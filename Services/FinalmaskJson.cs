@@ -160,6 +160,80 @@ namespace XrayUI.Services
             return Write(root);
         }
 
+        /// <summary>Drops quicParams.udpHop, and quicParams itself once that leaves it empty.</summary>
+        private static void RemoveLegacyUdpHop(JsonObject root, JsonObject quicParams)
+        {
+            quicParams.Remove("udpHop");
+            if (quicParams.Count == 0)
+                root.Remove("quicParams");
+        }
+
+        /// <summary>Hop mode equal to what quicParams.udpHop did: a fresh local socket and a fresh remote port per interval.</summary>
+        private const string LegacyUdpHopMode = "intervalLocal,intervalRemote";
+
+        /// <summary>
+        /// Rewrites the stored quicParams.udpHop into the udp mask the core reads since Xray
+        /// 26.9.9: <c>udp: [{type: "udphop", settings: {mode, interval, remotePorts}}]</c>. The
+        /// core ignores the old key without complaint, so an untranslated mask passes
+        /// <c>-test</c> and then never leaves the base port. Run on the config being emitted
+        /// only — stored masks and share links keep the quicParams shape, which is what
+        /// <see cref="AddHysteria2UdpHop"/> writes and <see cref="TakeHysteria2UdpHop"/> reads.
+        /// </summary>
+        public static void TranslateLegacyUdpHop(JsonObject root)
+        {
+            if (root["quicParams"] is not JsonObject quicParams
+                || quicParams["udpHop"] is not JsonObject legacy)
+            {
+                return;
+            }
+
+            JsonArray? udp;
+            switch (root["udp"])
+            {
+                case JsonArray existing: udp = existing; break;
+                case null: udp = null; break;
+                default: return; // non-array udp: a mask we do not understand, leave it alone
+            }
+
+            RemoveLegacyUdpHop(root, quicParams);
+
+            if (AsText(legacy["ports"]) is not { Length: > 0 } ports)
+                return;
+
+            // A hand-written native hop wins, same as an existing udpHop wins in AddHysteria2UdpHop.
+            if (udp is not null)
+            {
+                foreach (var item in udp)
+                {
+                    if (item is JsonObject itemObject
+                        && string.Equals(AsText(itemObject["type"]), "udphop", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+                }
+            }
+
+            var settings = new JsonObject
+            {
+                ["mode"] = LegacyUdpHopMode, // required: the core rejects a hop with no mode
+                ["remotePorts"] = ports
+            };
+            if (legacy["interval"] is JsonNode interval)
+                settings["interval"] = interval.DeepClone();
+
+            if (udp is null)
+                root["udp"] = udp = [];
+
+            // Last, after salamander: the hop owns the dial, so it has to be the innermost mask,
+            // and the core lists masks outermost first. Anywhere else passes -test and then
+            // fails every connection with "incorrect index: 1 *udphop.Config" (26.11.9, tested).
+            udp.Add((JsonNode)new JsonObject
+            {
+                ["type"] = "udphop",
+                ["settings"] = settings
+            });
+        }
+
         /// <summary>
         /// Inverse of <see cref="AddHysteria2SalamanderMask"/>: pulls the obfs password out so a
         /// share link can re-emit it as obfs= / obfs-password=, and returns what is left of the
@@ -218,9 +292,7 @@ namespace XrayUI.Services
             if (!isCanonical)
                 return (ports, finalmask);
 
-            quicParams.Remove("udpHop");
-            if (quicParams.Count == 0)
-                root.Remove("quicParams");
+            RemoveLegacyUdpHop(root, quicParams);
 
             return (ports, Remaining(root));
         }

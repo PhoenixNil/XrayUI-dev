@@ -635,6 +635,9 @@
   <data name="EditServer_AllowInsecure" xml:space="preserve">
     <value>允许不安全连接（跳过证书校验）</value>
   </data>
+  <data name="EditServer_UseSystemCa" xml:space="preserve">
+    <value>使用系统证书库校验（自签 CA 节点）</value>
+  </data>
   <data name="EditServer_CertFingerprint" xml:space="preserve">
     <value>证书指纹 (SHA-256)</value>
   </data>
@@ -1420,6 +1423,12 @@
   <data name="Tun_AutoInterfaceLabel" xml:space="preserve">
     <value>auto（推荐）</value>
   </data>
+  <data name="Tun_LeakGuardLabel.Text" xml:space="preserve">
+    <value>防 DNS 泄漏</value>
+  </data>
+  <data name="Tun_LeakGuardTooltip" xml:space="preserve">
+    <value>通过 Windows 筛选平台阻止其他程序绕过 TUN 发送 DNS 查询，并阻止未路由进 TUN 的 IP 版本（未开启 IPv6 时即全部 IPv6 流量）。开启期间，其他 VPN 的 DNS、虚拟机 NAT 的域名解析以及公共 Wi-Fi 的登录认证页可能无法使用。</value>
+  </data>
   <data name="Tun_Ipv6Label.Text" xml:space="preserve">
     <value>开启IPv6</value>
   </data>
@@ -1477,6 +1486,15 @@
   <data name="Xray_ExeNotFound" xml:space="preserve">
     <value>找不到 xray.exe
 路径：{0}</value>
+  </data>
+  <data name="Xray_Hint_PlaintextProxy" xml:space="preserve">
+    <value>内核不再允许 VLESS / Trojan 以明文方式连接公网服务器。请为该节点启用 TLS 或 REALITY（VLESS 也可使用 VLESS Encryption），或换用其他节点。</value>
+  </data>
+  <data name="Xray_Hint_UnknownCipher" xml:space="preserve">
+    <value>内核不支持加密方式“{0}”。Shadowsocks 的 none / plain 已被移除，请改用 AEAD 或 2022 系列加密方式。</value>
+  </data>
+  <data name="Xray_Hint_MissingGeoCategory" xml:space="preserve">
+    <value>规则引用了 {0}，但当前的 geosite.dat / geoip.dat 中没有这个分类。请在自定义规则、高级路由或配置档案中删除或替换它。</value>
   </data>
   <data name="Xray_ExitedImmediately" xml:space="preserve">
     <value>xray 立即退出（退出码 {0}）</value>

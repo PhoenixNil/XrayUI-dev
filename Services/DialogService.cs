@@ -172,6 +172,8 @@ namespace XrayUI.Services
             var txtFp = new TextBox { Header = L.EditServer_Fingerprint, Text = existing?.Fingerprint ?? string.Empty };
             var chkAllowInsecure = new CheckBox
                 { Content = L.EditServer_AllowInsecure, IsChecked = existing?.AllowInsecure ?? false };
+            var chkUseSystemCa = new CheckBox
+                { Content = L.EditServer_UseSystemCa, IsChecked = existing?.UseSystemCa ?? false };
             // Localized on purpose, unlike the PublicKey (Reality) / Flow (VLESS) rows below:
             // it pairs with 指纹 (uTLS) above, of which 证书指纹 is the qualified form.
             var txtPinnedCert = new TextBox
@@ -187,13 +189,6 @@ namespace XrayUI.Services
                 Text = existing?.EchConfigList ?? string.Empty,
                 TextWrapping = TextWrapping.Wrap
             };
-            var cmbEchForceQuery = new ComboBox { Header = "ECH Force Query", MinWidth = 200 };
-            foreach (var q in new[] { EchSettings.None, EchSettings.Half, EchSettings.Full })
-                cmbEchForceQuery.Items.Add(q);
-            var existingEchForceQuery = EchSettings.NormalizeForceQuery(existing?.EchForceQuery);
-            cmbEchForceQuery.SelectedItem = string.IsNullOrEmpty(existingEchForceQuery)
-                ? EchSettings.None
-                : existingEchForceQuery;
             var txtPk = new TextBox { Header = "PublicKey (Reality)", Text = existing?.PublicKey ?? string.Empty };
             var txtSid = new TextBox { Header = "ShortId (Reality)", Text = existing?.ShortId ?? string.Empty };
             var txtSpx = new TextBox { Header = "SpiderX (Reality)", Text = existing?.SpiderX ?? string.Empty };
@@ -244,9 +239,9 @@ namespace XrayUI.Services
             var rowSni = Wrap(txtSni);
             var rowFp = Wrap(txtFp);
             var rowAllowInsecure = Wrap(chkAllowInsecure);
+            var rowUseSystemCa = Wrap(chkUseSystemCa);
             var rowPinnedCert = Wrap(txtPinnedCert);
             var rowEchConfigList = Wrap(txtEchConfigList);
-            var rowEchForceQuery = Wrap(cmbEchForceQuery);
             var rowPk = Wrap(txtPk);
             var rowSid = Wrap(txtSid);
             var rowSpx = Wrap(txtSpx);
@@ -304,8 +299,9 @@ namespace XrayUI.Services
                 rowPinnedCert.Visibility = ((hasTls && !hasReality) || isHysteria2)
                     ? Visibility.Visible
                     : Visibility.Collapsed;
+                // Same reach as the pin: both are tlsSettings keys.
+                rowUseSystemCa.Visibility = rowPinnedCert.Visibility;
                 rowEchConfigList.Visibility = hasEch ? Visibility.Visible : Visibility.Collapsed;
-                rowEchForceQuery.Visibility = hasEch ? Visibility.Visible : Visibility.Collapsed;
                 rowPk.Visibility = hasReality ? Visibility.Visible : Visibility.Collapsed;
                 rowSid.Visibility = hasReality ? Visibility.Visible : Visibility.Collapsed;
                 rowSpx.Visibility = hasReality ? Visibility.Visible : Visibility.Collapsed;
@@ -344,7 +340,7 @@ namespace XrayUI.Services
                     txtName, txtHost, numPort, cmbProtocol,
                     rowEncryption, rowUsername, rowPassword, rowUuid, rowAlterId,
                     cmbNetwork, rowPath, rowWsHost, rowXhttpMode, rowXhttpExtra,
-                    cmbSecurity, rowSni, rowFp, rowAllowInsecure, rowPinnedCert, rowEchConfigList, rowEchForceQuery,
+                    cmbSecurity, rowSni, rowFp, rowAllowInsecure, rowUseSystemCa, rowPinnedCert, rowEchConfigList,
                     rowPk, rowSid, rowSpx, rowFlow, rowVlessEncryption,
                     rowWgPrivateKey, rowWgPublicKey, rowWgPreSharedKey, rowWgLocalAddress, rowWgMtu, rowWgReserved,
                     rowFinalmask
@@ -393,6 +389,7 @@ namespace XrayUI.Services
             entry.Sni = txtSni.Text.Trim();
             entry.Fingerprint = txtFp.Text.Trim();
             entry.AllowInsecure = chkAllowInsecure.IsChecked == true;
+            entry.UseSystemCa = chkUseSystemCa.IsChecked == true;
             // Hand entry is the only path that needs cleaning: cert viewers copy digests with
             // colons (openssl, Firefox) or spaces (Windows certmgr). Measured against the shipped
             // core — it tolerates colons and either case itself, but rejects the spaced form with
@@ -400,8 +397,9 @@ namespace XrayUI.Services
             // those paths store what they were given.
             entry.PinnedPeerCertSha256 = txtPinnedCert.Text
                 .Trim().Replace(":", string.Empty).Replace(" ", string.Empty);
+            // EchForceQuery is deliberately left as it was: the core dropped the option, so
+            // there is no control for it, and an imported link's value should round-trip.
             entry.EchConfigList = txtEchConfigList.Text.Trim();
-            entry.EchForceQuery = EchSettings.NormalizeForceQuery(cmbEchForceQuery.SelectedItem?.ToString());
             entry.PublicKey = txtPk.Text.Trim();
             entry.ShortId = txtSid.Text.Trim();
             entry.SpiderX = txtSpx.Text.Trim();
@@ -509,6 +507,7 @@ namespace XrayUI.Services
             if (!pinApplies)
             {
                 entry.PinnedPeerCertSha256 = string.Empty;
+                entry.UseSystemCa = false;
             }
 
             if (entry.Protocol != "ss" && entry.Protocol != "socks" && entry.Protocol != "http" && entry.Protocol != "wireguard")
@@ -680,7 +679,8 @@ namespace XrayUI.Services
 
         public async Task<bool> ShowTunConfirmationDialogAsync(AppSettings settings)
         {
-            var content = new TunConfirmationDialog(settings.TunMtu, settings.TunOutboundInterface, settings.TunIpv6Enabled);
+            var content = new TunConfirmationDialog(
+                settings.TunMtu, settings.TunOutboundInterface, settings.TunIpv6Enabled, settings.TunLeakGuardEnabled);
 
             var dialog = CreateDialog();
             dialog.Title = L.Tun_EnableTitle;
@@ -695,6 +695,7 @@ namespace XrayUI.Services
             settings.TunMtu = content.Mtu;
             settings.TunOutboundInterface = content.SelectedInterface;
             settings.TunIpv6Enabled = content.Ipv6Enabled;
+            settings.TunLeakGuardEnabled = content.LeakGuardEnabled;
             return true;
         }
 
