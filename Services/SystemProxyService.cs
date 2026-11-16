@@ -35,7 +35,6 @@ namespace XrayUI.Services
                     "172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;" +
                     "172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*;<local>",
                     RegistryValueKind.String);
-                key.Flush();
 
                 NotifyWindows();
             }
@@ -55,7 +54,6 @@ namespace XrayUI.Services
 
                 key.SetValue("ProxyEnable", 0, RegistryValueKind.DWord);
                 key.DeleteValue("ProxyServer", throwOnMissingValue: false);
-                key.Flush();
                 NotifyWindows();
             }
             catch (Exception ex)
