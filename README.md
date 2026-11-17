@@ -64,6 +64,11 @@ dotnet publish -c Release -r win-arm64 -p:Platform=ARM64
   </a>
 </p>
 
+
+  <a href="https://signpath.io" target="_blank" rel="noreferrer noopener">
+  <img  src="https://github.com/user-attachments/assets/1c7544dc-f76b-40db-b686-0357152dc90c"  width="260" />
+  </a>
+
 ## Code signing policy
 
 Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
