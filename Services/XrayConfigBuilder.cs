@@ -230,25 +230,12 @@ namespace XrayUI.Services
             {
                 ["auth"] = "noauth",
                 ["udp"] = true
-            }
+            },
+            ["sniffing"] = XrayInboundSniffing.Create()
         };
 
         private static JsonObject BuildTunInbound(AppSettings settings)
         {
-            var destOverride = settings.FakeDnsEnabled
-                ? CreateStringArray(XrayConfigConstants.FakeDnsServerTag, "http", "tls", "quic")
-                : CreateStringArray("http", "tls", "quic");
-
-            var sniffing = new JsonObject
-            {
-                ["enabled"] = true,
-                ["destOverride"] = destOverride,
-            };
-            if (settings.FakeDnsEnabled)
-            {
-                sniffing["metadataOnly"] = false;
-            }
-
             // IPv6 is opt-in: only when enabled do we hand the TUN a v6 gateway and hijack ::/0,
             // so IPv4-only networks keep the leak-free v4-only behaviour.
             var gateway = settings.TunIpv6Enabled
@@ -285,7 +272,9 @@ namespace XrayUI.Services
                 ["tag"] = XrayConfigConstants.TunInboundTag,
                 ["protocol"] = "tun",
                 ["settings"] = tunSettings,
-                ["sniffing"] = sniffing,
+                ["sniffing"] = XrayInboundSniffing.Create(
+                    fakeDnsEnabled: settings.FakeDnsEnabled,
+                    leakGuardActive: IsLeakGuardActive(settings)),
             };
         }
 
