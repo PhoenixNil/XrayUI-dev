@@ -13,6 +13,9 @@ namespace XrayUI.Services
         private const int INTERNET_OPTION_SETTINGS_CHANGED = 39;
         private const int INTERNET_OPTION_REFRESH          = 37;
 
+        private static readonly object _proxyLock = new();
+        private static readonly SystemProxyOwnership _ownership = new();
+
         [DllImport("wininet.dll", SetLastError = true)]
         private static extern bool InternetSetOption(
             IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);
@@ -24,19 +27,24 @@ namespace XrayUI.Services
         {
             try
             {
-                using var key = Registry.CurrentUser.OpenSubKey(RegPath, writable: true)
-                             ?? throw new InvalidOperationException("无法打开注册表项：" + RegPath);
+                lock (_proxyLock)
+                {
+                    using var key = Registry.CurrentUser.OpenSubKey(RegPath, writable: true)
+                                 ?? throw new InvalidOperationException("无法打开注册表项：" + RegPath);
 
-                key.SetValue("ProxyEnable", 1, RegistryValueKind.DWord);
-                key.SetValue("ProxyServer", $"{host}:{port}", RegistryValueKind.String);
-                // Bypass proxy for local addresses.
-                key.SetValue("ProxyOverride",
-                    "localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;" +
-                    "172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;" +
-                    "172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*;<local>",
-                    RegistryValueKind.String);
+                    var proxyServer = $"{host}:{port}";
+                    key.SetValue("ProxyEnable", 1, RegistryValueKind.DWord);
+                    key.SetValue("ProxyServer", proxyServer, RegistryValueKind.String);
+                    _ownership.Record(proxyServer);
+                    // Bypass proxy for local addresses.
+                    key.SetValue("ProxyOverride",
+                        "localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;" +
+                        "172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;" +
+                        "172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*;<local>",
+                        RegistryValueKind.String);
 
-                NotifyWindows();
+                    NotifyWindows();
+                }
             }
             catch (Exception ex)
             {
@@ -44,17 +52,25 @@ namespace XrayUI.Services
             }
         }
 
-        /// <summary>Disables the system proxy.</summary>
+        /// <summary>Disables the system proxy only while it still points to the one we set.</summary>
         public static void ClearProxy()
         {
             try
             {
-                using var key = Registry.CurrentUser.OpenSubKey(RegPath, writable: true);
-                if (key == null) return;
+                lock (_proxyLock)
+                {
+                    if (!_ownership.HasProxy) return;
 
-                key.SetValue("ProxyEnable", 0, RegistryValueKind.DWord);
-                key.DeleteValue("ProxyServer", throwOnMissingValue: false);
-                NotifyWindows();
+                    using var key = Registry.CurrentUser.OpenSubKey(RegPath, writable: true);
+                    if (key == null) return;
+
+                    _ownership.ClearIfOwned(key.GetValue("ProxyServer") as string, () =>
+                    {
+                        key.SetValue("ProxyEnable", 0, RegistryValueKind.DWord);
+                        key.DeleteValue("ProxyServer", throwOnMissingValue: false);
+                        NotifyWindows();
+                    });
+                }
             }
             catch (Exception ex)
             {

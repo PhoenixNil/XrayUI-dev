@@ -41,7 +41,7 @@ namespace XrayUI.Services
             {
                 using var client = CreateProxiedClient(httpProxyPort);
 
-                var response = await client.GetAsync("https://api.openai.com/", ct);
+                using var response = await client.GetAsync("https://api.openai.com/", ct);
                 var body = await response.Content.ReadAsStringAsync(ct);
 
                 // Region / country block — OpenAI returns 200 but body contains this error code
