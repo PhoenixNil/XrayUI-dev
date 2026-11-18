@@ -36,6 +36,7 @@
     <Compile Include="..\Models\ChangelogFeed.cs" Link="Prod\Models\ChangelogFeed.cs" />
     <Compile Include="..\Services\ChangelogSelector.cs" Link="Prod\Services\ChangelogSelector.cs" />
     <Compile Include="..\Services\NodeLinkParser.cs" Link="Prod\Services\NodeLinkParser.cs" />
+    <Compile Include="..\Services\SystemProxyOwnership.cs" Link="Prod\Services\SystemProxyOwnership.cs" />
     <Compile Include="..\Services\NodeLinkSerializer.cs" Link="Prod\Services\NodeLinkSerializer.cs" />
     <Compile Include="..\Services\ClashConfigParser.cs" Link="Prod\Services\ClashConfigParser.cs" />
     <Compile Include="..\Services\CustomRuleValueParser.cs" Link="Prod\Services\CustomRuleValueParser.cs" />
