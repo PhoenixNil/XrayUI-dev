@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.Graphics.Imaging;
+using Windows.UI.ViewManagement;
 using WinUIEx;
 using XrayUI.Helpers;
 
@@ -32,6 +33,7 @@ namespace XrayUI.Views
 
         private readonly IntPtr _hwnd;
         private readonly ActiveAcrylicBackdrop _backdrop = new();
+        private readonly UISettings _uiSettings = new();
         private readonly string _idleIconPath;
         private readonly string _runningIconPath;
         private ImageSource? _idleIcon;
@@ -296,6 +298,13 @@ namespace XrayUI.Views
         {
             StopSlide();
             var from = AppWindow.Position;
+            if (!_uiSettings.AnimationsEnabled)
+            {
+                AppWindow.Move(new PointInt32(from.X, toY));
+                completed();
+                return;
+            }
+
             var clock = Stopwatch.StartNew();
             _slideFrame = (_, _) =>
             {

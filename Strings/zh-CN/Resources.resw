@@ -161,7 +161,7 @@
     <value>系统代理</value>
   </data>
   <data name="TrayPanel_TunLabel.Text" xml:space="preserve">
-    <value>TUN</value>
+    <value>TUN模式</value>
   </data>
   <data name="TrayPanel_NodeLabel.Text" xml:space="preserve">
     <value>节点</value>

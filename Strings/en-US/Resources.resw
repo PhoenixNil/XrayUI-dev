@@ -161,7 +161,7 @@
     <value>System Proxy</value>
   </data>
   <data name="TrayPanel_TunLabel.Text" xml:space="preserve">
-    <value>TUN</value>
+    <value>TUN Mode</value>
   </data>
   <data name="TrayPanel_NodeLabel.Text" xml:space="preserve">
     <value>Node</value>
@@ -1488,7 +1488,7 @@ Path: {0}</value>
     <value>The core no longer allows VLESS / Trojan to reach a public server unencrypted. Enable TLS or REALITY for this node (VLESS can also use VLESS Encryption), or pick another node.</value>
   </data>
   <data name="Xray_Hint_UnknownCipher" xml:space="preserve">
-    <value>The core does not support the cipher &quot;{0}&quot;. The Shadowsocks none / plain methods were removed; use an AEAD or 2022 cipher instead.</value>
+    <value>The core does not support the cipher "{0}". The Shadowsocks none / plain methods were removed; use an AEAD or 2022 cipher instead.</value>
   </data>
   <data name="Xray_Hint_MissingGeoCategory" xml:space="preserve">
     <value>A rule refers to {0}, but the current geosite.dat / geoip.dat has no such category. Remove or replace it in your custom rules, advanced routing or config profile.</value>

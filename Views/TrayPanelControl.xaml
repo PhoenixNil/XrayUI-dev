@@ -214,41 +214,50 @@
                           CommandParameter="global" />
         </Grid>
 
-        <!-- Proxy switches, side by side -->
+        <!-- Proxy switches, side by side. Each ToggleSwitch cancels the template's fixed 12px
+             trailing spacer so the pills align flush with their column edges, keeping "System
+             Proxy" roomy in English. -->
         <Grid Grid.Row="3"
               ColumnDefinitions="*,*"
-              ColumnSpacing="8">
-            <StackPanel Orientation="Horizontal"
-                        Spacing="12">
+              ColumnSpacing="16">
+            <Grid ColumnDefinitions="*,Auto"
+                  ColumnSpacing="8">
                 <TextBlock x:Name="SystemProxyLabel"
                            x:Uid="TrayPanel_SystemProxyLabel"
                            VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
                            Text="系统代理" />
-                <ToggleSwitch AutomationProperties.AutomationId="TrayPanelSystemProxySwitch"
+                <ToggleSwitch Grid.Column="1"
+                              AutomationProperties.AutomationId="TrayPanelSystemProxySwitch"
                               AutomationProperties.LabeledBy="{x:Bind SystemProxyLabel, Mode=OneTime}"
                               MinWidth="0"
+                              Margin="0,0,-12,0"
                               VerticalAlignment="Center"
                               OnContent=""
                               OffContent=""
                               IsEnabled="{x:Bind ViewModel.CanToggleSystemProxy, Mode=OneWay}"
                               IsOn="{x:Bind ViewModel.IsSystemProxyOn, Mode=TwoWay}" />
-            </StackPanel>
-            <StackPanel Grid.Column="1"
-                        Orientation="Horizontal"
-                        Spacing="12">
+            </Grid>
+
+            <Grid Grid.Column="1"
+                  ColumnDefinitions="*,Auto"
+                  ColumnSpacing="8">
                 <TextBlock x:Name="TunLabel"
                            x:Uid="TrayPanel_TunLabel"
                            VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
                            Text="TUN" />
-                <ToggleSwitch AutomationProperties.AutomationId="TrayPanelTunSwitch"
+                <ToggleSwitch Grid.Column="1"
+                              AutomationProperties.AutomationId="TrayPanelTunSwitch"
                               AutomationProperties.LabeledBy="{x:Bind TunLabel, Mode=OneTime}"
                               MinWidth="0"
+                              Margin="0,0,-12,0"
                               VerticalAlignment="Center"
                               OnContent=""
                               OffContent=""
                               IsEnabled="{x:Bind ViewModel.CanToggleTun, Mode=OneWay}"
                               IsOn="{x:Bind ViewModel.IsTunOn, Mode=TwoWay}" />
-            </StackPanel>
+            </Grid>
         </Grid>
     </Grid>
 </UserControl>
