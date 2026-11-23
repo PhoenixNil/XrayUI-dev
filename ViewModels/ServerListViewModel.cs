@@ -7,7 +7,6 @@ using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using XrayUI.Helpers;
@@ -915,6 +914,12 @@ namespace XrayUI.ViewModels
                     var entry = NodeLinkParser.Parse(line.Trim());
                     if (entry == null) continue;
 
+                    if (string.IsNullOrWhiteSpace(entry.Name))
+                    {
+                        var host = NodeLinkSerializer.FormatHost(entry.Host);
+                        entry.Name = entry.Port > 0 ? $"{host}:{entry.Port}" : host;
+                    }
+
                     Servers.Add(entry);
                     lastAdded = entry;
                     added++;
@@ -1180,7 +1185,7 @@ namespace XrayUI.ViewModels
             if (raw == null)
                 return (null, error);
 
-            var entries = ParseSubscriptionText(raw);
+            var entries = SubscriptionParser.Parse(raw);
 
             if (entries.Count == 0)
             {
@@ -1199,7 +1204,7 @@ namespace XrayUI.ViewModels
                     sub.Usage = cu;
 
                 if (clashRaw != null)
-                    entries = ParseSubscriptionText(clashRaw);
+                    entries = SubscriptionParser.Parse(clashRaw);
             }
 
             if (entries.Count == 0)
@@ -1252,40 +1257,6 @@ namespace XrayUI.ViewModels
             resp.Content.Headers.TryGetValues("subscription-userinfo", out values)
                 ? ParseSubscriptionUserInfo(values.FirstOrDefault())
                 : null;
-
-        // Decodes a subscription body (base64 or plain) and parses it as a v2rayN link list, falling
-        // back to a Clash/Clash.Meta YAML parse only when no line parsed as a share link — so a normal
-        // link-list subscription never pays for a YAML parse attempt.
-        private static List<ServerEntry> ParseSubscriptionText(string raw)
-        {
-            var trimmed = raw.Trim();
-            var decoded = new byte[trimmed.Length];
-            var text = Convert.TryFromBase64String(trimmed, decoded, out var written)
-                ? Encoding.UTF8.GetString(decoded, 0, written)
-                : raw;
-
-            var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            var entries = new List<ServerEntry>();
-            foreach (var line in lines)
-            {
-                var entry = NodeLinkParser.Parse(line.Trim());
-                if (entry != null) entries.Add(entry);
-            }
-
-            if (entries.Count == 0)
-            {
-                try
-                {
-                    entries.AddRange(ClashConfigParser.Parse(text).Nodes);
-                }
-                catch
-                {
-                    // Not valid YAML either - caller treats an empty list as "nothing parsed".
-                }
-            }
-
-            return entries;
-        }
 
         // Parses `upload=..; download=..; total=..; expire=..` (bytes; expire in unix seconds).
         private static SubscriptionUserInfo ParseSubscriptionUserInfo(string? value)

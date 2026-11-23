@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using XrayUI.Models;
@@ -7,7 +8,8 @@ using XrayUI.Models;
 namespace XrayUI.Services
 {
     /// <summary>
-    /// Parses proxy share links (ss://, vmess://, vless://, hysteria2://, trojan://) into ServerEntry instances.
+    /// Parses proxy share links (ss://, vmess://, vless://, hysteria2://, trojan://, socks5://)
+    /// into ServerEntry instances.
     /// AnyTLS is not supported by the current Xray-based client.
     /// Returns null on any parse failure.
     /// </summary>
@@ -18,13 +20,14 @@ namespace XrayUI.Services
             if (string.IsNullOrWhiteSpace(rawLink))
                 return null;
 
-            rawLink = rawLink.Trim();
+            rawLink = rawLink.Trim().TrimStart('\uFEFF').Trim();
 
             if (rawLink.StartsWith("ss://",        StringComparison.OrdinalIgnoreCase)) return ParseSs(rawLink);
             if (rawLink.StartsWith("vmess://",     StringComparison.OrdinalIgnoreCase)) return ParseVmess(rawLink);
             if (rawLink.StartsWith("vless://",     StringComparison.OrdinalIgnoreCase)) return ParseVless(rawLink);
             if (rawLink.StartsWith("hysteria2://", StringComparison.OrdinalIgnoreCase)) return ParseHysteria2(rawLink);
             if (rawLink.StartsWith("trojan://",    StringComparison.OrdinalIgnoreCase)) return ParseTrojan(rawLink);
+            if (rawLink.StartsWith("socks5://",    StringComparison.OrdinalIgnoreCase)) return ParseSocks5(rawLink);
 
             return null;
         }
@@ -464,9 +467,109 @@ namespace XrayUI.Services
             }
         }
 
+        // ── SOCKS5 ────────────────────────────────────────────────────────────
+
+        // Standard URIs only: socks5://[user[:pass]@]host:port[/][#name] with percent-encoded
+        // credentials. Non-standard variants (Base64 userinfo, whole-payload Base64, query params,
+        // a path) are rejected rather than imported with mangled credentials.
+        private static ServerEntry? ParseSocks5(string link)
+        {
+            try
+            {
+                var rest = link.Substring("socks5://".Length);
+
+                string name = string.Empty;
+                var hashIdx = rest.IndexOf('#');
+                if (hashIdx >= 0)
+                {
+                    name = Uri.UnescapeDataString(rest.Substring(hashIdx + 1));
+                    rest = rest.Substring(0, hashIdx);
+                }
+
+                // RFC 3986: the authority ends at the first '/' or '?'. Only a lone trailing '/'
+                // may follow it.
+                if (rest.EndsWith('/'))
+                    rest = rest.Substring(0, rest.Length - 1);
+                if (rest.IndexOfAny(['/', '?']) >= 0)
+                    return null;
+
+                string username = string.Empty;
+                string password = string.Empty;
+                var atIdx = rest.LastIndexOf('@');
+                if (atIdx >= 0)
+                {
+                    // Split on the raw ':' so a percent-encoded colon in the username survives.
+                    var userinfo = rest.Substring(0, atIdx).Split(':', 2);
+                    username = Uri.UnescapeDataString(userinfo[0]);
+                    if (userinfo.Length > 1)
+                        password = Uri.UnescapeDataString(userinfo[1]);
+
+                    rest = rest.Substring(atIdx + 1);
+                }
+
+                if (!TrySplitStrictHostPort(rest, out var host, out var port))
+                    return null;
+
+                return new ServerEntry
+                {
+                    Name       = name,
+                    Protocol   = "socks",
+                    Host       = host,
+                    Port       = port,
+                    Username   = username,
+                    Password   = password,
+                    Network    = "tcp",
+                    Security   = "none",
+                    Encryption = string.Empty
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool TrySplitStrictHostPort(string hostPort, out string host, out int port)
+        {
+            host = string.Empty;
+            port = 0;
+
+            // "[ipv6]:port" or "dns-or-ipv4:port". An empty host or port fails the checks below.
+            string hostText, portText;
+            if (hostPort.StartsWith('['))
+            {
+                var close = hostPort.IndexOf("]:", StringComparison.Ordinal);
+                if (close < 0)
+                    return false;
+
+                hostText = hostPort.Substring(1, close - 1);
+                portText = hostPort.Substring(close + 2);
+                if (Uri.CheckHostName(hostText) != UriHostNameType.IPv6)
+                    return false;
+            }
+            else
+            {
+                var colonIdx = hostPort.LastIndexOf(':');
+                if (colonIdx < 0)
+                    return false;
+
+                hostText = hostPort.Substring(0, colonIdx);
+                portText = hostPort.Substring(colonIdx + 1);
+                if (Uri.CheckHostName(hostText) is not (UriHostNameType.Dns or UriHostNameType.IPv4))
+                    return false;
+            }
+
+            if (!int.TryParse(portText, NumberStyles.None, CultureInfo.InvariantCulture, out port)
+                || port is < 1 or > 65535)
+                return false;
+
+            host = hostText;
+            return true;
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────
 
-        private static string? TryBase64Decode(string input)
+        internal static string? TryBase64Decode(string input)
         {
             try
             {

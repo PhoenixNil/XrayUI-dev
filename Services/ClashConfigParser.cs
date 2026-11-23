@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using XrayUI.Models;
 using YamlDotNet.RepresentationModel;
@@ -14,8 +15,8 @@ namespace XrayUI.Services
     ///
     /// Routing rules and proxy-groups are ignored by design — this is node-only import.
     /// Only protocols the Xray core supports are mapped (ss / vmess / vless / trojan /
-    /// hysteria2 / wireguard); everything else (tuic, anytls, hysteria v1, ssr, snell, …)
-    /// is counted as skipped.
+    /// hysteria2 / socks5 / wireguard); everything else (tuic, anytls, hysteria v1, ssr, snell, …)
+    /// is counted as skipped, and so is http, which import deliberately leaves out.
     ///
     /// AOT-safe: uses YamlDotNet's reflection-free <see cref="YamlStream"/> DOM, never the
     /// reflection-based <c>Deserializer</c>.
@@ -61,19 +62,44 @@ namespace XrayUI.Services
         {
             ServerEntry? entry = Str(p, "type").ToLowerInvariant() switch
             {
-                "ss"        => MapSs(p),
-                "vmess"     => MapVmess(p),
-                "vless"     => MapVless(p),
-                "trojan"    => MapTrojan(p),
-                "hysteria2" => MapHysteria2(p),
-                "wireguard" => MapWireguard(p),
-                _           => null,
+                "ss"                => MapSs(p),
+                "vmess"             => MapVmess(p),
+                "vless"             => MapVless(p),
+                "trojan"            => MapTrojan(p),
+                "hysteria2"         => MapHysteria2(p),
+                "socks5" or "socks" => MapSocks5(p),
+                "wireguard"         => MapWireguard(p),
+                _                   => null,
             };
 
-            if (entry is null || string.IsNullOrWhiteSpace(entry.Host) || entry.Port <= 0)
+            if (entry is null || string.IsNullOrWhiteSpace(entry.Host) || entry.Port is <= 0 or > 65535)
                 return null;
 
             return entry;
+        }
+
+        private static ServerEntry? MapSocks5(YamlMappingNode p)
+        {
+            // XrayConfigBuilder emits a plaintext TCP outbound for socks, so only import entries
+            // that are certainly plaintext: a dropped TLS setting would send the credentials in the
+            // clear. Skip when tls is anything but absent/false, and when a YAML merge key (not
+            // resolved here) could be inheriting it.
+            if (Child(p, "<<") is not null
+                || (Child(p, "tls") is { } tls && !IsFalse(tls)))
+                return null;
+
+            return new ServerEntry
+            {
+                Name       = Str(p, "name"),
+                Protocol   = "socks",
+                Host       = Str(p, "server"),
+                Port       = Int(p, "port"),
+                Username   = Str(p, "username"),
+                Password   = Str(p, "password"),
+                Network    = "tcp",
+                Security   = "none",
+                Encryption = string.Empty,
+            };
         }
 
         private static ServerEntry? MapSs(YamlMappingNode p)
@@ -321,9 +347,24 @@ namespace XrayUI.Services
             => Child(map, key) is YamlScalarNode s && int.TryParse(s.Value, out var n) ? n : def;
 
         private static bool Bool(YamlMappingNode map, string key, bool def = false)
-            => Child(map, key) is YamlScalarNode { Value: { } v }
-                ? v.Equals("true", StringComparison.OrdinalIgnoreCase)
-                : def;
+            => Child(map, key) is YamlScalarNode { Value: { } v } && TryParseBool(v, out var b) ? b : def;
+
+        private static bool IsFalse(YamlNode node)
+            => node is YamlScalarNode { Value: { } v } && TryParseBool(v, out var b) && !b;
+
+        // Mirrors mihomo's bool decoding: integers are true when non-zero, strings follow
+        // Go's strconv.ParseBool (true/t/false/f).
+        private static bool TryParseBool(string v, out bool value)
+        {
+            if (long.TryParse(v, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var n))
+            {
+                value = n != 0;
+                return true;
+            }
+
+            value = v.Equals("true", StringComparison.OrdinalIgnoreCase) || v.Equals("t", StringComparison.OrdinalIgnoreCase);
+            return value || v.Equals("false", StringComparison.OrdinalIgnoreCase) || v.Equals("f", StringComparison.OrdinalIgnoreCase);
+        }
 
         private static YamlMappingNode? Map(YamlMappingNode map, string key)
             => Child(map, key) as YamlMappingNode;

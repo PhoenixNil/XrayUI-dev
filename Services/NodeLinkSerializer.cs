@@ -23,6 +23,7 @@ namespace XrayUI.Services
                 "vless"     => ToVlessLink(server),
                 "hysteria2" => ToHysteria2Link(server),
                 "trojan"    => ToTrojanLink(server),
+                "socks"     => ToSocks5Link(server),
                 _           => null
             };
         }
@@ -305,10 +306,41 @@ namespace XrayUI.Services
             return sb.ToString();
         }
 
+        // ── SOCKS5 ────────────────────────────────────────────────────────────
+
+        private static string? ToSocks5Link(ServerEntry s)
+        {
+            if (string.IsNullOrWhiteSpace(s.Host) || s.Port is < 1 or > 65535)
+                return null;
+
+            var sb = new StringBuilder();
+            sb.Append("socks5://");
+
+            if (!string.IsNullOrEmpty(s.Username) || !string.IsNullOrEmpty(s.Password))
+            {
+                sb.Append(Uri.EscapeDataString(s.Username ?? string.Empty));
+                sb.Append(':');
+                sb.Append(Uri.EscapeDataString(s.Password ?? string.Empty));
+                sb.Append('@');
+            }
+
+            sb.Append(FormatHost(s.Host));
+            sb.Append(':');
+            sb.Append(s.Port);
+
+            if (!string.IsNullOrEmpty(s.Name))
+            {
+                sb.Append('#');
+                sb.Append(Uri.EscapeDataString(s.Name));
+            }
+
+            return sb.ToString();
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────
 
         /// <summary>Wraps bare IPv6 addresses (containing ':') in brackets for URI use.</summary>
-        private static string FormatHost(string? host)
+        internal static string FormatHost(string? host)
         {
             if (string.IsNullOrEmpty(host)) return string.Empty;
             return host.Contains(':') && !host.StartsWith('[') ? $"[{host}]" : host;
