@@ -236,18 +236,124 @@ namespace XrayUI.Tests
         }
 
         [Fact]
+        public void Parse_Socks5_MapsAllFieldsAndHttpIsSkipped()
+        {
+            var yaml = """
+                proxies:
+                  - name: s5-auth
+                    type: socks5
+                    server: s5.example.com
+                    port: 1080
+                    username: alice
+                    password: 123456
+                    udp: true
+                    tls: false
+                  - name: s5-noauth
+                    type: socks
+                    server: 1.2.3.4
+                    port: 1081
+                  - name: http-auth
+                    type: http
+                    server: http.example.com
+                    port: 8080
+                    username: bob
+                    password: secret
+                """;
+
+            var result = ClashConfigParser.Parse(yaml);
+
+            Assert.Equal(1, result.Skipped);
+            Assert.Equal(2, result.Nodes.Count);
+
+            var s5 = result.Nodes[0];
+            Assert.Equal("s5-auth", s5.Name);
+            Assert.Equal("socks", s5.Protocol);
+            Assert.Equal("s5.example.com", s5.Host);
+            Assert.Equal(1080, s5.Port);
+            Assert.Equal("alice", s5.Username);
+            Assert.Equal("123456", s5.Password);
+            Assert.Equal("tcp", s5.Network);
+            Assert.Equal("none", s5.Security);
+            Assert.Equal(string.Empty, s5.Encryption);
+
+            var s5NoAuth = result.Nodes[1];
+            Assert.Equal("socks", s5NoAuth.Protocol);
+            Assert.Equal("1.2.3.4", s5NoAuth.Host);
+            Assert.Equal(1081, s5NoAuth.Port);
+            Assert.Equal(string.Empty, s5NoAuth.Username);
+            Assert.Equal(string.Empty, s5NoAuth.Password);
+        }
+
+        [Fact]
+        public void Parse_Socks5WithTls_IsSkipped()
+        {
+            var yaml = """
+                proxies:
+                  - { name: tls-true, type: socks5, server: s.example.com, port: 443, tls: true }
+                  - { name: tls-int, type: socks5, server: s.example.com, port: 443, tls: 1 }
+                  - { name: tls-str, type: socks5, server: s.example.com, port: 443, tls: "True" }
+                  - { name: tls-t, type: socks5, server: s.example.com, port: 443, tls: t }
+                  - { name: tls-unknown, type: socks5, server: s.example.com, port: 443, tls: maybe }
+                """;
+
+            var result = ClashConfigParser.Parse(yaml);
+
+            Assert.Empty(result.Nodes);
+            Assert.Equal(5, result.Skipped);
+        }
+
+        [Fact]
+        public void Parse_Socks5ExplicitlyPlaintext_IsImported()
+        {
+            var yaml = """
+                proxies:
+                  - { name: tls-false, type: socks5, server: s.example.com, port: 1080, tls: false }
+                  - { name: tls-zero, type: socks5, server: s.example.com, port: 1080, tls: 0 }
+                  - { name: tls-f, type: socks5, server: s.example.com, port: 1080, tls: "f" }
+                """;
+
+            var result = ClashConfigParser.Parse(yaml);
+
+            Assert.Equal(0, result.Skipped);
+            Assert.Equal(["tls-false", "tls-zero", "tls-f"], result.Nodes.Select(n => n.Name));
+        }
+
+        [Fact]
+        public void Parse_Socks5WithMergeKey_IsSkipped()
+        {
+            // The merge key could be inheriting tls: true; importing it as a plain outbound would
+            // send the credentials in the clear.
+            var yaml = """
+                base: &secure
+                  tls: true
+                proxies:
+                  - name: merged
+                    type: socks5
+                    server: s.example.com
+                    port: 443
+                    <<: *secure
+                """;
+
+            var result = ClashConfigParser.Parse(yaml);
+
+            Assert.Empty(result.Nodes);
+            Assert.Equal(1, result.Skipped);
+        }
+
+        [Fact]
         public void Parse_MissingHostOrPort_IsSkipped()
         {
             var yaml = """
                 proxies:
                   - { name: no-port, type: ss, server: ss.example.com, cipher: aes-256-gcm, password: pw }
                   - { name: no-host, type: ss, port: 8388, cipher: aes-256-gcm, password: pw }
+                  - { name: bad-port, type: socks5, server: s.example.com, port: 70000 }
                 """;
 
             var result = ClashConfigParser.Parse(yaml);
 
             Assert.Empty(result.Nodes);
-            Assert.Equal(2, result.Skipped);
+            Assert.Equal(3, result.Skipped);
         }
 
         [Fact]

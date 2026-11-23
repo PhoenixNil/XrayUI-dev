@@ -185,11 +185,38 @@ namespace XrayUI.Tests
         }
 
         [Fact]
-        public void ToLink_UnsupportedProtocols_ReturnNull()
+        public void RoundTrip_Socks5WithAuthAndSpecialChars()
+        {
+            RoundTrip("socks5://user%3A1:p%40ss%2F1%3F2%233@proxy.example.com:1080#SOCKS5%20%E8%8A%82%E7%82%B9");
+        }
+
+        [Fact]
+        public void RoundTrip_Socks5NoAuth()
+        {
+            RoundTrip("socks5://1.2.3.4:1080#S5");
+        }
+
+        [Fact]
+        public void RoundTrip_Socks5PartialCredentials()
+        {
+            RoundTrip("socks5://alice:@1.2.3.4:1080#UserOnly");
+            RoundTrip("socks5://:secret@1.2.3.4:1080#PassOnly");
+        }
+
+        [Fact]
+        public void RoundTrip_Socks5Ipv6()
+        {
+            RoundTrip("socks5://alice:p%40ss%3A1@[2001:db8::1]:1080#S5%20V6");
+        }
+
+        [Fact]
+        public void ToLink_UnsupportedOrIncompleteProtocols_ReturnNull()
         {
             Assert.Null(NodeLinkSerializer.ToLink(new ServerEntry { Protocol = "wireguard", Host = "h", Port = 1 }));
             Assert.Null(NodeLinkSerializer.ToLink(new ServerEntry { Protocol = "chain", Host = "h", Port = 1 }));
-            Assert.Null(NodeLinkSerializer.ToLink(new ServerEntry { Protocol = "socks", Host = "h", Port = 1 }));
+            Assert.Null(NodeLinkSerializer.ToLink(new ServerEntry { Protocol = "socks", Host = "", Port = 1080 }));
+            Assert.Null(NodeLinkSerializer.ToLink(new ServerEntry { Protocol = "socks", Host = "h", Port = 0 }));
+            Assert.Null(NodeLinkSerializer.ToLink(new ServerEntry { Protocol = "http", Host = "h", Port = 8080 }));
         }
     }
 }

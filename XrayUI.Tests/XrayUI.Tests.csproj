@@ -39,6 +39,7 @@
     <Compile Include="..\Services\SystemProxyOwnership.cs" Link="Prod\Services\SystemProxyOwnership.cs" />
     <Compile Include="..\Services\NodeLinkSerializer.cs" Link="Prod\Services\NodeLinkSerializer.cs" />
     <Compile Include="..\Services\ClashConfigParser.cs" Link="Prod\Services\ClashConfigParser.cs" />
+    <Compile Include="..\Services\SubscriptionParser.cs" Link="Prod\Services\SubscriptionParser.cs" />
     <Compile Include="..\Services\CustomRuleValueParser.cs" Link="Prod\Services\CustomRuleValueParser.cs" />
     <Compile Include="..\Services\XrayConfigConstants.cs" Link="Prod\Services\XrayConfigConstants.cs" />
     <Compile Include="..\Services\XrayInboundSniffing.cs" Link="Prod\Services\XrayInboundSniffing.cs" />

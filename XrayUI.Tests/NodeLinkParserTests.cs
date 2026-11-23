@@ -14,7 +14,6 @@ namespace XrayUI.Tests
         [InlineData("")]
         [InlineData("   ")]
         [InlineData("http://example.com")]
-        [InlineData("socks5://user:pass@example.com:1080")]
         [InlineData("vmess://!!!not-base64!!!")]
         [InlineData("ss://ZZZZ")]
         public void Parse_InvalidOrUnsupportedInput_ReturnsNull(string? link)
@@ -341,6 +340,122 @@ namespace XrayUI.Tests
         public void Parse_TrojanEmptyPassword_ReturnsNull()
         {
             Assert.Null(NodeLinkParser.Parse("trojan://@t.example.com:443#T"));
+        }
+
+        // ── SOCKS5 ────────────────────────────────────────────────────────────
+
+        [Theory]
+        [InlineData("socks5://user:pass@example.com:1080#My%20Socks")]
+        [InlineData("SOCKS5://user:pass@example.com:1080#My%20Socks")]
+        [InlineData("socks5://user:pass@example.com:1080/#My%20Socks")]
+        public void Parse_SocksWithPlainAuth_ExtractsAllFields(string link)
+        {
+            var s = NodeLinkParser.Parse(link);
+
+            Assert.NotNull(s);
+            Assert.Equal("socks", s.Protocol);
+            Assert.Equal("example.com", s.Host);
+            Assert.Equal(1080, s.Port);
+            Assert.Equal("user", s.Username);
+            Assert.Equal("pass", s.Password);
+            Assert.Equal("My Socks", s.Name);
+            Assert.Equal("tcp", s.Network);
+            Assert.Equal("none", s.Security);
+            Assert.Equal(string.Empty, s.Encryption);
+        }
+
+        [Fact]
+        public void Parse_SocksNoAuthAndEmptyUserinfo_ExtractsHostPort()
+        {
+            var plain = NodeLinkParser.Parse("socks5://1.2.3.4:1080");
+            Assert.NotNull(plain);
+            Assert.Equal("socks", plain.Protocol);
+            Assert.Equal("1.2.3.4", plain.Host);
+            Assert.Equal(1080, plain.Port);
+            Assert.Equal(string.Empty, plain.Username);
+            Assert.Equal(string.Empty, plain.Password);
+            Assert.Equal(string.Empty, plain.Name);
+
+            var emptyAt = NodeLinkParser.Parse("socks5://@1.2.3.4:1080#EmptyAt");
+            Assert.NotNull(emptyAt);
+            Assert.Equal(string.Empty, emptyAt.Username);
+            Assert.Equal(string.Empty, emptyAt.Password);
+            Assert.Equal("EmptyAt", emptyAt.Name);
+        }
+
+        [Fact]
+        public void Parse_SocksSpecialCharactersInCredentials_ArePreserved()
+        {
+            var escaped = NodeLinkParser.Parse("socks5://user%3A1:p%40ss%2F2%3F%23@1.2.3.4:1080#Escaped");
+            Assert.NotNull(escaped);
+            Assert.Equal("user:1", escaped.Username);
+            Assert.Equal("p@ss/2?#", escaped.Password);
+
+            // A raw '@' inside the authority is tolerated: the host starts after the last one.
+            var rawAtAndColon = NodeLinkParser.Parse("socks5://user:p@ss:123@1.2.3.4:1080#Raw");
+            Assert.NotNull(rawAtAndColon);
+            Assert.Equal("user", rawAtAndColon.Username);
+            Assert.Equal("p@ss:123", rawAtAndColon.Password);
+        }
+
+        [Theory]
+        [InlineData("user", "user", "")]
+        [InlineData("alice:", "alice", "")]
+        [InlineData(":secret", "", "secret")]
+        public void Parse_SocksPartialCredentials_HandledWithoutMangling(
+            string userinfo, string expectedUser, string expectedPass)
+        {
+            var s = NodeLinkParser.Parse($"socks5://{userinfo}@1.2.3.4:1080#Partial");
+
+            Assert.NotNull(s);
+            Assert.Equal(expectedUser, s.Username);
+            Assert.Equal(expectedPass, s.Password);
+        }
+
+        [Theory]
+        // Not supported: other schemes (v2rayN socks://, socks4://, socks5h://, http://).
+        [InlineData("socks://user:pass@1.2.3.4:1080#V2rayN")]
+        [InlineData("socks4://1.2.3.4:1080")]
+        [InlineData("socks5h://user:pass@1.2.3.4:1080#Curl")]
+        [InlineData("http://user:pass@1.2.3.4:8080#Http")]
+        // Not standard socks5 URIs: whole-payload Base64, query parameters.
+        [InlineData("socks5://MS4yLjMuNDoxMDgw#WholeB64")]
+        [InlineData("socks5://YWxpY2U6c2VjcmV0QDEuMi4zLjQ6MTA4MA==#WholeB64Auth")]
+        [InlineData("socks5://user:pass@1.2.3.4:1080?remarks=Node")]
+        [InlineData("socks5://user:pass@1.2.3.4:1080/?tls=0")]
+        [InlineData("socks5://user:pass@1.2.3.4:1080?tls=1#TLS")]
+        // An unescaped '?' ends the authority, so it can't be part of a password.
+        [InlineData("socks5://user:a?b=c@1.2.3.4:1080#QEq")]
+        // Anything after host:port other than a lone '/'.
+        [InlineData("socks5://1.2.3.4:1080/path")]
+        [InlineData("socks5://docs.example/profiles/@cache.example:1080")]
+        // Missing, malformed or out-of-range host:port.
+        [InlineData("socks5://example.com")]
+        [InlineData("socks5://example.com:0")]
+        [InlineData("socks5://example.com:65536")]
+        [InlineData("socks5://example.com:-1")]
+        [InlineData("socks5://example.com:abc")]
+        [InlineData("socks5://:1080")]
+        [InlineData("socks5://2001:db8::1")]
+        [InlineData("socks5://[2001:db8::1]")]
+        [InlineData("socks5://[]:1080")]
+        public void Parse_UnsupportedOrNonStandard_ReturnNull(string link)
+        {
+            Assert.Null(NodeLinkParser.Parse(link));
+        }
+
+        [Fact]
+        public void Parse_SocksIpv6_Succeeds()
+        {
+            var s = NodeLinkParser.Parse("socks5://user:pass@[2001:db8::1]:1080/#V6");
+
+            Assert.NotNull(s);
+            Assert.Equal("socks", s.Protocol);
+            Assert.Equal("2001:db8::1", s.Host);
+            Assert.Equal(1080, s.Port);
+            Assert.Equal("user", s.Username);
+            Assert.Equal("pass", s.Password);
+            Assert.Equal("V6", s.Name);
         }
     }
 }
