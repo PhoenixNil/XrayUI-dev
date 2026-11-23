@@ -71,8 +71,10 @@ namespace XrayUI.Services
 
         /// <summary>
         /// How many nodes the core may reject, one restart each, before the run is given up as
-        /// failed. A rejection is a config-parse error, so each restart costs only a process
-        /// spawn; the cap just bounds a list made almost entirely of unloadable nodes.
+        /// failed. A rejection is a config-parse error, so each restart costs a process spawn
+        /// plus a parse of the whole config (about 180 ms at 2,000 nodes); the cap bounds a list
+        /// made almost entirely of unloadable nodes. Plaintext nodes the core is certain to
+        /// refuse never reach the core, so they do not count against it.
         /// </summary>
         private const int MaxRejectedNodes = 32;
 
@@ -100,14 +102,16 @@ namespace XrayUI.Services
 
             // Capture the caller's context (the UI thread) so results marshal back to it for safe
             // binding updates, while the timing itself runs off-thread (ConfigureAwait(false)) —
-            // UI-thread scheduling delay must not inflate the measured RTT.
+            // UI-thread scheduling delay must not inflate the measured RTT. A result reported
+            // while still on that thread (before the first real await) lands inline, so it falls
+            // inside the caller's batch instead of after a run that ended without yielding.
             var ui = SynchronizationContext.Current;
             void Report(ServerEntry s, int ms)
             {
-                if (ui is not null)
-                    ui.Post(_ => onResult(s, ms), null);
-                else
+                if (ui is null || SynchronizationContext.Current == ui)
                     onResult(s, ms);
+                else
+                    ui.Post(_ => onResult(s, ms), null);
             }
 
             if (!File.Exists(XrayService.ExePath))
@@ -118,10 +122,20 @@ namespace XrayUI.Services
                 return;
             }
 
-            // 1. Allocate one free loopback port per server.
+            // 1. Report the nodes PlaintextProxyRule says the core will refuse, and give each of
+            // the rest a free loopback port.
             var entries = new List<(ServerEntry server, int port)>(servers.Count);
             foreach (var s in servers)
-                entries.Add((s, LoopbackPort.PickFree()));
+            {
+                if (XrayConfigBuilder.IsRefusedAsPlaintext(s))
+                    Report(s, -1);
+                else
+                    entries.Add((s, LoopbackPort.PickFree()));
+            }
+            if (entries.Count < servers.Count)
+                Debug.WriteLine($"[RealLatencyProbe] 跳过 {servers.Count - entries.Count} 个内核必拒的明文节点");
+            if (entries.Count == 0)
+                return;
 
             // 2. Bind the throwaway core to the physical egress while TUN owns the default
             // route. autoOutboundsInterface belongs to the live core's TUN inbound and does not
@@ -138,8 +152,8 @@ namespace XrayUI.Services
             {
                 // 3-5. Write the dedicated multi-inbound speed-test config and start the
                 // throwaway core on it. One config carries every node, and the core refuses the
-                // whole file over a single outbound it will not load (a plaintext VLESS/Trojan
-                // node to a public address, a removed Shadowsocks cipher). Its error names that
+                // whole file over a single outbound it will not load (a removed Shadowsocks
+                // cipher, a plaintext node step 1 could not rule on). Its error names that
                 // outbound, so that node is reported failed and the core restarted without it;
                 // otherwise one such node in a subscription fails the test for every other.
                 Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);

@@ -56,6 +56,7 @@
     <Compile Include="..\Services\RecentConnectionHistory.cs" Link="Prod\Services\RecentConnectionHistory.cs" />
     <Compile Include="..\Services\RouteTestProtocol.cs" Link="Prod\Services\RouteTestProtocol.cs" />
     <Compile Include="..\Services\CoreStartupDiagnosis.cs" Link="Prod\Services\CoreStartupDiagnosis.cs" />
+    <Compile Include="..\Services\PlaintextProxyRule.cs" Link="Prod\Services\PlaintextProxyRule.cs" />
     <Compile Include="..\Helpers\CommandLineArguments.cs" Link="Prod\Helpers\CommandLineArguments.cs" />
   </ItemGroup>
 

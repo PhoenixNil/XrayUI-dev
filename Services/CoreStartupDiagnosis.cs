@@ -16,7 +16,7 @@ namespace XrayUI.Services
     }
 
     /// <summary>
-    /// Reads the reason out of an xray "Failed to start" line. The core stays the only judge of
+    /// Reads the reason out of an xray "Failed to start" line. The core stays the judge of
     /// what loads: nothing here predicts a rejection, it only recognizes one after the fact, so
     /// the checks cannot drift from the core's own (which address counts as private, which
     /// categories a .dat holds). An unrecognized log simply yields <see cref="CoreStartupProblem.Unknown"/>.

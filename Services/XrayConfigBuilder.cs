@@ -1443,6 +1443,32 @@ namespace XrayUI.Services
                 : -1;
 
         /// <summary>
+        /// True when the core is certain to refuse <paramref name="server"/>'s outbound as a
+        /// plaintext proxy (<see cref="PlaintextProxyRule"/>), judged on the outbound this builder
+        /// emits for it. An outbound that fails to build is not certain either;
+        /// <see cref="BuildSpeedtestConfig"/> meets the same error and reports it.
+        /// </summary>
+        public static bool IsRefusedAsPlaintext(ServerEntry server)
+        {
+            try
+            {
+                // Only VLESS or Trojan with no stream security can be refused, so only those get
+                // an outbound built, read off the same two fields BuildProxyOutbound and
+                // BuildStreamSettings map. A skip that went stale would only cost the probe a
+                // restart; the refusal itself is still judged on the built JSON.
+                if (server.Protocol.ToLowerInvariant() is not ("vless" or "trojan")
+                    || !(string.IsNullOrWhiteSpace(server.Security) || server.Security.ToLowerInvariant() == "none"))
+                    return false;
+
+                return PlaintextProxyRule.IsRefused(BuildProxyOutbound(server, SpeedtestOutboundTagPrefix));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Builds a dedicated speed-test config for the "real delay" latency test: one socks
         /// inbound + one proxy outbound per server, paired 1:1 via routing (in-{i} → out-{i}).
         /// Run in a throwaway core separate from the live connection. No TUN/DNS/fakedns — just
