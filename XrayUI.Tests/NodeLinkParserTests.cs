@@ -428,6 +428,8 @@ namespace XrayUI.Tests
         [Theory]
         [InlineData("anytls://pw@203.0.113.7:443?security=reality&sni=www.example.com&fp=chrome&sid=01#A")]
         [InlineData("anytls://pw@203.0.113.7:443?security=reality&sni=www.example.com&pbk=&sid=01#A")]
+        [InlineData("vless://11111111-2222-3333-4444-555555555555@203.0.113.7:443" +
+                    "?type=tcp&security=reality&sni=www.example.com&fp=chrome&sid=01#V")]
         public void Parse_RealityWithoutPublicKey_ReturnsNull(string link)
         {
             // The core refuses a REALITY outbound without its public key ("empty password").

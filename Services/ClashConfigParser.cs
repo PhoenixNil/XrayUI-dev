@@ -147,6 +147,9 @@ namespace XrayUI.Services
         {
             if (Transport(p) is not { } t) return null;
             var reality = Map(p, "reality-opts");
+            var publicKey = reality is null ? string.Empty : Str(reality, "public-key");
+            // The core refuses REALITY without its public key, so such a row is unusable.
+            if (reality is not null && string.IsNullOrWhiteSpace(publicKey)) return null;
             bool tls = Bool(p, "tls");
             string security = reality is not null ? "reality" : tls ? "tls" : "none";
             return new ServerEntry
@@ -161,7 +164,7 @@ namespace XrayUI.Services
                 Sni           = Str(p, "servername", Str(p, "sni")),
                 Fingerprint   = Str(p, "client-fingerprint"),
                 AllowInsecure = Bool(p, "skip-cert-verify"),
-                PublicKey     = reality is null ? string.Empty : Str(reality, "public-key"),
+                PublicKey     = publicKey,
                 ShortId       = reality is null ? string.Empty : Str(reality, "short-id"),
                 SpiderX       = reality is null ? string.Empty : Str(reality, "spider-x"),
                 Path          = t.path,
@@ -176,13 +179,16 @@ namespace XrayUI.Services
         private static ServerEntry? MapTrojan(YamlMappingNode p)
         {
             if (Transport(p) is not { } t) return null;
+            // The core refuses a trojan outbound without a password (so does NodeLinkParser).
+            var password = Str(p, "password");
+            if (string.IsNullOrEmpty(password)) return null;
             return new ServerEntry
             {
                 Name          = Str(p, "name"),
                 Protocol      = "trojan",
                 Host          = Str(p, "server"),
                 Port          = Int(p, "port"),
-                Password      = Str(p, "password"),
+                Password      = password,
                 Network       = t.network,
                 Security      = "tls",
                 Sni           = Str(p, "sni", Str(p, "servername")),

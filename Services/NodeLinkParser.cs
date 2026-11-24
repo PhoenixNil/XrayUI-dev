@@ -252,6 +252,11 @@ namespace XrayUI.Services
                 var finalmask = FinalmaskJson.NormalizeForStorage(Q(query, "fm"));
                 var allowInsecure = IsTruthy(Q(query, "allowInsecure")) || IsTruthy(Q(query, "insecure"));
 
+                // The core refuses REALITY without a public key, so such a link is unusable.
+                if (string.Equals(security, "reality", StringComparison.OrdinalIgnoreCase)
+                    && string.IsNullOrWhiteSpace(pk))
+                    return null;
+
                 // Gated on xhttp: grpc links reuse the "mode" key for gun/multi. Case-insensitive
                 // because network keeps the URI's original casing (only the builder lowercases).
                 var xhttpMode  = string.Empty;

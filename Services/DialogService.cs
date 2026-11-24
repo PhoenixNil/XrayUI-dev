@@ -545,8 +545,9 @@ namespace XrayUI.Services
                 entry.EchForceQuery = string.Empty;
             }
 
-            // Same rule for the certificate pin: gated on protocol AND security, not Security
-            // alone, because ss shares the same combobox but BuildSsOutbound never reads it.
+            // Same rule for the certificate pin and REALITY keys: gated on protocol AND security,
+            // not Security alone, because ss shares the same combobox while BuildSsOutbound reads
+            // neither, and switching away from a REALITY node must not leave pbk/sid/spx behind.
             // These are the protocols whose outbound goes through BuildStreamSettings.
             bool hasStreamSecurity = entry.Protocol is "vmess" or "vless" or "trojan" or "anytls";
             bool pinApplies = entry.Protocol == "hysteria2"
@@ -555,6 +556,15 @@ namespace XrayUI.Services
             {
                 entry.PinnedPeerCertSha256 = string.Empty;
                 entry.UseSystemCa = false;
+            }
+
+            bool realityApplies = hasStreamSecurity
+                && string.Equals(entry.Security, "reality", StringComparison.OrdinalIgnoreCase);
+            if (!realityApplies)
+            {
+                entry.PublicKey = string.Empty;
+                entry.ShortId = string.Empty;
+                entry.SpiderX = string.Empty;
             }
 
             if (entry.Protocol != "ss" && entry.Protocol != "socks" && entry.Protocol != "http" && entry.Protocol != "wireguard")

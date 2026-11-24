@@ -300,6 +300,39 @@ namespace XrayUI.Tests
         }
 
         [Fact]
+        public void Parse_TrojanWithoutPassword_IsSkipped()
+        {
+            // The core refuses a trojan outbound without a password (NodeLinkParser already skips
+            // such links), so importing it would only fail later.
+            var yaml = """
+                proxies:
+                  - { name: tj-missing, type: trojan, server: t.example.com, port: 443 }
+                  - { name: tj-ok, type: trojan, server: t.example.com, port: 443, password: pw }
+                """;
+
+            var result = ClashConfigParser.Parse(yaml);
+
+            var node = Assert.Single(result.Nodes);
+            Assert.Equal("tj-ok", node.Name);
+            Assert.Equal(1, result.Skipped);
+        }
+
+        [Fact]
+        public void Parse_VlessRealityWithoutPublicKey_IsSkipped()
+        {
+            // The core refuses REALITY without its public key ("empty password").
+            var yaml = """
+                proxies:
+                  - { name: vl-reality, type: vless, server: v.example.com, port: 443, uuid: 11111111-2222-3333-4444-555555555555, reality-opts: { short-id: 01 } }
+                """;
+
+            var result = ClashConfigParser.Parse(yaml);
+
+            Assert.Empty(result.Nodes);
+            Assert.Equal(1, result.Skipped);
+        }
+
+        [Fact]
         public void Parse_WireguardSinglePeer_BuildsCidrLocalAddress()
         {
             var yaml = """
