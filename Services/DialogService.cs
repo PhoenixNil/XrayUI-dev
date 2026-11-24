@@ -129,7 +129,7 @@ namespace XrayUI.Services
                 SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
             };
             var cmbProtocol = new ComboBox { Header = L.EditServer_Protocol, MinWidth = 200 };
-            foreach (var p in new[] { "ss", "vmess", "vless", "hysteria2", "trojan", "socks", "http", "wireguard" })
+            foreach (var p in new[] { "ss", "vmess", "vless", "hysteria2", "trojan", "anytls", "socks", "http", "wireguard" })
                 cmbProtocol.Items.Add(new ComboBoxItem { Content = ServerEntry.GetDisplayProtocol(p), Tag = p });
             SetProtocolCode(cmbProtocol, existing?.Protocol?.ToLower() ?? "ss");
 
@@ -149,9 +149,11 @@ namespace XrayUI.Services
             var numAlterId = new NumberBox
                 { Header = "AlterId (VMess)", Value = existing?.AlterId ?? 0, Minimum = 0, Maximum = 65535 };
             var cmbNetwork = new ComboBox { Header = L.EditServer_Transport, MinWidth = 200 };
-            foreach (var n in new[] { "tcp", "ws", "grpc", "xhttp" })
+            var networks = new[] { "tcp", "ws", "grpc", "xhttp" };
+            foreach (var n in networks)
                 cmbNetwork.Items.Add(n);
-            cmbNetwork.SelectedItem = existing?.Network ?? "tcp";
+            var initialNetwork = existing?.Network?.Trim().ToLowerInvariant();
+            cmbNetwork.SelectedItem = Array.IndexOf(networks, initialNetwork) >= 0 ? initialNetwork : "tcp";
 
             var txtPath = new TextBox { Header = L.EditServer_Path, Text = existing?.Path ?? string.Empty };
             var txtWsHost = new TextBox { Header = L.EditServer_WsHost, Text = existing?.WsHost ?? string.Empty };
@@ -164,9 +166,11 @@ namespace XrayUI.Services
             cmbXhttpMode.SelectedItem = XhttpSettings.NormalizeMode(existing?.XhttpMode);
             var txtXhttpExtra = CreateJsonTextBox("XHTTP Extra (JSON)", existing?.XhttpExtra);
             var cmbSecurity = new ComboBox { Header = L.EditServer_Security, MinWidth = 200 };
-            foreach (var s in new[] { "none", "tls", "reality" })
+            var securities = new[] { "none", "tls", "reality" };
+            foreach (var s in securities)
                 cmbSecurity.Items.Add(s);
-            cmbSecurity.SelectedItem = existing?.Security ?? "none";
+            var initialSecurity = existing?.Security?.Trim().ToLowerInvariant();
+            cmbSecurity.SelectedItem = Array.IndexOf(securities, initialSecurity) >= 0 ? initialSecurity : "none";
 
             var txtSni = new TextBox { Header = "SNI", Text = existing?.Sni ?? string.Empty };
             var txtFp = new TextBox { Header = L.EditServer_Fingerprint, Text = existing?.Fingerprint ?? string.Empty };
@@ -266,23 +270,27 @@ namespace XrayUI.Services
                 bool isVless = proto == "vless";
                 bool isHysteria2 = proto == "hysteria2";
                 bool isTrojan = proto == "trojan";
+                bool isAnyTls = proto == "anytls";
                 bool isSocks = proto == "socks";
                 bool isHttp = proto == "http";
                 bool isWireguard = proto == "wireguard";
-                bool isStandardTransport = !isHysteria2 && !isSocks && !isHttp && !isWireguard;
+                // anytls is TCP only, so it gets no network combo, but it picks TLS or REALITY like
+                // the stream protocols (the tcp dialer runs either beneath the anytls session).
+                bool hasSecurityChoice = !isHysteria2 && !isSocks && !isHttp && !isWireguard;
+                bool isStandardTransport = hasSecurityChoice && !isAnyTls;
                 bool hasWs = isStandardTransport && net == "ws";
                 bool hasXhttp = isStandardTransport && net == "xhttp";
                 bool hasGrpc = isStandardTransport && net == "grpc";
-                bool hasTls = isStandardTransport && (sec == "tls" || sec == "reality");
-                bool hasReality = isStandardTransport && sec == "reality";
+                bool hasTls = hasSecurityChoice && (sec == "tls" || sec == "reality");
+                bool hasReality = hasSecurityChoice && sec == "reality";
                 bool hasEch = isVless && sec == "tls";
 
                 cmbNetwork.Visibility = isStandardTransport ? Visibility.Visible : Visibility.Collapsed;
-                cmbSecurity.Visibility = isStandardTransport ? Visibility.Visible : Visibility.Collapsed;
+                cmbSecurity.Visibility = hasSecurityChoice ? Visibility.Visible : Visibility.Collapsed;
 
                 rowEncryption.Visibility = isSs ? Visibility.Visible : Visibility.Collapsed;
                 rowUsername.Visibility = (isSocks || isHttp) ? Visibility.Visible : Visibility.Collapsed;
-                rowPassword.Visibility = (isSs || isHysteria2 || isTrojan || isSocks || isHttp)
+                rowPassword.Visibility = (isSs || isHysteria2 || isTrojan || isAnyTls || isSocks || isHttp)
                     ? Visibility.Visible
                     : Visibility.Collapsed;
                 rowUuid.Visibility = (isVmess || isVless) ? Visibility.Visible : Visibility.Collapsed;
@@ -317,19 +325,41 @@ namespace XrayUI.Services
                 rowWgReserved.Visibility = wg;
             }
 
+            // anytls is never plaintext, so it is not offered "none" at all: picking it would only
+            // hide the TLS rows while the save below quietly turns it back into tls. Every other
+            // protocol keeps it (trojan too: the core allows plaintext trojan to a private address).
+            // "none" only ever sits first: the list starts with it and it is put back there.
+            void SyncSecurityChoices(string? proto)
+            {
+                bool hasNone = cmbSecurity.Items[0]?.ToString() == "none";
+                if (proto != "anytls")
+                {
+                    if (!hasNone)
+                        cmbSecurity.Items.Insert(0, "none");
+                    return;
+                }
+
+                if (cmbSecurity.SelectedItem?.ToString() is not ("tls" or "reality"))
+                    cmbSecurity.SelectedItem = "tls";
+                if (hasNone)
+                    cmbSecurity.Items.RemoveAt(0);
+            }
+
             cmbProtocol.SelectionChanged += (_, _) =>
             {
                 var proto = GetProtocolCode(cmbProtocol);
                 if ((proto == "trojan" || proto == "hysteria2")
-                    && cmbSecurity.SelectedItem?.ToString() == "none")
+                    && cmbSecurity.SelectedItem?.ToString() is null or "none")
                 {
                     cmbSecurity.SelectedItem = "tls";
                 }
 
+                SyncSecurityChoices(proto);
                 UpdateVisibility();
             };
             cmbNetwork.SelectionChanged += (_, _) => UpdateVisibility();
             cmbSecurity.SelectionChanged += (_, _) => UpdateVisibility();
+            SyncSecurityChoices(GetProtocolCode(cmbProtocol));
             UpdateVisibility();
 
             var form = new StackPanel
@@ -417,6 +447,22 @@ namespace XrayUI.Services
             {
                 entry.Security = "tls";
             }
+            else if (entry.Protocol == "anytls")
+            {
+                // anytls has no transport choice — pin TCP. It keeps its TLS-vs-REALITY selection
+                // (a stray "none" coerces up to tls, since anytls is always encrypted). Drop state
+                // the hidden network combo carried over from another protocol.
+                entry.Network = "tcp";
+                if (entry.Security != "reality")
+                    entry.Security = "tls";
+                entry.Username = string.Empty;
+                entry.Uuid = string.Empty;
+                entry.AlterId = 0;
+                entry.Path = string.Empty;
+                entry.WsHost = string.Empty;
+                entry.Flow = string.Empty;
+                entry.VlessEncryption = string.Empty;
+            }
             else if (entry.Protocol == "wireguard")
             {
                 entry.Network = string.Empty;
@@ -501,9 +547,10 @@ namespace XrayUI.Services
 
             // Same rule for the certificate pin: gated on protocol AND security, not Security
             // alone, because ss shares the same combobox but BuildSsOutbound never reads it.
+            // These are the protocols whose outbound goes through BuildStreamSettings.
+            bool hasStreamSecurity = entry.Protocol is "vmess" or "vless" or "trojan" or "anytls";
             bool pinApplies = entry.Protocol == "hysteria2"
-                || ((entry.Protocol == "vmess" || entry.Protocol == "vless" || entry.Protocol == "trojan")
-                    && string.Equals(entry.Security, "tls", StringComparison.OrdinalIgnoreCase));
+                || (hasStreamSecurity && string.Equals(entry.Security, "tls", StringComparison.OrdinalIgnoreCase));
             if (!pinApplies)
             {
                 entry.PinnedPeerCertSha256 = string.Empty;

@@ -209,6 +209,97 @@ namespace XrayUI.Tests
         }
 
         [Fact]
+        public void Parse_AnyTls_MapsTlsKnobs()
+        {
+            var yaml = """
+                proxies:
+                  - name: at-1
+                    type: anytls
+                    server: a.example.com
+                    port: 8443
+                    password: pw
+                    sni: real.example.com
+                    client-fingerprint: chrome
+                    skip-cert-verify: true
+                    fingerprint: 88b874b4
+                """;
+
+            var node = Assert.Single(ClashConfigParser.Parse(yaml).Nodes);
+
+            Assert.Equal("anytls", node.Protocol);
+            Assert.Equal("a.example.com", node.Host);
+            Assert.Equal(8443, node.Port);
+            Assert.Equal("pw", node.Password);
+            Assert.Equal("tcp", node.Network);
+            Assert.Equal("tls", node.Security);
+            Assert.Equal("real.example.com", node.Sni);
+            // client-fingerprint is the uTLS fingerprint; `fingerprint` is the cert pin.
+            Assert.Equal("chrome", node.Fingerprint);
+            Assert.True(node.AllowInsecure);
+            Assert.Equal("88b874b4", node.PinnedPeerCertSha256);
+            Assert.Equal("TLS", node.Encryption);
+        }
+
+        [Fact]
+        public void Parse_AnyTlsWithoutPassword_IsSkipped()
+        {
+            // The core refuses an anytls outbound without a password, so importing it would only
+            // fail later.
+            var yaml = """
+                proxies:
+                  - { name: at-missing, type: anytls, server: a.example.com, port: 443, sni: a.example.com }
+                  - { name: at-empty, type: anytls, server: a.example.com, port: 443, password: "" }
+                  - { name: at-ok, type: anytls, server: a.example.com, port: 443, password: pw }
+                """;
+
+            var result = ClashConfigParser.Parse(yaml);
+
+            var node = Assert.Single(result.Nodes);
+            Assert.Equal("at-ok", node.Name);
+            Assert.Equal(2, result.Skipped);
+        }
+
+        [Fact]
+        public void Parse_AnyTlsWithUnsupportedWrappers_AreSkipped()
+        {
+            // Xray has no ShadowTLS/ResTLS/JLS dialer; without the wrapper the node cannot connect,
+            // so dropping the block would import a broken plain-TLS node instead of counting it
+            // skipped.
+            var yaml = """
+                proxies:
+                  - name: at-shadowtls
+                    type: anytls
+                    server: a.example.com
+                    port: 443
+                    password: pw
+                    shadow-tls-opts: { version: 3, password: spw }
+                  - name: at-restls
+                    type: anytls
+                    server: a.example.com
+                    port: 443
+                    password: pw
+                    restls-opts: { password: rpw }
+                  - name: at-jls
+                    type: anytls
+                    server: a.example.com
+                    port: 443
+                    password: pw
+                    jls-opts: { password: jpw }
+                  - name: at-plain
+                    type: anytls
+                    server: a.example.com
+                    port: 443
+                    password: pw
+                """;
+
+            var result = ClashConfigParser.Parse(yaml);
+
+            var node = Assert.Single(result.Nodes);
+            Assert.Equal("at-plain", node.Name);
+            Assert.Equal(3, result.Skipped);
+        }
+
+        [Fact]
         public void Parse_WireguardSinglePeer_BuildsCidrLocalAddress()
         {
             var yaml = """

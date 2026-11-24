@@ -23,6 +23,7 @@ namespace XrayUI.Services
                 "vless"     => ToVlessLink(server),
                 "hysteria2" => ToHysteria2Link(server),
                 "trojan"    => ToTrojanLink(server),
+                "anytls"    => ToAnyTlsLink(server),
                 "socks"     => ToSocks5Link(server),
                 _           => null
             };
@@ -296,6 +297,70 @@ namespace XrayUI.Services
                     AddIfNotEmpty("host", s.WsHost);
                 AddIfNotEmpty("fm", finalmask);
             }
+
+            if (!string.IsNullOrEmpty(s.Name))
+            {
+                sb.Append('#');
+                sb.Append(Uri.EscapeDataString(s.Name));
+            }
+
+            return sb.ToString();
+        }
+
+        // ── AnyTLS ────────────────────────────────────────────────────────────
+
+        private static string? ToAnyTlsLink(ServerEntry s)
+        {
+            if (string.IsNullOrEmpty(s.Password)) return null;
+
+            var host     = FormatHost(s.Host);
+            var password = Uri.EscapeDataString(s.Password);
+            bool isReality = string.Equals(s.Security, "reality", StringComparison.OrdinalIgnoreCase);
+
+            var sb = new StringBuilder();
+            sb.Append("anytls://");
+            sb.Append(password);
+            sb.Append('@');
+            sb.Append(host);
+            sb.Append(':');
+            sb.Append(s.Port > 0 ? s.Port : 443);
+
+            // sni + insecure are the whole official anytls scheme; security=reality (with pbk/sid/
+            // spx) and fp/hpkp/fm are appended only when set, so a plain TLS node still shares
+            // as a stock-compatible link while reality and finalmask survive a round-trip. The
+            // query exists only if something is written, so '?' goes out with the first value.
+            bool first = true;
+            void Add(string key, string? value)
+            {
+                if (string.IsNullOrEmpty(value))
+                    return;
+                if (first)
+                    sb.Append('?');
+                AppendParam(sb, key, value, first);
+                first = false;
+            }
+
+            // Reality must be explicit; TLS is the scheme's default and stays implicit.
+            if (isReality)
+                Add("security", "reality");
+            Add("sni", s.Sni);
+            Add("fp", s.Fingerprint);
+            if (isReality)
+            {
+                Add("pbk", s.PublicKey);
+                Add("sid", s.ShortId);
+                Add("spx", s.SpiderX);
+            }
+            else
+            {
+                // hpkp, not pinSHA256: it is the key mihomo reads, and a client that drops the
+                // pin of an insecure=1 link verifies nothing. mihomo takes one digest only and
+                // refuses a comma-separated list, which fails closed rather than losing the pin.
+                Add("hpkp", s.PinnedPeerCertSha256);
+            }
+            if (s.AllowInsecure)
+                Add("insecure", "1");
+            Add("fm", FinalmaskJson.NormalizeForShare(s.Finalmask));
 
             if (!string.IsNullOrEmpty(s.Name))
             {

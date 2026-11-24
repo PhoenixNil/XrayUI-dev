@@ -551,6 +551,7 @@ namespace XrayUI.Services
                 "vless" => BuildVlessOutbound(server, tag),
                 "hysteria2" => BuildHysteria2Outbound(server, tag),
                 "trojan" => BuildTrojanOutbound(server, tag),
+                "anytls" => BuildAnyTlsOutbound(server, tag),
                 "socks" => BuildSocksOutbound(server, tag),
                 "http" => BuildHttpOutbound(server, tag),
                 "wireguard" => BuildWireguardOutbound(server, tag),
@@ -701,6 +702,30 @@ namespace XrayUI.Services
                     ["password"] = server.Password
                 },
                 ["streamSettings"] = BuildStreamSettings(server)
+            };
+        }
+
+        private static JsonObject BuildAnyTlsOutbound(ServerEntry server, string tag)
+        {
+            // anytls only interoperates as TCP under TLS or REALITY. Import and the editor already
+            // store it that way; pinning it here covers a hand-edited servers file too. The core
+            // does not refuse plaintext anytls the way it refuses plaintext VLESS/Trojan, and would
+            // send sha256(password), which is the credential itself, in the clear.
+            var security = string.Equals(server.Security, "reality", StringComparison.OrdinalIgnoreCase)
+                ? "reality"
+                : "tls";
+
+            return new JsonObject
+            {
+                ["tag"] = tag,
+                ["protocol"] = "anytls",
+                ["settings"] = new JsonObject
+                {
+                    ["address"] = server.Host,
+                    ["port"] = server.Port,
+                    ["password"] = server.Password
+                },
+                ["streamSettings"] = BuildStreamSettings(server, network: "tcp", security: security)
             };
         }
 
@@ -914,12 +939,15 @@ namespace XrayUI.Services
             return tlsSettings;
         }
 
-        private static JsonObject BuildStreamSettings(ServerEntry server)
+        // network / security, when given (lowercase), replace the stored Network / Security: for a
+        // protocol whose stream shape is fixed rather than chosen by the user.
+        private static JsonObject BuildStreamSettings(
+            ServerEntry server, string? network = null, string? security = null)
         {
-            var network = string.IsNullOrWhiteSpace(server.Network)
+            network ??= string.IsNullOrWhiteSpace(server.Network)
                 ? "tcp"
                 : server.Network.ToLowerInvariant();
-            var security = string.IsNullOrWhiteSpace(server.Security)
+            security ??= string.IsNullOrWhiteSpace(server.Security)
                 ? "none"
                 : server.Security.ToLowerInvariant();
 

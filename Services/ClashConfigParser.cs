@@ -15,7 +15,7 @@ namespace XrayUI.Services
     ///
     /// Routing rules and proxy-groups are ignored by design — this is node-only import.
     /// Only protocols the Xray core supports are mapped (ss / vmess / vless / trojan /
-    /// hysteria2 / socks5 / wireguard); everything else (tuic, anytls, hysteria v1, ssr, snell, …)
+    /// hysteria2 / anytls / socks5 / wireguard); everything else (tuic, hysteria v1, ssr, snell, …)
     /// is counted as skipped, and so is http, which import deliberately leaves out.
     ///
     /// AOT-safe: uses YamlDotNet's reflection-free <see cref="YamlStream"/> DOM, never the
@@ -67,6 +67,7 @@ namespace XrayUI.Services
                 "vless"             => MapVless(p),
                 "trojan"            => MapTrojan(p),
                 "hysteria2"         => MapHysteria2(p),
+                "anytls"            => MapAnyTls(p),
                 "socks5" or "socks" => MapSocks5(p),
                 "wireguard"         => MapWireguard(p),
                 _                   => null,
@@ -229,6 +230,41 @@ namespace XrayUI.Services
                 finalmask = FinalmaskJson.AddHysteria2UdpHop(finalmask, ports, Str(p, "hop-interval"));
 
             return finalmask;
+        }
+
+        // anytls is TCP-only — Clash Meta gives it no `network`/transport field, so unlike
+        // vmess/vless/trojan there is no ws/grpc to resolve. mihomo's anytls has no reality-opts,
+        // so a Clash anytls row is always plain TLS (REALITY on anytls exists only in the
+        // share-link form NodeLinkParser handles). The wrapper blocks (shadow-tls-opts /
+        // restls-opts / jls-opts) have no Xray dialer and the node cannot connect without them,
+        // so those rows skip, like ss rows with a plugin.
+        private static ServerEntry? MapAnyTls(YamlMappingNode p)
+        {
+            if (Child(p, "shadow-tls-opts") is not null
+                || Child(p, "restls-opts") is not null
+                || Child(p, "jls-opts") is not null)
+                return null;
+
+            // The core refuses an anytls outbound without a password.
+            var password = Str(p, "password");
+            if (string.IsNullOrEmpty(password)) return null;
+            return new ServerEntry
+            {
+                Name          = Str(p, "name"),
+                Protocol      = "anytls",
+                Host          = Str(p, "server"),
+                Port          = Int(p, "port"),
+                Password      = password,
+                Network       = "tcp",
+                Security      = "tls",
+                Sni           = Str(p, "sni", Str(p, "servername")),
+                Fingerprint   = Str(p, "client-fingerprint"),
+                AllowInsecure = Bool(p, "skip-cert-verify"),
+                // Clash spells the pinned certificate digest `fingerprint`; `client-fingerprint`
+                // above is the unrelated uTLS fingerprint. Same split as hysteria2.
+                PinnedPeerCertSha256 = Str(p, "fingerprint"),
+                Encryption    = "TLS",
+            };
         }
 
         // WireGuard: single-peer form (top-level public-key / server / port). Returns null when a
