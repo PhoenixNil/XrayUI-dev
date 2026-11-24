@@ -146,7 +146,7 @@ namespace XrayUI.Models
         /// not to REALITY, which authenticates by public key and has no tlsSettings.
         /// Carried in hysteria2 share links as "pinSHA256" and in anytls links as "hpkp" (the key
         /// mihomo reads); other protocols have no share-link convention for a pin here, so their
-        /// entries are set by hand in the edit dialog.
+        /// entries get one from a Clash config's `fingerprint` or by hand in the edit dialog.
         /// </summary>
         [ObservableProperty]
         public partial string PinnedPeerCertSha256 { get; set; }

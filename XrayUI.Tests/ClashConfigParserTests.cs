@@ -187,6 +187,68 @@ namespace XrayUI.Tests
         }
 
         [Fact]
+        public void Parse_TlsStreamRows_CarryCertPin()
+        {
+            // mihomo enforces the `fingerprint` pin even under skip-cert-verify; dropping it would
+            // import these rows with nothing verified at all.
+            var yaml = """
+                proxies:
+                  - { name: vm, type: vmess, server: m.example.com, port: 443, uuid: 11111111-2222-3333-4444-555555555555, alterId: 0, cipher: auto, tls: true, skip-cert-verify: true, client-fingerprint: chrome, fingerprint: 88b874b4 }
+                  - { name: vl, type: vless, server: v.example.com, port: 443, uuid: 11111111-2222-3333-4444-555555555555, tls: true, skip-cert-verify: true, client-fingerprint: chrome, fingerprint: 88b874b4 }
+                  - { name: tj, type: trojan, server: t.example.com, port: 443, password: pw, skip-cert-verify: true, client-fingerprint: chrome, fingerprint: 88b874b4 }
+                """;
+
+            var nodes = ClashConfigParser.Parse(yaml).Nodes;
+
+            Assert.Equal(3, nodes.Count);
+            Assert.All(nodes, n =>
+            {
+                Assert.Equal("tls", n.Security);
+                Assert.True(n.AllowInsecure);
+                Assert.Equal("88b874b4", n.PinnedPeerCertSha256);
+                // client-fingerprint stays the uTLS fingerprint.
+                Assert.Equal("chrome", n.Fingerprint);
+            });
+        }
+
+        [Fact]
+        public void Parse_CertPin_OnlyUnderTls()
+        {
+            // REALITY authenticates by public key and has no tlsSettings; a plaintext row has no
+            // TLS at all. Neither takes a pin.
+            var yaml = """
+                proxies:
+                  - { name: vl-reality, type: vless, server: v.example.com, port: 443, uuid: 11111111-2222-3333-4444-555555555555, fingerprint: 88b874b4, reality-opts: { public-key: pk, short-id: 01 } }
+                  - { name: vm-plain, type: vmess, server: m.example.com, port: 80, uuid: 11111111-2222-3333-4444-555555555555, alterId: 0, cipher: auto, tls: false, fingerprint: 88b874b4 }
+                """;
+
+            var nodes = ClashConfigParser.Parse(yaml).Nodes;
+
+            Assert.Equal(2, nodes.Count);
+            Assert.All(nodes, n => Assert.Equal(string.Empty, n.PinnedPeerCertSha256));
+        }
+
+        [Theory]
+        [InlineData("chrome")]
+        [InlineData("Firefox")]
+        [InlineData("randomized")]
+        public void Parse_BrowserNameInFingerprint_IsNotAPin(string name)
+        {
+            // A uTLS name in `fingerprint` is the common mix-up with client-fingerprint. It pins
+            // nothing, and the core would refuse the whole config over a non-hex pin.
+            var yaml = $$"""
+                proxies:
+                  - { name: tj, type: trojan, server: t.example.com, port: 443, password: pw, fingerprint: {{name}} }
+                  - { name: hy, type: hysteria2, server: h.example.com, port: 443, password: pw, fingerprint: {{name}} }
+                """;
+
+            var nodes = ClashConfigParser.Parse(yaml).Nodes;
+
+            Assert.Equal(2, nodes.Count);
+            Assert.All(nodes, n => Assert.Equal(string.Empty, n.PinnedPeerCertSha256));
+        }
+
+        [Fact]
         public void Parse_Hysteria2Salamander_BuildsFinalmask()
         {
             var yaml = """

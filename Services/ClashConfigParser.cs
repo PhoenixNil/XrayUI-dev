@@ -139,6 +139,7 @@ namespace XrayUI.Services
                 Sni           = Str(p, "servername", Str(p, "sni")),
                 Fingerprint   = Str(p, "client-fingerprint"),
                 AllowInsecure = Bool(p, "skip-cert-verify"),
+                PinnedPeerCertSha256 = tls ? CertPin(p) : string.Empty,
                 Encryption    = tls ? "TLS" : "None",
             };
         }
@@ -164,6 +165,8 @@ namespace XrayUI.Services
                 Sni           = Str(p, "servername", Str(p, "sni")),
                 Fingerprint   = Str(p, "client-fingerprint"),
                 AllowInsecure = Bool(p, "skip-cert-verify"),
+                // REALITY authenticates by public key and has no tlsSettings to pin in.
+                PinnedPeerCertSha256 = security == "tls" ? CertPin(p) : string.Empty,
                 PublicKey     = publicKey,
                 ShortId       = reality is null ? string.Empty : Str(reality, "short-id"),
                 SpiderX       = reality is null ? string.Empty : Str(reality, "spider-x"),
@@ -194,6 +197,7 @@ namespace XrayUI.Services
                 Sni           = Str(p, "sni", Str(p, "servername")),
                 Fingerprint   = Str(p, "client-fingerprint"),
                 AllowInsecure = Bool(p, "skip-cert-verify"),
+                PinnedPeerCertSha256 = CertPin(p),
                 Path          = t.path,
                 WsHost        = t.wsHost,
                 Encryption    = "TLS",
@@ -211,9 +215,7 @@ namespace XrayUI.Services
             Security      = "tls",
             Sni           = Str(p, "sni", Str(p, "servername")),
             AllowInsecure = Bool(p, "skip-cert-verify"),
-            // Clash spells the pinned certificate digest `fingerprint` — unrelated to the
-            // uTLS `client-fingerprint` that maps to ServerEntry.Fingerprint elsewhere.
-            PinnedPeerCertSha256 = Str(p, "fingerprint"),
+            PinnedPeerCertSha256 = CertPin(p),
             Finalmask     = BuildHysteria2Finalmask(p),
             Encryption    = "TLS",
         };
@@ -266,9 +268,7 @@ namespace XrayUI.Services
                 Sni           = Str(p, "sni", Str(p, "servername")),
                 Fingerprint   = Str(p, "client-fingerprint"),
                 AllowInsecure = Bool(p, "skip-cert-verify"),
-                // Clash spells the pinned certificate digest `fingerprint`; `client-fingerprint`
-                // above is the unrelated uTLS fingerprint. Same split as hysteria2.
-                PinnedPeerCertSha256 = Str(p, "fingerprint"),
+                PinnedPeerCertSha256 = CertPin(p),
                 Encryption    = "TLS",
             };
         }
@@ -370,6 +370,22 @@ namespace XrayUI.Services
             var host = headers is null ? string.Empty : Str(headers, "Host");
             return (Str(ws, "path"), host);
         }
+
+        // Clash spells the certificate pin `fingerprint` (a SHA-256 digest); `client-fingerprint`
+        // is the unrelated uTLS fingerprint that maps to ServerEntry.Fingerprint. A browser name
+        // in `fingerprint` is the usual mix-up of the two (mihomo refuses exactly this list with
+        // a hint): it pins nothing, and the core would refuse the whole config over a non-hex pin,
+        // so it is dropped. Anything else is kept as given, so a damaged digest still fails closed.
+        private static string CertPin(YamlMappingNode p)
+        {
+            var pin = Str(p, "fingerprint");
+            return UtlsFingerprintNames.Contains(pin.Trim()) ? string.Empty : pin;
+        }
+
+        private static readonly HashSet<string> UtlsFingerprintNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "chrome", "firefox", "safari", "ios", "android", "edge", "360", "qq", "random", "randomized",
+        };
 
         // ── YAML DOM accessors (case-insensitive keys, no reflection) ──────────
 
