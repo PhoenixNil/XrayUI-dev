@@ -207,6 +207,11 @@ namespace XrayUI.Views
         {
             var flyout = new MenuFlyout();
 
+            var server = ViewModel.SelectedServer;
+            var testLatencyItem = CreateMenuItem(L.ServerList_TestNodeLatency, "\uF42F");
+            testLatencyItem.IsEnabled = server is not null && ViewModel.CanTestServerLatency(server);
+            testLatencyItem.Click += (_, _) => ViewModel.TestServerLatencyCommand.Execute(server);
+
             var editItem = CreateMenuItem(L.ServerList_Edit, "");
             editItem.IsEnabled = ViewModel.CanEditSelectedServer;
             editItem.Click += (_, _) => ViewModel.EditServerCommand.Execute(null);
@@ -224,6 +229,7 @@ namespace XrayUI.Views
             var shareItem = CreateMenuItem(L.ServerList_Share, "");
             shareItem.Click += (_, _) => ViewModel.ShareServerCommand.Execute(null);
 
+            flyout.Items.Add(testLatencyItem);
             flyout.Items.Add(editItem);
             flyout.Items.Add(favoriteItem);
             flyout.Items.Add(deleteItem);
@@ -255,6 +261,14 @@ namespace XrayUI.Views
 
         public static Visibility RealModeIconVisibility(string mode)
             => mode == "real" ? Visibility.Visible : Visibility.Collapsed;
+
+        // The row's latency number gives way to its spinner while a single-node test runs.
+        public static Visibility LatencyTextVisibility(bool hasLatency, bool isTesting)
+            => hasLatency && !isTesting ? Visibility.Visible : Visibility.Collapsed;
+
+        // Accessible name for the row spinner. Cached: the item template's x:Bind reads it on
+        // every row realization, Mode=OneTime or not.
+        public static string TestingLatencyName { get; } = L.ServerList_TestingNodeLatency;
 
         public static double ActiveBadgeOpacity(bool isActive)
             => isActive ? 1.0 : 0.0;

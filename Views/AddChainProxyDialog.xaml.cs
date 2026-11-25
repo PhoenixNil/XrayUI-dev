@@ -66,9 +66,10 @@ namespace XrayUI.Views
             chain.Name = name;
             chain.SubscriptionId = string.Empty;
             chain.Protocol = "chain";
-            // Host/Port mirror the entry server so latency probing has an endpoint.
-            chain.Host = entryServer.Host;
-            chain.Port = entryServer.Port;
+            // No address of its own: a chain dials its entry hop, resolved by id wherever it is
+            // used. Cleared so an edited chain drops the copy older versions stored here.
+            chain.Host = string.Empty;
+            chain.Port = 0;
             chain.ChainEntryServerId = entryServer.Id;
             chain.ChainExitServerId = exitServer.Id;
 

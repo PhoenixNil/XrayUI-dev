@@ -175,6 +175,12 @@
   <data name="ServerList_Share" xml:space="preserve">
     <value>分享</value>
   </data>
+  <data name="ServerList_TestNodeLatency" xml:space="preserve">
+    <value>测试延迟</value>
+  </data>
+  <data name="ServerList_TestingNodeLatency" xml:space="preserve">
+    <value>正在测试延迟</value>
+  </data>
   <data name="ServerList_SortActiveHint" xml:space="preserve">
     <value>只在筛选为「所有服务器」时可用</value>
   </data>

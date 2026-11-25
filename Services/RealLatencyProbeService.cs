@@ -18,8 +18,8 @@ namespace XrayUI.Services
     /// config — completely separate from the live connection owned by <see cref="XrayService"/> —
     /// so it works even when nothing is connected and never disturbs the user's active session.
     ///
-    /// Chain servers are not supported here (they need a second outbound + sockopt.dialerProxy); the
-    /// caller must filter them out before calling.
+    /// A chain is measured through both hops (its exit hop dialing through its entry hop, as the
+    /// live config builds it), so its number is the full chain's round trip.
     /// </summary>
     public sealed class RealLatencyProbeService
     {
@@ -82,6 +82,11 @@ namespace XrayUI.Services
         // clobbers the live session's config file.
         private static readonly string ConfigPath = AppPaths.XraySpeedtestConfigPath;
 
+        // One run at a time: every run writes ConfigPath and deletes it when done, so a
+        // single-node test overlapping the toolbar sweep would hand one core the other's config
+        // (its probes then hit ports nobody listens on).
+        private readonly SemaphoreSlim _runGate = new(1, 1);
+
         /// <summary>Populated when the test core fails to start; empty on success.</summary>
         public string LastError { get; private set; } = string.Empty;
 
@@ -91,10 +96,33 @@ namespace XrayUI.Services
         /// The HTTP timing runs off the UI thread for accuracy; <paramref name="onResult"/> is
         /// marshalled back to the calling (UI) thread, so it may touch bound state directly.
         /// </summary>
+        /// <param name="availableServers">The whole server list, which chains resolve their hops
+        /// from (a hop may be outside <paramref name="servers"/>). Read on the calling (UI)
+        /// thread, so the live collection is fine.</param>
         public async Task ProbeAllAsync(
             IReadOnlyList<ServerEntry> servers,
+            IEnumerable<ServerEntry> availableServers,
             Action<ServerEntry, int> onResult,
             CancellationToken ct = default)
+        {
+            // No ConfigureAwait(false): the run must start on the caller's (UI) thread, whose
+            // context it captures for onResult and on which it reads availableServers.
+            await _runGate.WaitAsync(ct);
+            try
+            {
+                await ProbeAllCoreAsync(servers, availableServers, onResult, ct);
+            }
+            finally
+            {
+                _runGate.Release();
+            }
+        }
+
+        private async Task ProbeAllCoreAsync(
+            IReadOnlyList<ServerEntry> servers,
+            IEnumerable<ServerEntry> availableServers,
+            Action<ServerEntry, int> onResult,
+            CancellationToken ct)
         {
             LastError = string.Empty;
             if (servers.Count == 0)
@@ -122,18 +150,22 @@ namespace XrayUI.Services
                 return;
             }
 
-            // 1. Report the nodes PlaintextProxyRule says the core will refuse, and give each of
-            // the rest a free loopback port.
-            var entries = new List<(ServerEntry server, int port)>(servers.Count);
+            // 1. Resolve each node to the hops that carry it (a chain: exit through entry) and
+            // report the ones that cannot run: a chain whose hops do not resolve, or any hop
+            // PlaintextProxyRule says the core will refuse (dialerProxy does not exempt a chain's
+            // exit hop). Give each of the rest a free loopback port.
+            var entries = new List<SpeedtestNode>(servers.Count);
             foreach (var s in servers)
             {
-                if (XrayConfigBuilder.IsRefusedAsPlaintext(s))
-                    Report(s, -1);
+                if (XrayConfigBuilder.TryResolveHops(s, availableServers, out var exit, out var chainEntry)
+                    && !XrayConfigBuilder.IsRefusedAsPlaintext(exit)
+                    && (chainEntry is null || !XrayConfigBuilder.IsRefusedAsPlaintext(chainEntry)))
+                    entries.Add(new SpeedtestNode(s, LoopbackPort.PickFree(), exit, chainEntry));
                 else
-                    entries.Add((s, LoopbackPort.PickFree()));
+                    Report(s, -1);
             }
             if (entries.Count < servers.Count)
-                Debug.WriteLine($"[RealLatencyProbe] 跳过 {servers.Count - entries.Count} 个内核必拒的明文节点");
+                Debug.WriteLine($"[RealLatencyProbe] 跳过 {servers.Count - entries.Count} 个内核必拒的明文节点或链路不全的链式节点");
             if (entries.Count == 0)
                 return;
 
@@ -182,13 +214,13 @@ namespace XrayUI.Services
                     {
                         // Not a failure one node can be blamed for (or far too many of them).
                         LastError = failure;
-                        foreach (var (s, _) in entries)
-                            Report(s, -1);
+                        foreach (var e in entries)
+                            Report(e.Server, -1);
                         return;
                     }
 
-                    Debug.WriteLine($"[RealLatencyProbe] 内核拒绝节点 {entries[rejected].server.Name}: {failure}");
-                    Report(entries[rejected].server, -1);
+                    Debug.WriteLine($"[RealLatencyProbe] 内核拒绝节点 {entries[rejected].Server.Name}: {failure}");
+                    Report(entries[rejected].Server, -1);
                     entries.RemoveAt(rejected);
                     if (entries.Count == 0)
                     {
@@ -200,8 +232,8 @@ namespace XrayUI.Services
                 // 6. Probe each server through its own socks port (capped concurrency).
                 using var throttle = new SemaphoreSlim(MaxConcurrency);
                 var tasks = new List<Task>(entries.Count);
-                foreach (var (server, port) in entries)
-                    tasks.Add(ProbeOneAsync(server, port, throttle, Report, ct));
+                foreach (var e in entries)
+                    tasks.Add(ProbeOneAsync(e.Server, e.Port, throttle, Report, ct));
 
                 await Task.WhenAll(tasks).ConfigureAwait(false);
             }
@@ -213,8 +245,8 @@ namespace XrayUI.Services
             {
                 // entries, not servers: a node the core rejected above already has its result.
                 LastError = ex.Message;
-                foreach (var (s, _) in entries)
-                    Report(s, -1);
+                foreach (var e in entries)
+                    Report(e.Server, -1);
             }
             finally
             {

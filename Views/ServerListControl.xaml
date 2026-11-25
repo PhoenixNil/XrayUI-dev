@@ -335,10 +335,19 @@
 
                                 <TextBlock Grid.Column="1"
                                            Text="{x:Bind LatencyText, Mode=OneWay}"
-                                           Visibility="{x:Bind HasLatency, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                           Visibility="{x:Bind views:ServerListControl.LatencyTextVisibility(HasLatency, IsTestingLatency), Mode=OneWay}"
                                            FontSize="13.5"
                                            FontWeight="SemiBold"
                                            Foreground="{x:Bind views:ServerListControl.LatencyForeground(LatencyMs), Mode=OneWay}" />
+                                <!-- Takes the latency text's place while a row-menu test runs.
+                                     16px, the ring's minimum size, fits inside the text line,
+                                     so the row height doesn't change. -->
+                                <ProgressRing Grid.Column="1"
+                                              Width="16"
+                                              Height="16"
+                                              IsActive="{x:Bind IsTestingLatency, Mode=OneWay}"
+                                              Visibility="{x:Bind IsTestingLatency, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                              AutomationProperties.Name="{x:Bind views:ServerListControl.TestingLatencyName, Mode=OneTime}" />
                             </Grid>
                         </StackPanel>
                     </Grid>
