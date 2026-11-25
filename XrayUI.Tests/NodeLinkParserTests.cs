@@ -342,6 +342,126 @@ namespace XrayUI.Tests
             Assert.Null(NodeLinkParser.Parse("trojan://@t.example.com:443#T"));
         }
 
+        // ── AnyTLS ────────────────────────────────────────────────────────────
+
+        [Fact]
+        public void Parse_AnyTls_ExtractsAllFields()
+        {
+            // The official two-parameter scheme: anytls://password@host:port?sni=..&insecure=1
+            var link = "anytls://p%40ss@a.example.com:8443?sni=real.example.com&insecure=1#AnyTLS%20Node";
+
+            var s = NodeLinkParser.Parse(link);
+
+            Assert.NotNull(s);
+            Assert.Equal("anytls", s.Protocol);
+            Assert.Equal("p@ss", s.Password);
+            Assert.Equal("a.example.com", s.Host);
+            Assert.Equal(8443, s.Port);
+            Assert.Equal("real.example.com", s.Sni);
+            Assert.True(s.AllowInsecure);
+            // Plain anytls defaults to TCP + TLS.
+            Assert.Equal("tcp", s.Network);
+            Assert.Equal("tls", s.Security);
+            Assert.Equal("TLS", s.Encryption);
+            Assert.Equal("AnyTLS Node", s.Name);
+        }
+
+        [Fact]
+        public void Parse_AnyTls_IgnoresTransportAndCoercesPlaintextSecurityToTls()
+        {
+            // Non-TCP transport params and non-reality security values (e.g. security=none) must
+            // coerce to TCP + TLS rather than saving an unconnectable or plaintext node.
+            var s = NodeLinkParser.Parse(
+                "anytls://pw@a.example.com:443?type=ws&path=%2Fws&security=none&sni=real.example.com#A");
+
+            Assert.NotNull(s);
+            Assert.Equal("tcp", s.Network);
+            Assert.Equal("tls", s.Security);
+            Assert.Equal("TLS", s.Encryption);
+            Assert.Equal(string.Empty, s.Path);
+        }
+
+        [Fact]
+        public void Parse_AnyTlsWithoutPort_DefaultsTo443()
+        {
+            var s = NodeLinkParser.Parse("anytls://letmein@example.com/?sni=real.example.com#A");
+
+            Assert.NotNull(s);
+            Assert.Equal(443, s.Port);
+            Assert.Equal("letmein", s.Password);
+        }
+
+        [Fact]
+        public void Parse_AnyTlsEmptyPassword_ReturnsNull()
+        {
+            // xray-core requires a non-empty anytls password, so an authless link is unusable.
+            Assert.Null(NodeLinkParser.Parse("anytls://@a.example.com:443#A"));
+        }
+
+        [Fact]
+        public void Parse_AnyTlsWithFingerprintAndPin_AreRead()
+        {
+            var link = "anytls://pw@a.example.com:443" +
+                       "?sni=real.example.com&fp=chrome" +
+                       "&pinSHA256=88b874b4cee4f3b6ca00a629b71447c9b8dc9a12056ce6f8cba772fff80b3d02#A";
+
+            var s = NodeLinkParser.Parse(link);
+
+            Assert.NotNull(s);
+            Assert.Equal("chrome", s.Fingerprint);
+            Assert.Equal("88b874b4cee4f3b6ca00a629b71447c9b8dc9a12056ce6f8cba772fff80b3d02", s.PinnedPeerCertSha256);
+        }
+
+        [Fact]
+        public void Parse_AnyTlsHpkpWithInsecure_KeepsThePin()
+        {
+            // mihomo's anytls links carry the pin as hpkp. Dropping it would leave insecure=1 with
+            // nothing verified; kept, the core still enforces the pin under allowInsecure.
+            var s = NodeLinkParser.Parse("anytls://pw@a.example.com:443?sni=real.example.com&insecure=1" +
+                                         "&hpkp=88b874b4cee4f3b6ca00a629b71447c9b8dc9a12056ce6f8cba772fff80b3d02#A");
+
+            Assert.NotNull(s);
+            Assert.True(s.AllowInsecure);
+            Assert.Equal("88b874b4cee4f3b6ca00a629b71447c9b8dc9a12056ce6f8cba772fff80b3d02", s.PinnedPeerCertSha256);
+        }
+
+        [Theory]
+        [InlineData("anytls://pw@203.0.113.7:443?security=reality&sni=www.example.com&fp=chrome&sid=01#A")]
+        [InlineData("anytls://pw@203.0.113.7:443?security=reality&sni=www.example.com&pbk=&sid=01#A")]
+        [InlineData("vless://11111111-2222-3333-4444-555555555555@203.0.113.7:443" +
+                    "?type=tcp&security=reality&sni=www.example.com&fp=chrome&sid=01#V")]
+        public void Parse_RealityWithoutPublicKey_ReturnsNull(string link)
+        {
+            // The core refuses a REALITY outbound without its public key ("empty password").
+            Assert.Null(NodeLinkParser.Parse(link));
+        }
+
+        [Fact]
+        public void Parse_AnyTlsReality_ExtractsRealityParams()
+        {
+            // anytls over REALITY: the official scheme has no reality, but Xray's tcp dialer dials
+            // it, so generators reuse the VLESS keys (security=reality&pbk=&sid=&fp=).
+            var link = "anytls://c3ludGhldGljLWFueXRscw%3D%3D@203.0.113.7:44300" +
+                       "/?security=reality&sni=www.example.com&fp=chrome" +
+                       "&pbk=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8&sid=0123456789abcdef#anytls";
+
+            var s = NodeLinkParser.Parse(link);
+
+            Assert.NotNull(s);
+            Assert.Equal("anytls", s.Protocol);
+            // The `==` padding must survive the userinfo round-trip, not get truncated.
+            Assert.Equal("c3ludGhldGljLWFueXRscw==", s.Password);
+            Assert.Equal(44300, s.Port);
+            Assert.Equal("reality", s.Security);
+            Assert.Equal("www.example.com", s.Sni);
+            Assert.Equal("chrome", s.Fingerprint);
+            Assert.Equal("AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8", s.PublicKey);
+            Assert.Equal("0123456789abcdef", s.ShortId);
+            // Reality has no cert pin.
+            Assert.Equal(string.Empty, s.PinnedPeerCertSha256);
+            Assert.Equal("Reality", s.Encryption);
+        }
+
         // ── SOCKS5 ────────────────────────────────────────────────────────────
 
         [Theory]

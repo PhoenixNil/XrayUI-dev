@@ -6,7 +6,7 @@ A native Windows GUI client for the Xray core, built with <a style="text-decorat
 
 ## Features
 
-- Support Shadowsocks, VMess, VLESS, Trojan, Hysteria2, WireGuard and Chain Proxy
+- Support Shadowsocks, VMess, VLESS, Trojan, AnyTLS, Hysteria2, WireGuard and Chain Proxy
 - TUN mode
 - Subscription import and update
 - AI Unlock Status Detection

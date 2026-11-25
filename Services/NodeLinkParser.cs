@@ -8,9 +8,8 @@ using XrayUI.Models;
 namespace XrayUI.Services
 {
     /// <summary>
-    /// Parses proxy share links (ss://, vmess://, vless://, hysteria2://, trojan://, socks5://)
-    /// into ServerEntry instances.
-    /// AnyTLS is not supported by the current Xray-based client.
+    /// Parses proxy share links (ss://, vmess://, vless://, hysteria2://, trojan://, anytls://,
+    /// socks5://) into ServerEntry instances.
     /// Returns null on any parse failure.
     /// </summary>
     public static class NodeLinkParser
@@ -27,6 +26,7 @@ namespace XrayUI.Services
             if (rawLink.StartsWith("vless://",     StringComparison.OrdinalIgnoreCase)) return ParseVless(rawLink);
             if (rawLink.StartsWith("hysteria2://", StringComparison.OrdinalIgnoreCase)) return ParseHysteria2(rawLink);
             if (rawLink.StartsWith("trojan://",    StringComparison.OrdinalIgnoreCase)) return ParseTrojan(rawLink);
+            if (rawLink.StartsWith("anytls://",    StringComparison.OrdinalIgnoreCase)) return ParseAnyTls(rawLink);
             if (rawLink.StartsWith("socks5://",    StringComparison.OrdinalIgnoreCase)) return ParseSocks5(rawLink);
 
             return null;
@@ -252,6 +252,11 @@ namespace XrayUI.Services
                 var finalmask = FinalmaskJson.NormalizeForStorage(Q(query, "fm"));
                 var allowInsecure = IsTruthy(Q(query, "allowInsecure")) || IsTruthy(Q(query, "insecure"));
 
+                // The core refuses REALITY without a public key, so such a link is unusable.
+                if (string.Equals(security, "reality", StringComparison.OrdinalIgnoreCase)
+                    && string.IsNullOrWhiteSpace(pk))
+                    return null;
+
                 // Gated on xhttp: grpc links reuse the "mode" key for gun/multi. Case-insensitive
                 // because network keeps the URI's original casing (only the builder lowercases).
                 var xhttpMode  = string.Empty;
@@ -459,6 +464,74 @@ namespace XrayUI.Services
                     Encryption    = security == "reality" ? "Reality"
                                   : security == "tls"     ? "TLS"
                                                           : "None"
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        // ── AnyTLS ────────────────────────────────────────────────────────────
+
+        private static ServerEntry? ParseAnyTls(string link)
+        {
+            try
+            {
+                // anytls://password@host:port?sni=..&insecure=1#name — the password rides in the
+                // userinfo (percent-encoded). anytls is always TCP, but Xray dials it under either
+                // TLS or REALITY: the official scheme predates reality and omits it, so generators
+                // reuse the VLESS reality keys (security=reality&pbk=&sid=&spx=).
+                var uri      = new Uri(link);
+                var password = Uri.UnescapeDataString(uri.UserInfo);
+                if (string.IsNullOrEmpty(password)) return null;
+
+                var host = uri.Host;
+                var port = uri.Port > 0 ? uri.Port : 443;
+                var name = string.IsNullOrEmpty(uri.Fragment)
+                    ? string.Empty
+                    : Uri.UnescapeDataString(uri.Fragment.TrimStart('#'));
+
+                var query = ParseQuery(uri.Query);
+                // Anything but REALITY is TLS: anytls never runs in plaintext.
+                bool isReality = string.Equals(Q(query, "security"), "reality", StringComparison.OrdinalIgnoreCase);
+                var publicKey = isReality ? Q(query, "pbk") ?? string.Empty : string.Empty;
+                // The core refuses REALITY without a public key, so such a link is unusable.
+                if (isReality && string.IsNullOrWhiteSpace(publicKey)) return null;
+
+                var sni   = Q(query, "sni") ?? Q(query, "servername") ?? string.Empty;
+                // fp/pbk/sid/spx/hpkp/fm go past the two-parameter (sni/insecure) anytls scheme; a
+                // stock anytls client ignores the extras, but they let reality/SNI-masquerade/
+                // finalmask survive a share round-trip.
+                var fp    = Q(query, "fp", string.Empty) ?? string.Empty;
+                var finalmask = FinalmaskJson.NormalizeForStorage(Q(query, "fm"));
+                var allowInsecure = IsTruthy(Q(query, "insecure")) || IsTruthy(Q(query, "allowInsecure"));
+
+                return new ServerEntry
+                {
+                    Name          = name,
+                    Protocol      = "anytls",
+                    Host          = host,
+                    Port          = port,
+                    Password      = password,
+                    Network       = "tcp",
+                    Security      = isReality ? "reality" : "tls",
+                    Sni           = sni,
+                    Fingerprint   = fp,
+                    AllowInsecure = allowInsecure,
+                    // REALITY authenticates by public key and has no tlsSettings, so pbk/sid/spx and
+                    // the cert pin are mutually exclusive by construction.
+                    PublicKey     = publicKey,
+                    ShortId       = isReality ? (Q(query, "sid", string.Empty) ?? string.Empty) : string.Empty,
+                    SpiderX       = isReality ? (Q(query, "spx", string.Empty) ?? string.Empty) : string.Empty,
+                    // hpkp is mihomo's key for the pin (hex SHA-256, the same value); pinSHA256 is
+                    // hysteria2's spelling, accepted too. Losing it would leave an insecure=1 link
+                    // with no verification at all, while the core enforces a pin even then.
+                    PinnedPeerCertSha256 = isReality
+                        ? string.Empty
+                        : (Q(query, "hpkp") ?? Q(query, "pinSHA256") ?? Q(query, "pinnedPeerCertSha256") ?? string.Empty).Trim(),
+                    Finalmask     = finalmask,
+                    Encryption    = isReality ? "Reality" : "TLS"
                 };
             }
             catch

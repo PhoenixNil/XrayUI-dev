@@ -15,7 +15,7 @@ namespace XrayUI.Services
     ///
     /// Routing rules and proxy-groups are ignored by design — this is node-only import.
     /// Only protocols the Xray core supports are mapped (ss / vmess / vless / trojan /
-    /// hysteria2 / socks5 / wireguard); everything else (tuic, anytls, hysteria v1, ssr, snell, …)
+    /// hysteria2 / anytls / socks5 / wireguard); everything else (tuic, hysteria v1, ssr, snell, …)
     /// is counted as skipped, and so is http, which import deliberately leaves out.
     ///
     /// AOT-safe: uses YamlDotNet's reflection-free <see cref="YamlStream"/> DOM, never the
@@ -67,6 +67,7 @@ namespace XrayUI.Services
                 "vless"             => MapVless(p),
                 "trojan"            => MapTrojan(p),
                 "hysteria2"         => MapHysteria2(p),
+                "anytls"            => MapAnyTls(p),
                 "socks5" or "socks" => MapSocks5(p),
                 "wireguard"         => MapWireguard(p),
                 _                   => null,
@@ -138,6 +139,7 @@ namespace XrayUI.Services
                 Sni           = Str(p, "servername", Str(p, "sni")),
                 Fingerprint   = Str(p, "client-fingerprint"),
                 AllowInsecure = Bool(p, "skip-cert-verify"),
+                PinnedPeerCertSha256 = tls ? CertPin(p) : string.Empty,
                 Encryption    = tls ? "TLS" : "None",
             };
         }
@@ -146,6 +148,9 @@ namespace XrayUI.Services
         {
             if (Transport(p) is not { } t) return null;
             var reality = Map(p, "reality-opts");
+            var publicKey = reality is null ? string.Empty : Str(reality, "public-key");
+            // The core refuses REALITY without its public key, so such a row is unusable.
+            if (reality is not null && string.IsNullOrWhiteSpace(publicKey)) return null;
             bool tls = Bool(p, "tls");
             string security = reality is not null ? "reality" : tls ? "tls" : "none";
             return new ServerEntry
@@ -160,7 +165,9 @@ namespace XrayUI.Services
                 Sni           = Str(p, "servername", Str(p, "sni")),
                 Fingerprint   = Str(p, "client-fingerprint"),
                 AllowInsecure = Bool(p, "skip-cert-verify"),
-                PublicKey     = reality is null ? string.Empty : Str(reality, "public-key"),
+                // REALITY authenticates by public key and has no tlsSettings to pin in.
+                PinnedPeerCertSha256 = security == "tls" ? CertPin(p) : string.Empty,
+                PublicKey     = publicKey,
                 ShortId       = reality is null ? string.Empty : Str(reality, "short-id"),
                 SpiderX       = reality is null ? string.Empty : Str(reality, "spider-x"),
                 Path          = t.path,
@@ -175,18 +182,22 @@ namespace XrayUI.Services
         private static ServerEntry? MapTrojan(YamlMappingNode p)
         {
             if (Transport(p) is not { } t) return null;
+            // The core refuses a trojan outbound without a password (so does NodeLinkParser).
+            var password = Str(p, "password");
+            if (string.IsNullOrEmpty(password)) return null;
             return new ServerEntry
             {
                 Name          = Str(p, "name"),
                 Protocol      = "trojan",
                 Host          = Str(p, "server"),
                 Port          = Int(p, "port"),
-                Password      = Str(p, "password"),
+                Password      = password,
                 Network       = t.network,
                 Security      = "tls",
                 Sni           = Str(p, "sni", Str(p, "servername")),
                 Fingerprint   = Str(p, "client-fingerprint"),
                 AllowInsecure = Bool(p, "skip-cert-verify"),
+                PinnedPeerCertSha256 = CertPin(p),
                 Path          = t.path,
                 WsHost        = t.wsHost,
                 Encryption    = "TLS",
@@ -204,9 +215,7 @@ namespace XrayUI.Services
             Security      = "tls",
             Sni           = Str(p, "sni", Str(p, "servername")),
             AllowInsecure = Bool(p, "skip-cert-verify"),
-            // Clash spells the pinned certificate digest `fingerprint` — unrelated to the
-            // uTLS `client-fingerprint` that maps to ServerEntry.Fingerprint elsewhere.
-            PinnedPeerCertSha256 = Str(p, "fingerprint"),
+            PinnedPeerCertSha256 = CertPin(p),
             Finalmask     = BuildHysteria2Finalmask(p),
             Encryption    = "TLS",
         };
@@ -229,6 +238,39 @@ namespace XrayUI.Services
                 finalmask = FinalmaskJson.AddHysteria2UdpHop(finalmask, ports, Str(p, "hop-interval"));
 
             return finalmask;
+        }
+
+        // anytls is TCP-only — Clash Meta gives it no `network`/transport field, so unlike
+        // vmess/vless/trojan there is no ws/grpc to resolve. mihomo's anytls has no reality-opts,
+        // so a Clash anytls row is always plain TLS (REALITY on anytls exists only in the
+        // share-link form NodeLinkParser handles). The wrapper blocks (shadow-tls-opts /
+        // restls-opts / jls-opts) have no Xray dialer and the node cannot connect without them,
+        // so those rows skip, like ss rows with a plugin.
+        private static ServerEntry? MapAnyTls(YamlMappingNode p)
+        {
+            if (Child(p, "shadow-tls-opts") is not null
+                || Child(p, "restls-opts") is not null
+                || Child(p, "jls-opts") is not null)
+                return null;
+
+            // The core refuses an anytls outbound without a password.
+            var password = Str(p, "password");
+            if (string.IsNullOrEmpty(password)) return null;
+            return new ServerEntry
+            {
+                Name          = Str(p, "name"),
+                Protocol      = "anytls",
+                Host          = Str(p, "server"),
+                Port          = Int(p, "port"),
+                Password      = password,
+                Network       = "tcp",
+                Security      = "tls",
+                Sni           = Str(p, "sni", Str(p, "servername")),
+                Fingerprint   = Str(p, "client-fingerprint"),
+                AllowInsecure = Bool(p, "skip-cert-verify"),
+                PinnedPeerCertSha256 = CertPin(p),
+                Encryption    = "TLS",
+            };
         }
 
         // WireGuard: single-peer form (top-level public-key / server / port). Returns null when a
@@ -328,6 +370,22 @@ namespace XrayUI.Services
             var host = headers is null ? string.Empty : Str(headers, "Host");
             return (Str(ws, "path"), host);
         }
+
+        // Clash spells the certificate pin `fingerprint` (a SHA-256 digest); `client-fingerprint`
+        // is the unrelated uTLS fingerprint that maps to ServerEntry.Fingerprint. A browser name
+        // in `fingerprint` is the usual mix-up of the two (mihomo refuses exactly this list with
+        // a hint): it pins nothing, and the core would refuse the whole config over a non-hex pin,
+        // so it is dropped. Anything else is kept as given, so a damaged digest still fails closed.
+        private static string CertPin(YamlMappingNode p)
+        {
+            var pin = Str(p, "fingerprint");
+            return UtlsFingerprintNames.Contains(pin.Trim()) ? string.Empty : pin;
+        }
+
+        private static readonly HashSet<string> UtlsFingerprintNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "chrome", "firefox", "safari", "ios", "android", "edge", "360", "qq", "random", "randomized",
+        };
 
         // ── YAML DOM accessors (case-insensitive keys, no reflection) ──────────
 

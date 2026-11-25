@@ -58,13 +58,13 @@ namespace XrayUI.Models
         [ObservableProperty]
         public partial int Port { get; set; }
 
-        /// <summary>ss | vmess | vless | hysteria2 | trojan | socks | wireguard | chain</summary>
+        /// <summary>ss | vmess | vless | hysteria2 | trojan | anytls | socks | http | wireguard | chain</summary>
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(DisplayProtocol))]
         [NotifyPropertyChangedFor(nameof(IsChain))]
         public partial string Protocol { get; set; }
 
-        /// <summary>Cipher for ss; "TLS" or "Reality" label for vless/vmess/hysteria2</summary>
+        /// <summary>Cipher for ss; "TLS" / "Reality" / "None" label for vless/vmess/trojan/anytls/hysteria2; "WireGuard" for wireguard</summary>
         [ObservableProperty]
         public partial string Encryption { get; set; }
 
@@ -144,8 +144,9 @@ namespace XrayUI.Models
         /// Server certificate fingerprint (SHA-256 hex) to pin instead of validating the chain.
         /// Maps to tlsSettings.pinnedPeerCertSha256, so it applies to every TLS outbound — but
         /// not to REALITY, which authenticates by public key and has no tlsSettings.
-        /// Only hysteria2 links carry it (as "pinSHA256"); other protocols have no share-link
-        /// convention for a pin, so their entries are set by hand in the edit dialog.
+        /// Carried in hysteria2 share links as "pinSHA256" and in anytls links as "hpkp" (the key
+        /// mihomo reads); other protocols have no share-link convention for a pin here, so their
+        /// entries get one from a Clash config's `fingerprint` or by hand in the edit dialog.
         /// </summary>
         [ObservableProperty]
         public partial string PinnedPeerCertSha256 { get; set; }
@@ -233,6 +234,7 @@ namespace XrayUI.Models
             "vless" => "VLESS",
             "hysteria2" => "Hysteria 2",
             "trojan" => "Trojan",
+            "anytls" => "AnyTLS",
             "socks" => "SOCKS",
             "http" => "HTTP",
             "wireguard" => "WireGuard",

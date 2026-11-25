@@ -179,6 +179,49 @@ namespace XrayUI.Tests
         }
 
         [Fact]
+        public void RoundTrip_AnyTls()
+        {
+            RoundTrip("anytls://p%40ss@a.example.com:8443?sni=real.example.com&insecure=1#AnyTLS%20%E8%8A%82%E7%82%B9");
+        }
+
+        [Fact]
+        public void RoundTrip_AnyTlsWithFingerprintAndPin()
+        {
+            // Only fixture exercising the fp/hpkp extensions past the two-param scheme — without
+            // it the round-trip guard compares default-vs-default and the serializer emit could drop.
+            RoundTrip("anytls://pw123@a.example.com:443" +
+                      "?sni=real.example.com&fp=chrome" +
+                      "&hpkp=88b874b4cee4f3b6ca00a629b71447c9b8dc9a12056ce6f8cba772fff80b3d02&insecure=1#AT");
+        }
+
+        [Fact]
+        public void Share_AnyTlsPin_EmitsHpkpForMihomo()
+        {
+            // mihomo reads an anytls pin only from hpkp; under any other key it imports an
+            // insecure=1 link with no pin, i.e. with no certificate verification at all.
+            var s = NodeLinkParser.Parse("anytls://pw@a.example.com:443" +
+                                         "?sni=real.example.com&insecure=1&pinSHA256=88b874b4#AT");
+            Assert.NotNull(s);
+
+            var link = NodeLinkSerializer.ToLink(s);
+
+            Assert.NotNull(link);
+            Assert.Contains("hpkp=88b874b4", link);
+            Assert.Contains("insecure=1", link);
+            Assert.DoesNotContain("pinSHA256", link);
+        }
+
+        [Fact]
+        public void RoundTrip_AnyTlsReality()
+        {
+            // anytls over REALITY (security=reality + pbk/sid) must not lose the reality keys —
+            // exactly the field-dropping bug this fixture guards against.
+            RoundTrip("anytls://c3ludGhldGljLWFueXRscw%3D%3D@203.0.113.7:44300" +
+                      "?security=reality&sni=www.example.com&fp=chrome" +
+                      "&pbk=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8&sid=0123456789abcdef#anytls");
+        }
+
+        [Fact]
         public void RoundTrip_Ipv6Host()
         {
             RoundTrip("vless://u-u-i-d@[2001:db8::1]:443?type=tcp&security=none&encryption=none#V6");

@@ -187,6 +187,68 @@ namespace XrayUI.Tests
         }
 
         [Fact]
+        public void Parse_TlsStreamRows_CarryCertPin()
+        {
+            // mihomo enforces the `fingerprint` pin even under skip-cert-verify; dropping it would
+            // import these rows with nothing verified at all.
+            var yaml = """
+                proxies:
+                  - { name: vm, type: vmess, server: m.example.com, port: 443, uuid: 11111111-2222-3333-4444-555555555555, alterId: 0, cipher: auto, tls: true, skip-cert-verify: true, client-fingerprint: chrome, fingerprint: 88b874b4 }
+                  - { name: vl, type: vless, server: v.example.com, port: 443, uuid: 11111111-2222-3333-4444-555555555555, tls: true, skip-cert-verify: true, client-fingerprint: chrome, fingerprint: 88b874b4 }
+                  - { name: tj, type: trojan, server: t.example.com, port: 443, password: pw, skip-cert-verify: true, client-fingerprint: chrome, fingerprint: 88b874b4 }
+                """;
+
+            var nodes = ClashConfigParser.Parse(yaml).Nodes;
+
+            Assert.Equal(3, nodes.Count);
+            Assert.All(nodes, n =>
+            {
+                Assert.Equal("tls", n.Security);
+                Assert.True(n.AllowInsecure);
+                Assert.Equal("88b874b4", n.PinnedPeerCertSha256);
+                // client-fingerprint stays the uTLS fingerprint.
+                Assert.Equal("chrome", n.Fingerprint);
+            });
+        }
+
+        [Fact]
+        public void Parse_CertPin_OnlyUnderTls()
+        {
+            // REALITY authenticates by public key and has no tlsSettings; a plaintext row has no
+            // TLS at all. Neither takes a pin.
+            var yaml = """
+                proxies:
+                  - { name: vl-reality, type: vless, server: v.example.com, port: 443, uuid: 11111111-2222-3333-4444-555555555555, fingerprint: 88b874b4, reality-opts: { public-key: pk, short-id: 01 } }
+                  - { name: vm-plain, type: vmess, server: m.example.com, port: 80, uuid: 11111111-2222-3333-4444-555555555555, alterId: 0, cipher: auto, tls: false, fingerprint: 88b874b4 }
+                """;
+
+            var nodes = ClashConfigParser.Parse(yaml).Nodes;
+
+            Assert.Equal(2, nodes.Count);
+            Assert.All(nodes, n => Assert.Equal(string.Empty, n.PinnedPeerCertSha256));
+        }
+
+        [Theory]
+        [InlineData("chrome")]
+        [InlineData("Firefox")]
+        [InlineData("randomized")]
+        public void Parse_BrowserNameInFingerprint_IsNotAPin(string name)
+        {
+            // A uTLS name in `fingerprint` is the common mix-up with client-fingerprint. It pins
+            // nothing, and the core would refuse the whole config over a non-hex pin.
+            var yaml = $$"""
+                proxies:
+                  - { name: tj, type: trojan, server: t.example.com, port: 443, password: pw, fingerprint: {{name}} }
+                  - { name: hy, type: hysteria2, server: h.example.com, port: 443, password: pw, fingerprint: {{name}} }
+                """;
+
+            var nodes = ClashConfigParser.Parse(yaml).Nodes;
+
+            Assert.Equal(2, nodes.Count);
+            Assert.All(nodes, n => Assert.Equal(string.Empty, n.PinnedPeerCertSha256));
+        }
+
+        [Fact]
         public void Parse_Hysteria2Salamander_BuildsFinalmask()
         {
             var yaml = """
@@ -206,6 +268,130 @@ namespace XrayUI.Tests
             Assert.Equal("hysteria2", node.Protocol);
             Assert.Contains("salamander", node.Finalmask);
             Assert.Contains("ob123", node.Finalmask);
+        }
+
+        [Fact]
+        public void Parse_AnyTls_MapsTlsKnobs()
+        {
+            var yaml = """
+                proxies:
+                  - name: at-1
+                    type: anytls
+                    server: a.example.com
+                    port: 8443
+                    password: pw
+                    sni: real.example.com
+                    client-fingerprint: chrome
+                    skip-cert-verify: true
+                    fingerprint: 88b874b4
+                """;
+
+            var node = Assert.Single(ClashConfigParser.Parse(yaml).Nodes);
+
+            Assert.Equal("anytls", node.Protocol);
+            Assert.Equal("a.example.com", node.Host);
+            Assert.Equal(8443, node.Port);
+            Assert.Equal("pw", node.Password);
+            Assert.Equal("tcp", node.Network);
+            Assert.Equal("tls", node.Security);
+            Assert.Equal("real.example.com", node.Sni);
+            // client-fingerprint is the uTLS fingerprint; `fingerprint` is the cert pin.
+            Assert.Equal("chrome", node.Fingerprint);
+            Assert.True(node.AllowInsecure);
+            Assert.Equal("88b874b4", node.PinnedPeerCertSha256);
+            Assert.Equal("TLS", node.Encryption);
+        }
+
+        [Fact]
+        public void Parse_AnyTlsWithoutPassword_IsSkipped()
+        {
+            // The core refuses an anytls outbound without a password, so importing it would only
+            // fail later.
+            var yaml = """
+                proxies:
+                  - { name: at-missing, type: anytls, server: a.example.com, port: 443, sni: a.example.com }
+                  - { name: at-empty, type: anytls, server: a.example.com, port: 443, password: "" }
+                  - { name: at-ok, type: anytls, server: a.example.com, port: 443, password: pw }
+                """;
+
+            var result = ClashConfigParser.Parse(yaml);
+
+            var node = Assert.Single(result.Nodes);
+            Assert.Equal("at-ok", node.Name);
+            Assert.Equal(2, result.Skipped);
+        }
+
+        [Fact]
+        public void Parse_AnyTlsWithUnsupportedWrappers_AreSkipped()
+        {
+            // Xray has no ShadowTLS/ResTLS/JLS dialer; without the wrapper the node cannot connect,
+            // so dropping the block would import a broken plain-TLS node instead of counting it
+            // skipped.
+            var yaml = """
+                proxies:
+                  - name: at-shadowtls
+                    type: anytls
+                    server: a.example.com
+                    port: 443
+                    password: pw
+                    shadow-tls-opts: { version: 3, password: spw }
+                  - name: at-restls
+                    type: anytls
+                    server: a.example.com
+                    port: 443
+                    password: pw
+                    restls-opts: { password: rpw }
+                  - name: at-jls
+                    type: anytls
+                    server: a.example.com
+                    port: 443
+                    password: pw
+                    jls-opts: { password: jpw }
+                  - name: at-plain
+                    type: anytls
+                    server: a.example.com
+                    port: 443
+                    password: pw
+                """;
+
+            var result = ClashConfigParser.Parse(yaml);
+
+            var node = Assert.Single(result.Nodes);
+            Assert.Equal("at-plain", node.Name);
+            Assert.Equal(3, result.Skipped);
+        }
+
+        [Fact]
+        public void Parse_TrojanWithoutPassword_IsSkipped()
+        {
+            // The core refuses a trojan outbound without a password (NodeLinkParser already skips
+            // such links), so importing it would only fail later.
+            var yaml = """
+                proxies:
+                  - { name: tj-missing, type: trojan, server: t.example.com, port: 443 }
+                  - { name: tj-ok, type: trojan, server: t.example.com, port: 443, password: pw }
+                """;
+
+            var result = ClashConfigParser.Parse(yaml);
+
+            var node = Assert.Single(result.Nodes);
+            Assert.Equal("tj-ok", node.Name);
+            Assert.Equal(1, result.Skipped);
+        }
+
+        [Fact]
+        public void Parse_VlessRealityWithoutPublicKey_IsSkipped()
+        {
+            // The core refuses REALITY without its public key ("empty password").
+            var yaml = """
+                proxies:
+                  - { name: vl-reality, type: vless, server: v.example.com, port: 443, uuid: 11111111-2222-3333-4444-555555555555, reality-opts: { short-id: 01 } }
+                """;
+
+            var result = ClashConfigParser.Parse(yaml);
+
+            Assert.Empty(result.Nodes);
+            Assert.Equal(1, result.Skipped);
         }
 
         [Fact]
