@@ -208,32 +208,34 @@ namespace XrayUI.Views
             var flyout = new MenuFlyout();
 
             var server = ViewModel.SelectedServer;
+
             var testLatencyItem = CreateMenuItem(L.ServerList_TestNodeLatency, "\uF42F");
             testLatencyItem.IsEnabled = server is not null && ViewModel.CanTestServerLatency(server);
             testLatencyItem.Click += (_, _) => ViewModel.TestServerLatencyCommand.Execute(server);
 
-            var editItem = CreateMenuItem(L.ServerList_Edit, "");
-            editItem.IsEnabled = ViewModel.CanEditSelectedServer;
-            editItem.Click += (_, _) => ViewModel.EditServerCommand.Execute(null);
-
-            var isFavorite = ViewModel.SelectedServer?.IsFavorite == true;
+            var isFavorite = server?.IsFavorite == true;
             var favoriteItem = CreateMenuItem(
                 isFavorite ? L.ServerList_RemoveFavorite : L.ServerList_AddFavorite,
                 isFavorite ? "\uE8D9" : "\uE734");
             favoriteItem.Click += (_, _) => ViewModel.ToggleFavoriteCommand.Execute(null);
 
-            var deleteItem = CreateMenuItem(L.ServerList_Delete, "");
+            var editItem = CreateMenuItem(L.ServerList_Edit, "\uE70F");
+            editItem.IsEnabled = ViewModel.CanEditSelectedServer;
+            editItem.Click += (_, _) => ViewModel.EditServerCommand.Execute(null);
+
+            var shareItem = CreateMenuItem(L.ServerList_Share, "\uE72D");
+            shareItem.Click += (_, _) => ViewModel.ShareServerCommand.Execute(null);
+
+            var deleteItem = CreateMenuItem(L.ServerList_Delete, "\uE74D");
             deleteItem.IsEnabled = ViewModel.CanRemoveSelectedServer;
             deleteItem.Click += (_, _) => ViewModel.RemoveServerCommand.Execute(null);
 
-            var shareItem = CreateMenuItem(L.ServerList_Share, "");
-            shareItem.Click += (_, _) => ViewModel.ShareServerCommand.Execute(null);
-
             flyout.Items.Add(testLatencyItem);
-            flyout.Items.Add(editItem);
             flyout.Items.Add(favoriteItem);
-            flyout.Items.Add(deleteItem);
+            flyout.Items.Add(editItem);
             flyout.Items.Add(shareItem);
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            flyout.Items.Add(deleteItem);
 
             return flyout;
         }
