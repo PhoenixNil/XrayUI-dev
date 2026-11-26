@@ -18,7 +18,22 @@ namespace XrayUI.Services
     /// config exposes no socks/http inbound on a plain integer port.</param>
     /// <param name="RouteTest">Where the running core answers route tests. Null only when a config
     /// profile declares its own api section.</param>
-    public readonly record struct BuiltXrayConfig(string Json, int? SystemProxyPort, RouteTestEndpoint? RouteTest);
+    /// <param name="DialedHost">The host the core connects to directly: the node's own, or a
+    /// chain's entry hop as resolved for this build. TUN cleanup is keyed on it.</param>
+    public readonly record struct BuiltXrayConfig(
+        string Json, int? SystemProxyPort, RouteTestEndpoint? RouteTest, string DialedHost);
+
+    /// <summary>
+    /// One node of a speed-test config (<see cref="XrayConfigBuilder.BuildSpeedtestConfig"/>).
+    /// </summary>
+    /// <param name="Server">The node being measured, the one its result is reported for.</param>
+    /// <param name="Port">The local socks port its probe enters through.</param>
+    /// <param name="Exit">The node whose outbound carries the probe: <paramref name="Server"/>
+    /// itself, or a chain's exit hop.</param>
+    /// <param name="ChainEntry">A chain's entry hop, which <paramref name="Exit"/> dials through;
+    /// null for a plain node. Both hops come from
+    /// <see cref="XrayConfigBuilder.TryResolveHops"/>.</param>
+    public readonly record struct SpeedtestNode(ServerEntry Server, int Port, ServerEntry Exit, ServerEntry? ChainEntry);
 
     /// <summary>
     /// Builds an xray-core JSON configuration string for the given server and app settings.
@@ -54,7 +69,8 @@ namespace XrayUI.Services
             var outbounds = BuildOutbounds(
                 server, settings, availableServers,
                 profileMode: profileJson is not null,
-                forwardNonAddressDns: TunBlocksOutsideDns(config));
+                forwardNonAddressDns: TunBlocksOutsideDns(config),
+                dialedServer: out var dialedServer);
             config["outbounds"] = outbounds;
 
             var routeTest = AddRouteTestApi(config, outbounds, apiPort, settings.IsTunMode);
@@ -62,7 +78,8 @@ namespace XrayUI.Services
             return new BuiltXrayConfig(
                 config.ToJsonString(JsonOpts),
                 ResolveSystemProxyPort(config),
-                routeTest);
+                routeTest,
+                dialedServer.Host);
         }
 
         /// <summary>
@@ -321,12 +338,15 @@ namespace XrayUI.Services
         /// legal to reference.</param>
         /// <param name="forwardNonAddressDns">Give dns-out a real upstream for non-A/AAAA
         /// queries; see <see cref="TunBlocksOutsideDns"/>.</param>
+        /// <param name="dialedServer">The node the core connects to directly:
+        /// <paramref name="server"/> itself, or a chain's entry hop.</param>
         private static JsonArray BuildOutbounds(
             ServerEntry server,
             AppSettings settings,
             IEnumerable<ServerEntry>? availableServers,
             bool profileMode,
-            bool forwardNonAddressDns)
+            bool forwardNonAddressDns,
+            out ServerEntry dialedServer)
         {
             var list = new JsonArray();
 
@@ -338,10 +358,12 @@ namespace XrayUI.Services
                 ApplyDialerProxy(proxy, ChainEntryOutboundTag);
                 AddNode(list, proxy);
                 AddNode(list, chainEntry);
+                dialedServer = entryServer;
             }
             else
             {
                 AddNode(list, BuildProxyOutbound(server, ProxyOutboundTag));
+                dialedServer = server;
             }
 
             var direct = new JsonObject
@@ -488,6 +510,13 @@ namespace XrayUI.Services
             if (entryServer is null || exitServer is null)
             {
                 throw new InvalidOperationException(L.Chain_EndpointMissing);
+            }
+
+            // The rule ServerListViewModel.CanRunServer applies to Start and the row menu, so the
+            // toolbar sweep, which has no such gate, refuses the same chains.
+            if (string.Equals(chain.ChainEntryServerId, chain.ChainExitServerId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(L.ChainProxy_EntryExitSame);
             }
 
             if (entryServer.IsChain || exitServer.IsChain)
@@ -1453,22 +1482,64 @@ namespace XrayUI.Services
 
         private const string SpeedtestOutboundTagPrefix = "out-";
 
+        // A chain's entry hop is tagged after its node's outbound ("out-3" → "out-3-entry"), so a
+        // rejection the core pins on the hop still maps back to the node (SpeedtestEntryIndex).
+        private const string SpeedtestChainEntryTagSuffix = "-entry";
+
         /// <summary>
         /// Maps an outbound tag of a <see cref="BuildSpeedtestConfig"/> config back to the index
-        /// of the entry it was built from, or -1 when the tag is not one of those (null, the
-        /// freedom fallback). Lets the latency probe find the node the core rejected by the tag
-        /// in the core's own error, without knowing the tag scheme.
+        /// of the node it was built for, a chain's entry hop included, or -1 when the tag is not
+        /// one of those (null, the freedom fallback). Lets the latency probe find the node the
+        /// core rejected by the tag in the core's own error, without knowing the tag scheme.
         /// </summary>
-        public static int SpeedtestEntryIndex(string? outboundTag) =>
-            outboundTag is not null
-            && outboundTag.StartsWith(SpeedtestOutboundTagPrefix, StringComparison.Ordinal)
-            && int.TryParse(
-                outboundTag.AsSpan(SpeedtestOutboundTagPrefix.Length),
+        public static int SpeedtestEntryIndex(string? outboundTag)
+        {
+            if (outboundTag is null
+                || !outboundTag.StartsWith(SpeedtestOutboundTagPrefix, StringComparison.Ordinal))
+                return -1;
+
+            var digits = outboundTag.AsSpan(SpeedtestOutboundTagPrefix.Length);
+            if (digits.EndsWith(SpeedtestChainEntryTagSuffix, StringComparison.Ordinal))
+                digits = digits[..^SpeedtestChainEntryTagSuffix.Length];
+
+            return int.TryParse(
+                digits,
                 System.Globalization.NumberStyles.None,
                 System.Globalization.CultureInfo.InvariantCulture,
                 out var index)
                 ? index
                 : -1;
+        }
+
+        /// <summary>
+        /// The nodes that carry <paramref name="server"/>'s traffic, resolved as the live config
+        /// resolves them (<see cref="ResolveChainServers"/>): the node itself, or a chain's exit
+        /// hop dialing through its entry hop, which is then the first connection made. False for
+        /// a chain that cannot run (a hop missing, both hops the same node, or a hop that is
+        /// itself a chain), so a latency probe can fail that node alone; the live path's
+        /// exception would take down every node in a speed-test config.
+        /// </summary>
+        public static bool TryResolveHops(
+            ServerEntry server,
+            IEnumerable<ServerEntry> availableServers,
+            out ServerEntry exit,
+            out ServerEntry? chainEntry)
+        {
+            exit = server;
+            chainEntry = null;
+            if (!server.IsChain)
+                return true;
+
+            try
+            {
+                (chainEntry, exit) = ResolveChainServers(server, availableServers);
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
 
         /// <summary>
         /// True when the core is certain to refuse <paramref name="server"/>'s outbound as a
@@ -1498,28 +1569,28 @@ namespace XrayUI.Services
 
         /// <summary>
         /// Builds a dedicated speed-test config for the "real delay" latency test: one socks
-        /// inbound + one proxy outbound per server, paired 1:1 via routing (in-{i} → out-{i}).
-        /// Run in a throwaway core separate from the live connection. No TUN/DNS/fakedns — just
-        /// enough to route an HTTP probe through each server. Chain servers are not supported;
-        /// the caller must filter them out.
+        /// inbound per node, routed 1:1 (in-{i} → out-{i}) to the outbound that carries it. For a
+        /// chain, out-{i} is the exit hop dialing through out-{i}-entry, the live config's shape,
+        /// so the probe crosses both hops. Run in a throwaway core separate from the live
+        /// connection. No TUN/DNS/fakedns — just enough to route an HTTP probe through each node.
         /// </summary>
-        /// <param name="entries">Each server paired with the local socks port it should listen on.</param>
+        /// <param name="nodes">Each node with its local socks port and resolved hops.</param>
         /// <param name="outboundInterface">Resolved physical interface name to pin every proxy
         /// outbound to (see <see cref="TunService.ResolveOutboundInterface"/>), or null for no
         /// pin. The pin is required when another Xray process owns a full-route TUN, otherwise
         /// this helper core's node connections can be captured and proxy-looped. Taken verbatim —
         /// callers resolve the "auto" sentinel first.</param>
         public static string BuildSpeedtestConfig(
-            IReadOnlyList<(ServerEntry server, int port)> entries,
+            IReadOnlyList<SpeedtestNode> nodes,
             string? outboundInterface)
         {
             var inbounds = new JsonArray();
             var outbounds = new JsonArray();
             var rules = new JsonArray();
 
-            for (int i = 0; i < entries.Count; i++)
+            for (int i = 0; i < nodes.Count; i++)
             {
-                var (server, port) = entries[i];
+                var node = nodes[i];
                 var inTag = $"in-{i}";
                 var outTag = $"{SpeedtestOutboundTagPrefix}{i}";
 
@@ -1528,7 +1599,7 @@ namespace XrayUI.Services
                     ["tag"] = inTag,
                     ["protocol"] = "socks",
                     ["listen"] = "127.0.0.1",
-                    ["port"] = port,
+                    ["port"] = node.Port,
                     ["settings"] = new JsonObject
                     {
                         ["auth"] = "noauth",
@@ -1536,12 +1607,26 @@ namespace XrayUI.Services
                     }
                 });
 
-                var outbound = BuildProxyOutbound(server, outTag);
+                var outbound = BuildProxyOutbound(node.Exit, outTag);
                 if (outboundInterface is not null)
                 {
                     ApplyOutboundInterface(outbound, outboundInterface);
                 }
                 AddNode(outbounds, outbound);
+
+                // A chain: the exit hop above dials through its entry hop, pinned too, as
+                // BuildOutbounds builds and pins a live chain.
+                if (node.ChainEntry is { } entryServer)
+                {
+                    var entryTag = outTag + SpeedtestChainEntryTagSuffix;
+                    ApplyDialerProxy(outbound, entryTag);
+                    var entry = BuildProxyOutbound(entryServer, entryTag);
+                    if (outboundInterface is not null)
+                    {
+                        ApplyOutboundInterface(entry, outboundInterface);
+                    }
+                    AddNode(outbounds, entry);
+                }
 
                 AddNode(rules, new JsonObject
                 {

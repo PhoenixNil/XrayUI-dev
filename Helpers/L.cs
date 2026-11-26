@@ -291,6 +291,8 @@ public static class L
     public static string ServerList_Edit             => Loc.GetString("ServerList_Edit");
     public static string ServerList_Delete           => Loc.GetString("ServerList_Delete");
     public static string ServerList_Share            => Loc.GetString("ServerList_Share");
+    public static string ServerList_TestNodeLatency  => Loc.GetString("ServerList_TestNodeLatency");
+    public static string ServerList_TestingNodeLatency => Loc.GetString("ServerList_TestingNodeLatency");
     public static string ServerList_AddFavorite      => Loc.GetString("ServerList_AddFavorite");
     public static string ServerList_RemoveFavorite   => Loc.GetString("ServerList_RemoveFavorite");
     public static string ServerList_FilterTooltip    => Loc.GetString("ServerList_FilterTooltip");

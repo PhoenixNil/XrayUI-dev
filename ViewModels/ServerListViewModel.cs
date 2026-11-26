@@ -808,10 +808,7 @@ namespace XrayUI.ViewModels
             _latencySortRefreshPending = false;
             try
             {
-                if (LatencyTestMode == "real")
-                    await TestRealLatenciesAsync(servers);
-                else
-                    await TestConnectLatenciesAsync(servers);
+                await ProbeLatenciesAsync(servers);
             }
             finally
             {
@@ -829,6 +826,13 @@ namespace XrayUI.ViewModels
             }
         }
 
+        // The probe LatencyTestMode picks. Both are handed the whole list (Servers) next to the
+        // nodes under test: a chain resolves its hops from it, and a hop may sit outside them.
+        private Task ProbeLatenciesAsync(List<ServerEntry> servers) =>
+            LatencyTestMode == "real"
+                ? TestRealLatenciesAsync(servers)
+                : TestConnectLatenciesAsync(servers);
+
         // "connect" mode: direct TCP-handshake probe to each server endpoint, in parallel
         // (capped concurrency). No proxy core involved.
         private async Task TestConnectLatenciesAsync(List<ServerEntry> servers)
@@ -844,7 +848,7 @@ namespace XrayUI.ViewModels
                     // ProbeAsync is already async I/O, awaited directly (no Task.Run hop). No
                     // ConfigureAwait(false): the continuation resumes on the UI thread (WinUI
                     // sync context), so ApplyLatencyResult's bound updates are safe.
-                    var result = await _latencyProbe.ProbeAsync(server, timeout);
+                    var result = await _latencyProbe.ProbeAsync(server, Servers, timeout);
                     ApplyLatencyResult(server, result.Status == LatencyProbeStatus.Success
                         ? result.Milliseconds ?? -1
                         : -1);
@@ -860,15 +864,43 @@ namespace XrayUI.ViewModels
 
         // "real" mode: route a real HTTP request through each server via a dedicated throwaway
         // xray core. Works even when nothing is connected and never touches the live session.
-        // Chain nodes aren't supported by the speed-test core yet, so they're skipped.
+        // ProbeAllAsync marshals ApplyLatencyResult back onto the UI thread.
         private Task TestRealLatenciesAsync(List<ServerEntry> servers)
-        {
-            var testable = servers.Where(s => !s.IsChain).ToList();
-            if (testable.Count == 0) return Task.CompletedTask;
+            => _realLatencyProbe.ProbeAllAsync(servers, Servers, ApplyLatencyResult);
 
-            // ProbeAllAsync marshals ApplyLatencyResult back onto the UI thread.
-            return _realLatencyProbe.ProbeAllAsync(testable, ApplyLatencyResult);
+        // Single-node test from a row's context menu, through the toolbar sweep's own probe so
+        // the two numbers compare. Progress shows only on the row (ServerEntry.IsTestingLatency):
+        // IsTestingLatencies stays false, so the toolbar never reads as a full sweep running.
+        [RelayCommand]
+        private async Task TestServerLatency(ServerEntry? server)
+        {
+            if (server is null || !CanTestServerLatency(server))
+                return;
+
+            server.IsTestingLatency = true;
+            try
+            {
+                await ProbeLatenciesAsync(new List<ServerEntry> { server });
+            }
+            catch (Exception ex)
+            {
+                // Fired from a menu click nobody awaits: a throw here would take the app down.
+                Debug.WriteLine($"[Latency] Single-node test failed for {server.Id}: {ex}");
+                ApplyLatencyResult(server, -1);
+            }
+            finally
+            {
+                server.IsTestingLatency = false;
+            }
         }
+
+        // Not while this row is already testing or a sweep (which covers this row anyway) is
+        // running, nor for a chain that can't run at all (a hop missing, or entry == exit):
+        // the Start button's own gate.
+        public bool CanTestServerLatency(ServerEntry server) =>
+            !server.IsTestingLatency
+            && !IsTestingLatencies
+            && CanRunServer(server);
 
         // Per-result bookkeeping shared by both probe modes (always invoked on the UI thread,
         // serially): record the latency, unlock the latency-sort option once the first result

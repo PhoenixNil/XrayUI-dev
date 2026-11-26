@@ -175,6 +175,12 @@
   <data name="ServerList_Share" xml:space="preserve">
     <value>Share</value>
   </data>
+  <data name="ServerList_TestNodeLatency" xml:space="preserve">
+    <value>Test Latency</value>
+  </data>
+  <data name="ServerList_TestingNodeLatency" xml:space="preserve">
+    <value>Testing latency</value>
+  </data>
   <data name="ServerList_SortActiveHint" xml:space="preserve">
     <value>Only available when filter is "All Servers"</value>
   </data>

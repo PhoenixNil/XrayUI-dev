@@ -322,6 +322,9 @@ namespace XrayUI.ViewModels
                 case nameof(ServerEntry.ChainEntryServerId):
                     OnPropertyChanged(nameof(SelectedHost));
                     OnPropertyChanged(nameof(SelectedEncryption));
+                    // A chain's latency is measured at its entry hop.
+                    CancelPendingLatencyTest();
+                    ResetLatencyDisplay();
                     break;
                 case nameof(ServerEntry.ChainExitServerId):
                     OnPropertyChanged(nameof(SelectedPort));
@@ -346,6 +349,7 @@ namespace XrayUI.ViewModels
                 or nameof(ServerEntry.LatencyMs)
                 or nameof(ServerEntry.LatencyText)
                 or nameof(ServerEntry.HasLatency)
+                or nameof(ServerEntry.IsTestingLatency)
                 or nameof(ServerEntry.DisplayProtocol)
                 or nameof(ServerEntry.IsChain)))
             {
@@ -544,8 +548,11 @@ namespace XrayUI.ViewModels
             try
             {
                 var token = cts.Token;
+                // Snapshot on the UI thread: the probe reads it off-thread to resolve a chain's
+                // current entry hop, and the live collection is only safe to read here.
+                var allServers = GetAllServers().ToArray();
                 var result = await Task.Run(
-                    () => _latencyProbe.ProbeAsync(server, TimeSpan.FromSeconds(3), token),
+                    () => _latencyProbe.ProbeAsync(server, allServers, TimeSpan.FromSeconds(3), token),
                     token);
 
                 if (!IsCurrentLatencyTest(version, cts, server))

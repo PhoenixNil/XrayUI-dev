@@ -83,6 +83,12 @@ namespace XrayUI.Models
         [NotifyPropertyChangedFor(nameof(HasLatency))]
         public partial int? LatencyMs { get; set; }
 
+        // Runtime-only: a single-node test from this row's context menu is in flight (drives the
+        // row's spinner; see ServerListViewModel.TestServerLatency).
+        [JsonIgnore]
+        [ObservableProperty]
+        public partial bool IsTestingLatency { get; set; }
+
         [ObservableProperty]
         public partial bool IsFavorite { get; set; }
 

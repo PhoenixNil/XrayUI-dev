@@ -347,9 +347,10 @@ namespace XrayUI.ViewModels
             {
                 // xray inherits admin from the parent process (HandleTunToggleAsync restarted
                 // the app as admin) and configures the TUN adapter + system routes itself via
-                // autoSystemRoutingTable. C# only remembers the active session for cleanup.
-                _currentTunServerHost = server.Host;
-                appSettings.LastTunServerHost = server.Host;
+                // autoSystemRoutingTable. C# only remembers the active session for cleanup,
+                // keyed on the host the core dials directly (for a chain, its entry hop).
+                _currentTunServerHost = built.DialedHost;
+                appSettings.LastTunServerHost = built.DialedHost;
                 await TrySaveSettingsAsync(appSettings, "persist TUN runtime state");
             }
             else
